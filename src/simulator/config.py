@@ -53,6 +53,18 @@ def _read_yaml(path: Path) -> dict[str, Any]:
 
 
 def load_mqtt_config(path: Path) -> MQTTConfig:
+    """MQTT broker yapılandırmasını YAML dosyasından yükle.
+
+    Args:
+        path: mqtt.yaml dosyasının yolu.
+
+    Returns:
+        Broker, topic prefix'leri ve QoS bilgilerini içeren MQTTConfig.
+
+    Raises:
+        FileNotFoundError: Config dosyası yoksa.
+        ValueError: YAML bozuksa veya şema geçersizse.
+    """
     data = _read_yaml(path)
     try:
         broker = data["broker"]
@@ -71,6 +83,18 @@ def load_mqtt_config(path: Path) -> MQTTConfig:
 
 
 def load_devices(path: Path) -> list[DeviceConfig]:
+    """Cihaz listesini YAML dosyasından yükle.
+
+    Args:
+        path: devices.yaml dosyasının yolu.
+
+    Returns:
+        Cihaz yapılandırmalarının listesi (her biri sensör tanımlarını içerir).
+
+    Raises:
+        FileNotFoundError: Config dosyası yoksa.
+        ValueError: YAML bozuksa veya şema geçersizse.
+    """
     data = _read_yaml(path)
     try:
         device_dicts = data["devices"]
@@ -100,6 +124,18 @@ def load_devices(path: Path) -> list[DeviceConfig]:
 
 
 def load_engine_config(path: Path) -> EngineConfig:
+    """Simülatör motor yapılandırmasını YAML dosyasından yükle.
+
+    Args:
+        path: engine.yaml dosyasının yolu.
+
+    Returns:
+        Tick frekansı (Hz) ve log seviyesini içeren EngineConfig.
+
+    Raises:
+        FileNotFoundError: Config dosyası yoksa.
+        ValueError: YAML bozuksa veya şema geçersizse.
+    """
     data = _read_yaml(path)
     try:
         engine = data["engine"]
