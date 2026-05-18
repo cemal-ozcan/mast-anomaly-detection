@@ -906,7 +906,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 6: `__main__.py` Entry Point + Config Örnekleri
+## Task 6: `__main__.py` Entry Point + Config Örnekleri ✅ TAMAMLANDI (commit `bb94d8c`)
 
 **Files:**
 - Create: `src/simulator/__main__.py`
@@ -914,7 +914,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 - Modify: `config/mqtt.yaml.example` (gözden geçir, gerek yoksa dokunma)
 - Create: `config/simulator.yaml.example`
 
-- [ ] **Step 6.1: `__main__.py` oluştur**
+- [x] **Step 6.1: `__main__.py` oluştur**
 
 `src/simulator/__main__.py`:
 ```python
@@ -944,7 +944,7 @@ if __name__ == "__main__":
     sys.exit(main())
 ```
 
-- [ ] **Step 6.2: `config/devices.yaml.example`'ı Iterasyon 1'e uyacak şekilde sadeleştir**
+- [x] **Step 6.2: `config/devices.yaml.example`'ı Iterasyon 1'e uyacak şekilde sadeleştir**
 
 Mevcut dosyanın tüm içeriğini şununla değiştir:
 
@@ -964,7 +964,7 @@ devices:
 
 İterasyon 2'de tüm sensörler ve state_durations eklenecek, example genişleyecek.
 
-- [ ] **Step 6.3: `config/simulator.yaml.example`'ı oluştur**
+- [x] **Step 6.3: `config/simulator.yaml.example`'ı oluştur**
 
 ```yaml
 # Engine çalışma parametreleri
@@ -975,11 +975,11 @@ engine:
   log_level: INFO
 ```
 
-- [ ] **Step 6.4: `config/mqtt.yaml.example` gözden geçirme**
+- [x] **Step 6.4: `config/mqtt.yaml.example` gözden geçirme**
 
 Mevcut içerik (`telemetry_prefix: telemetry`, `qos.telemetry: 1`) Iterasyon 1 için zaten yeterli. Eğer dosyada `alerts_prefix` gibi Iterasyon 1'de kullanılmayan alan varsa, kalmasında sakınca yok — config loader yalnızca kullandığı alanları okur. Dokunma gerekmeyebilir; bir bak ve değişiklik gerekiyorsa not düş.
 
-- [ ] **Step 6.5: Commit**
+- [x] **Step 6.5: Commit**
 
 ```bash
 git add src/simulator/__main__.py config/devices.yaml.example config/simulator.yaml.example
