@@ -141,10 +141,14 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 0 — Kurulum** (Şu an)
-Klasör yapısı, dokümanlar, slash komutları hazır. Henüz kod yok.
+**Faz 1 — Iterasyon 1: Walking Skeleton** (devam ediyor)
 
-Sıradaki adım: **Faz 1 — Simulator**. Sentetik telemetri üreten cihaz simülatörü yazılacak. Detay için `docs/ROADMAP.md`.
+- **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
+- **Aktif plan:** `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md`
+- **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
+- **Nerede kaldığımız:** Plan dosyasındaki checkbox'lar (`- [x]`) canlı state. Bir oturumda kaybolma durumunda plan dosyasına bakıp kaldığımız task'tan devam edilir.
+
+Faz 0 (kurulum) tamamlandı; klasör yapısı, dokümanlar, spec ve plan hazır. Iterasyon 1 sonrası: Iterasyon 2 (state machine + tüm sensörler). Faz seyri: `docs/ROADMAP.md`.
 
 ---
 
