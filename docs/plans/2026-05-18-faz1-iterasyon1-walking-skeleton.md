@@ -363,7 +363,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 3: MotorCurrentSensor (TDD)
+## Task 3: MotorCurrentSensor (TDD) ✅ TAMAMLANDI (commit `d4eccc1`)
 
 Iterasyon 1 sözleşmesi minimal: sensör `sample() -> float` döndürür. `BaseSensor` ABC ve `compute(runtime, position)` Iterasyon 2'de eklenecek; bu iterasyonda DeviceRuntimeState yok.
 
@@ -371,7 +371,7 @@ Iterasyon 1 sözleşmesi minimal: sensör `sample() -> float` döndürür. `Base
 - Create: `src/simulator/sensors/motor_current.py`
 - Create: `tests/unit/test_motor_current_sensor.py`
 
-- [ ] **Step 3.1: Başarısız testi yaz**
+- [x] **Step 3.1: Başarısız testi yaz**
 
 `tests/unit/test_motor_current_sensor.py`:
 ```python
@@ -420,14 +420,14 @@ def test_rejects_wrong_sensor_name() -> None:
         MotorCurrentSensor(bad, random.Random())
 ```
 
-- [ ] **Step 3.2: Testi başarısız çalıştır**
+- [x] **Step 3.2: Testi başarısız çalıştır**
 
 ```bash
 pytest tests/unit/test_motor_current_sensor.py -v
 ```
 Beklenen: `ModuleNotFoundError: No module named 'src.simulator.sensors.motor_current'`.
 
-- [ ] **Step 3.3: Sensör implementasyonunu yaz**
+- [x] **Step 3.3: Sensör implementasyonunu yaz**
 
 `src/simulator/sensors/motor_current.py`:
 ```python
@@ -455,14 +455,14 @@ class MotorCurrentSensor:
         return self.config.baseline + self._rng.gauss(0.0, self.config.noise_std)
 ```
 
-- [ ] **Step 3.4: Testleri yeşil çalıştır**
+- [x] **Step 3.4: Testleri yeşil çalıştır**
 
 ```bash
 pytest tests/unit/test_motor_current_sensor.py -v
 ```
 Beklenen: 4 test PASS.
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add src/simulator/sensors/motor_current.py tests/unit/test_motor_current_sensor.py
