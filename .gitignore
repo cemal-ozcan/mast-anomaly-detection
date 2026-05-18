@@ -73,3 +73,7 @@ models/
 # OS
 Thumbs.db
 Desktop.ini
+
+# Local config (gerçek dosyalar; örnekler commitlenir)
+config/*.yaml
+!config/*.yaml.example
