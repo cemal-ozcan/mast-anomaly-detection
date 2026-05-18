@@ -1,0 +1,6 @@
+# Engine çalışma parametreleri
+# Gerçek simulator.yaml dosyasını bu örnekten oluşturun: cp simulator.yaml.example simulator.yaml
+
+engine:
+  tick_hz: 1.0
+  log_level: INFO
