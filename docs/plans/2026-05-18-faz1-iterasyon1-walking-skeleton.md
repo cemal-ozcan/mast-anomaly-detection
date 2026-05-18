@@ -105,7 +105,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 2: Config Loader (TDD)
+## Task 2: Config Loader (TDD) ✅ TAMAMLANDI (commit `689118c` + fix `bbeeca1`)
 
 Iterasyon 1'in minimum config sınıfları: `MQTTConfig`, `SensorConfig`, `DeviceConfig`, `EngineConfig`. Spec § 5'teki tam dataclass'ların bir alt kümesi — `StateDurations`, `ScenarioWindow`, `target_height_mm`, `seed` Iterasyon 2-4'te eklenir.
 
@@ -116,7 +116,7 @@ Iterasyon 1'in minimum config sınıfları: `MQTTConfig`, `SensorConfig`, `Devic
 - Create: `tests/fixtures/devices_minimal.yaml`
 - Create: `tests/fixtures/simulator_minimal.yaml`
 
-- [ ] **Step 2.1: Test fixture'larını oluştur**
+- [x] **Step 2.1: Test fixture'larını oluştur**
 
 `tests/fixtures/mqtt_minimal.yaml`:
 ```yaml
@@ -150,7 +150,7 @@ engine:
   log_level: INFO
 ```
 
-- [ ] **Step 2.2: Başarısız testi yaz**
+- [x] **Step 2.2: Başarısız testi yaz**
 
 `tests/unit/test_config.py`:
 ```python
@@ -217,14 +217,14 @@ def test_invalid_yaml_raises_value_error(tmp_path: Path) -> None:
         load_mqtt_config(bad)
 ```
 
-- [ ] **Step 2.3: Testi başarısız olarak çalıştır**
+- [x] **Step 2.3: Testi başarısız olarak çalıştır**
 
 ```bash
 pytest tests/unit/test_config.py -v
 ```
 Beklenen: `ModuleNotFoundError: No module named 'src.simulator.config'` veya `ImportError`.
 
-- [ ] **Step 2.4: `config.py` implementasyonunu yaz**
+- [x] **Step 2.4: `config.py` implementasyonunu yaz**
 
 `src/simulator/config.py`:
 ```python
@@ -341,14 +341,14 @@ def load_engine_config(path: Path) -> EngineConfig:
         raise ValueError(f"Engine config geçersiz ({path}): {e}") from e
 ```
 
-- [ ] **Step 2.5: Testleri yeşil çalıştır**
+- [x] **Step 2.5: Testleri yeşil çalıştır**
 
 ```bash
 pytest tests/unit/test_config.py -v
 ```
 Beklenen: 5 test PASS.
 
-- [ ] **Step 2.6: Commit**
+- [x] **Step 2.6: Commit**
 
 ```bash
 git add src/simulator/config.py tests/unit/test_config.py tests/fixtures/
