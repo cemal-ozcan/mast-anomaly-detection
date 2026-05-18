@@ -1,0 +1,16 @@
+# MQTT broker yapılandırması örneği
+# Gerçek mqtt.yaml dosyasını bu örnekten oluşturun
+
+broker:
+  host: localhost
+  port: 1883
+  client_id_prefix: mast-anomaly
+  keepalive: 60
+
+topics:
+  telemetry_prefix: telemetry
+  alerts_prefix: alerts
+
+qos:
+  telemetry: 1
+  alerts: 1
