@@ -1,0 +1,27 @@
+# Simülasyon için cihaz tanımları örneği
+# Gerçek devices.yaml dosyasını bu örnekten oluşturun
+
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    sensors:
+      - name: motor_current
+        unit: A
+        baseline: 0.5
+        noise_std: 0.1
+      - name: hydraulic_pressure
+        unit: bar
+        baseline: 10
+        noise_std: 2
+      - name: mast_position
+        unit: mm
+        baseline: 0
+        noise_std: 1
+      - name: motor_temperature
+        unit: celsius
+        baseline: 25
+        noise_std: 0.5
+      - name: vibration
+        unit: g
+        baseline: 0.05
+        noise_std: 0.01

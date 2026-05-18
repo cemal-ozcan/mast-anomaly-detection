@@ -1,0 +1,27 @@
+# Anomali dedektörü yapılandırması örneği
+# Gerçek detectors.yaml dosyasını bu örnekten oluşturun
+
+rule_based:
+  - name: motor_current_overload
+    sensor: motor_current
+    condition: greater_than
+    threshold: 15.0
+    duration_seconds: 5
+    severity: high
+
+  - name: hydraulic_pressure_drop
+    sensor: hydraulic_pressure
+    condition: drop_rate
+    threshold: -10.0  # bar/dakika
+    severity: medium
+
+statistical:
+  rolling_window_size: 300  # saniye
+  sigma_threshold: 3.0
+  iqr_multiplier: 1.5
+
+ml:
+  isolation_forest:
+    n_estimators: 100
+    contamination: 0.01
+    random_state: 42
