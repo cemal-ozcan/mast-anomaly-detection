@@ -1,0 +1,9 @@
+broker:
+  host: localhost
+  port: 1883
+  client_id_prefix: mast-anomaly
+  keepalive: 60
+topics:
+  telemetry_prefix: telemetry
+qos:
+  telemetry: 1
