@@ -1,0 +1,8 @@
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    sensors:
+      - name: motor_current
+        unit: A
+        baseline: 0.5
+        noise_std: 0.1
