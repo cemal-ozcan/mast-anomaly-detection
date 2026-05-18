@@ -476,7 +476,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 4: MQTTPublisher (TDD, paho mock'lu)
+## Task 4: MQTTPublisher (TDD, paho mock'lu) ✅ TAMAMLANDI (commit `bc9fd30`)
 
 Spec § 7 payload + topic + `_now_iso()` formatı. Test için paho-mqtt client'ı `unittest.mock.MagicMock` ile değiştiriyoruz — gerçek broker bağlantısı testlerde yok (CI flakiness'ı önlemek için).
 
@@ -484,7 +484,7 @@ Spec § 7 payload + topic + `_now_iso()` formatı. Test için paho-mqtt client'�
 - Create: `src/simulator/publisher.py`
 - Create: `tests/unit/test_mqtt_publisher.py`
 
-- [ ] **Step 4.1: Başarısız testi yaz**
+- [x] **Step 4.1: Başarısız testi yaz**
 
 `tests/unit/test_mqtt_publisher.py`:
 ```python
@@ -567,14 +567,14 @@ def test_close_is_safe_without_connect() -> None:
     mock_client.disconnect.assert_not_called()
 ```
 
-- [ ] **Step 4.2: Testi başarısız çalıştır**
+- [x] **Step 4.2: Testi başarısız çalıştır**
 
 ```bash
 pytest tests/unit/test_mqtt_publisher.py -v
 ```
 Beklenen: `ModuleNotFoundError: No module named 'src.simulator.publisher'`.
 
-- [ ] **Step 4.3: Publisher implementasyonunu yaz**
+- [x] **Step 4.3: Publisher implementasyonunu yaz**
 
 `src/simulator/publisher.py`:
 ```python
@@ -645,14 +645,14 @@ class MQTTPublisher:
         self._connected = False
 ```
 
-- [ ] **Step 4.4: Testleri yeşil çalıştır**
+- [x] **Step 4.4: Testleri yeşil çalıştır**
 
 ```bash
 pytest tests/unit/test_mqtt_publisher.py -v
 ```
 Beklenen: 5 test PASS.
 
-- [ ] **Step 4.5: Commit**
+- [x] **Step 4.5: Commit**
 
 ```bash
 git add src/simulator/publisher.py tests/unit/test_mqtt_publisher.py
