@@ -66,7 +66,7 @@ config/
 
 ---
 
-## Task 1: .gitignore + paket marker'lar + boş kabuk
+## Task 1: .gitignore + paket marker'lar + boş kabuk ✅ TAMAMLANDI (commit `2510b34`)
 
 **Files:**
 - Modify: `.gitignore` (sonuna ekleme)
@@ -75,7 +75,7 @@ config/
 - Create: `tests/__init__.py`
 - Create: `tests/unit/__init__.py`
 
-- [ ] **Step 1.1: `.gitignore`'a config dosyalarını ekle**
+- [x] **Step 1.1: `.gitignore`'a config dosyalarını ekle**
 
 `.gitignore` dosyasının sonuna ekle:
 
@@ -86,7 +86,7 @@ config/*.yaml
 !config/*.yaml.example
 ```
 
-- [ ] **Step 1.2: Paket marker dosyalarını oluştur**
+- [x] **Step 1.2: Paket marker dosyalarını oluştur**
 
 Aşağıdaki dört dosyayı **boş** olarak oluştur:
 - `src/simulator/__init__.py`
@@ -94,7 +94,7 @@ Aşağıdaki dört dosyayı **boş** olarak oluştur:
 - `tests/__init__.py`
 - `tests/unit/__init__.py`
 
-- [ ] **Step 1.3: Commit**
+- [x] **Step 1.3: Commit**
 
 ```bash
 git add .gitignore src/simulator/__init__.py src/simulator/sensors/__init__.py tests/__init__.py tests/unit/__init__.py
