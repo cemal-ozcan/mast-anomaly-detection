@@ -668,7 +668,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 5: Engine Loop (TDD)
+## Task 5: Engine Loop (TDD) ✅ TAMAMLANDI (commit `31a5ab0`)
 
 Iterasyon 1 engine: tek cihaz + tek sensör + tek publisher. Sonsuz döngü `stop` event'iyle kırılır (SIGINT/SIGTERM handler). Test edebilmek için döngü `max_iterations` parametresi alır — testlerde sınırlı, prod'da None.
 
@@ -676,7 +676,7 @@ Iterasyon 1 engine: tek cihaz + tek sensör + tek publisher. Sonsuz döngü `sto
 - Create: `src/simulator/engine.py`
 - Create: `tests/unit/test_engine.py`
 
-- [ ] **Step 5.1: Başarısız testi yaz**
+- [x] **Step 5.1: Başarısız testi yaz**
 
 `tests/unit/test_engine.py`:
 ```python
@@ -771,14 +771,14 @@ devices:
         )
 ```
 
-- [ ] **Step 5.2: Testi başarısız çalıştır**
+- [x] **Step 5.2: Testi başarısız çalıştır**
 
 ```bash
 pytest tests/unit/test_engine.py -v
 ```
 Beklenen: `ModuleNotFoundError: No module named 'src.simulator.engine'`.
 
-- [ ] **Step 5.3: Engine implementasyonunu yaz**
+- [x] **Step 5.3: Engine implementasyonunu yaz**
 
 `src/simulator/engine.py`:
 ```python
@@ -877,21 +877,21 @@ def run(
         publisher.close()
 ```
 
-- [ ] **Step 5.4: Testleri yeşil çalıştır**
+- [x] **Step 5.4: Testleri yeşil çalıştır**
 
 ```bash
 pytest tests/unit/test_engine.py -v
 ```
 Beklenen: 3 test PASS.
 
-- [ ] **Step 5.5: Tüm unit testleri çalıştır + coverage**
+- [x] **Step 5.5: Tüm unit testleri çalıştır + coverage**
 
 ```bash
 pytest tests/unit/ --cov=src/simulator --cov-report=term-missing
 ```
 Beklenen: 17 test PASS. `src/simulator/` kapsama %80+ olmalı (Iterasyon 1 için sade hedef; final %80 kapsama Faz 1 bitiminde değerlendirilecek).
 
-- [ ] **Step 5.6: Commit**
+- [x] **Step 5.6: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/unit/test_engine.py
