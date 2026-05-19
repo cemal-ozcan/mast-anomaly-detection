@@ -5,7 +5,7 @@ import sys
 
 from loguru import logger
 
-from src.simulator.engine import run
+from simulator.engine import run
 
 
 def main() -> int:

@@ -5,8 +5,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.simulator.config import MQTTConfig
-from src.simulator.publisher import MQTTPublisher, _now_iso
+from simulator.config import MQTTConfig
+from simulator.publisher import MQTTPublisher, _now_iso
 
 
 def _config(qos: int = 1) -> MQTTConfig:

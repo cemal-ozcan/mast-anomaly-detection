@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from src.simulator.engine import run
+from simulator.engine import run
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
@@ -16,8 +16,8 @@ def test_run_publishes_configured_iteration_count(monkeypatch: pytest.MonkeyPatc
         captured["config"] = config
         return mock_publisher
 
-    monkeypatch.setattr("src.simulator.engine._make_publisher", fake_publisher_factory)
-    monkeypatch.setattr("src.simulator.engine.time.sleep", lambda _: None)
+    monkeypatch.setattr("simulator.engine._make_publisher", fake_publisher_factory)
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
     run(
         mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
@@ -54,8 +54,8 @@ devices:
       - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
 """
     )
-    monkeypatch.setattr("src.simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("src.simulator.engine.time.sleep", lambda _: None)
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
     with pytest.raises(ValueError, match="exactly 1 device"):
         run(
@@ -77,8 +77,8 @@ devices:
       - {name: hydraulic_pressure, unit: bar, baseline: 10, noise_std: 2}
 """
     )
-    monkeypatch.setattr("src.simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("src.simulator.engine.time.sleep", lambda _: None)
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
     with pytest.raises(ValueError, match="motor_current"):
         run(

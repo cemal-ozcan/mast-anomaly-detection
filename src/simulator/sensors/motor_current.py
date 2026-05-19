@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import random
 
-from src.simulator.config import SensorConfig
+from simulator.config import SensorConfig
 
 
 class MotorCurrentSensor:
