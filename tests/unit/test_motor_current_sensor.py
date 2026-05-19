@@ -3,8 +3,8 @@ import statistics
 
 import pytest
 
-from src.simulator.config import SensorConfig
-from src.simulator.sensors.motor_current import MotorCurrentSensor
+from simulator.config import SensorConfig
+from simulator.sensors.motor_current import MotorCurrentSensor
 
 
 def _config(baseline: float = 0.5, noise_std: float = 0.1) -> SensorConfig:

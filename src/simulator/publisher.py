@@ -8,7 +8,7 @@ from typing import Any
 import paho.mqtt.client as mqtt
 from loguru import logger
 
-from src.simulator.config import MQTTConfig
+from simulator.config import MQTTConfig
 
 
 def _now_iso() -> str:

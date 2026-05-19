@@ -9,7 +9,7 @@ from types import FrameType
 
 from loguru import logger
 
-from src.simulator.config import (
+from simulator.config import (
     DeviceConfig,
     EngineConfig,
     MQTTConfig,
@@ -17,8 +17,8 @@ from src.simulator.config import (
     load_engine_config,
     load_mqtt_config,
 )
-from src.simulator.publisher import MQTTPublisher
-from src.simulator.sensors.motor_current import MotorCurrentSensor
+from simulator.publisher import MQTTPublisher
+from simulator.sensors.motor_current import MotorCurrentSensor
 
 
 def _make_publisher(config: MQTTConfig) -> MQTTPublisher:
