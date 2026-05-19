@@ -147,7 +147,9 @@ src/simulator/
 ### Immutable Config (YAML'den okunur)
 
 ```python
-class DeviceState(str, Enum):
+from enum import StrEnum  # Python 3.11+ resmi pattern; str mixin + auto value
+
+class DeviceState(StrEnum):
     IDLE = "idle"
     RAISING = "raising"
     HOLDING = "holding"
@@ -188,25 +190,32 @@ class DeviceConfig:
 ### Mutable Runtime
 
 ```python
+from collections.abc import Callable
+from dataclasses import dataclass, field
+import time
+
 @dataclass
 class DeviceRuntimeState:
     state: DeviceState
-    state_entered_at_monotonic: float    # time.monotonic() snapshot
-    current_state_duration_s: float       # KRİTİK: transition'da BİR KEZ seçilir
+    state_entered_at_monotonic: float       # clock() snapshot
+    current_state_duration_s: float          # KRİTİK: transition'da BİR KEZ seçilir
     position_mm: float
     cycle_count: int
-    rng: random.Random                    # per-device, seed'li
-    started_at_monotonic: float           # cihaz engine'de spawn edildiği an
+    rng: random.Random                       # per-device, seed'li
+    started_at_monotonic: float              # cihaz engine'de spawn edildiği an
+    clock: Callable[[], float] = field(default=time.monotonic)  # test edilebilirlik (DI)
 
     @property
     def elapsed_in_state_s(self) -> float:
-        return time.monotonic() - self.state_entered_at_monotonic
+        return self.clock() - self.state_entered_at_monotonic
 
     @property
     def device_elapsed_s(self) -> float:
         """Cihaz spawn olduğundan beri geçen toplam süre — senaryo pencereleri için."""
-        return time.monotonic() - self.started_at_monotonic
+        return self.clock() - self.started_at_monotonic
 ```
+
+**Clock DI gerekçesi:** State geçişleri zamana bağlı; testler `clock=FakeClock(0)` ile deterministik kontrol sağlar. Production'da default `time.monotonic` — wall clock değişikliklerinden bağımsız. Bu pattern monkeypatch sihrinden temiz: dependency açıkça görünür, mocklama explicit. Üretim kodu test paketinden import yapmaz; `FakeClock` `tests/unit/test_runtime.py` içinde tanımlı.
 
 ### Çıktı
 
@@ -246,7 +255,7 @@ class BaseSensor(ABC):
 ### Kritik İnvaryantlar
 
 1. **`current_state_duration_s` sadece state transition anında seçilir** ve o durum süresince değişmez. Sensörler ve `compute_position()` bu sabit değeri runtime state'ten okur, kendileri rastgele seçmez. Aksi halde her tick yeni bir doğrusal denklem → kaos.
-2. **`time.monotonic()` kullanılır**, `time.time()` değil. Wall clock değişiklikleri (NTP, manuel saat ayarı) elapsed hesabını bozmaz.
+2. **`runtime.clock()` kullanılır** (default `time.monotonic`), `time.time()` değil. Wall clock değişiklikleri (NTP, manuel saat ayarı) elapsed hesabını bozmaz. Test'lerde `clock=FakeClock(0)` inject edilir.
 3. **Per-device RNG**: Cihazlar birbirinin rastgelelik durumunu etkilemez. Aynı seed ile aynı çıktı → regresyon testleri mümkün.
 4. **State geçişi tek yönlü**: IDLE → RAISING → HOLDING → LOWERING → IDLE.
 
@@ -270,6 +279,7 @@ Toplam döngü: 85-450 saniye.
 | Sensör | Birim | IDLE baseline | RAISING kararlı | HOLDING | Gürültü std | DOMAIN ref |
 |---|---|---|---|---|---|---|
 | motor_current | A | 0.5 | 8.0 (5-15 aralığı) | 0.5 | 0.1 | sat. 58 |
+| ↳ LOWERING için | A | — | 8.0 (RAISING ile aynı kategori — DOMAIN.md "hareket halinde 5-15A" hem RAISING hem LOWERING'i kapsar) | — | — | sat. 58 |
 | motor_voltage | V | 24.0 | 24.0 | 24.0 | 0.2 | sat. 21 |
 | hydraulic_pressure | bar | 10 (5-20) | 150 (100-200) | 80 (50-150) | 2 | sat. 60 |
 | motor_temperature | °C | 25 (çevre) | motor enerjili durumlarda (RAISING, HOLDING, LOWERING) lineer artış 0.08 °C/s, üst sınır 35 | IDLE'da lineer azalış 0.04 °C/s, alt sınır 25 | 0.5 | sat. 67 |
@@ -524,6 +534,26 @@ tests/
 ├── scenarios/     # Senaryo imza testleri (istatistiksel)
 └── fixtures/      # Deterministik YAML config + seed'li çıktı snapshot'ları
 ```
+
+### Saat Mock Pattern: `FakeClock`
+
+State geçişleri ve zamana-bağlı senaryolar test edilebilir kılmak için `DeviceRuntimeState.clock` field'ı dependency injection kullanır (default `time.monotonic`). Test'lerde `FakeClock` instance inject edilir:
+
+```python
+class FakeClock:
+    """Test-only: zamanı manuel kontrol et."""
+
+    def __init__(self, start: float = 0.0):
+        self._now = start
+
+    def __call__(self) -> float:
+        return self._now
+
+    def advance(self, seconds: float) -> None:
+        self._now += seconds
+```
+
+Üretim kodu `FakeClock`'u import etmez; sınıf `tests/unit/test_runtime.py` veya `tests/conftest.py` içinde tanımlı. Bu pattern monkeypatch yerine açık DI sağlar — mocklama imzada görünür.
 
 ### Unit Test Prensipleri
 
