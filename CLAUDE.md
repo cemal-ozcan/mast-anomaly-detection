@@ -141,14 +141,26 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 1: Walking Skeleton** (devam ediyor)
+**Faz 1 — Iterasyon 2: State Machine + Tüm Sensörler** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
-- **Aktif plan:** `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md`
+- **Tamamlanan iterasyon:** `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 task ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
-- **Nerede kaldığımız:** Plan dosyasındaki checkbox'lar (`- [x]`) canlı state. Bir oturumda kaybolma durumunda plan dosyasına bakıp kaldığımız task'tan devam edilir.
+- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz yayın yapar.
 
-Faz 0 (kurulum) tamamlandı; klasör yapısı, dokümanlar, spec ve plan hazır. Iterasyon 1 sonrası: Iterasyon 2 (state machine + tüm sensörler). Faz seyri: `docs/ROADMAP.md`.
+### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
+
+Çalışan parça: tek `motor_current` sensörü, 1 Hz Gauss gürültülü MQTT yayını, SIGINT/SIGTERM graceful shutdown, 17 unit test (≥84% kapsama). State machine yok, sabit `state="idle"`. Paketleme: `src/simulator/` PEP 660 src layout.
+
+### Iterasyon 2 (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iterasyon 2):
+- 6 sensör (motor_current, motor_voltage, hydraulic_pressure, motor_temperature, mast_position, vibration)
+- `DeviceState` enum + `DeviceRuntimeState` (mutable runtime), state machine transitions
+- `BaseSensor` ABC + her sensörün durum-bazlı davranış formülleri
+- Sensörler arası implicit korelasyon
+
+Faz seyri: `docs/ROADMAP.md`.
 
 ---
 

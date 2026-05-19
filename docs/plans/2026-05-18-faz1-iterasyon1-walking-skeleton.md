@@ -994,18 +994,20 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>"
 
 ---
 
-## Task 7: Uçtan Uca Manuel Doğrulama
+## Task 7: Uçtan Uca Manuel Doğrulama ✅ TAMAMLANDI (manuel test başarılı, 2026-05-19)
+
+> **Not — Paketleme fix'i:** Bu task sırasında `python -m simulator` komutunun çalışmadığı keşfedildi. Sebep: tüm imports `from src.simulator.X` formatındaydı ama paket adı `simulator` olmalıydı. Düzeltme commit `4b1baf7`: pyproject.toml'a `[tool.setuptools.packages.find] where = ["src"]` eklendi, tüm imports `from simulator.X` olarak yeniden yazıldı, `tests/conftest.py` eklendi (editable install olmadan pytest çalışsın). Adım: `pip install -e .` artık gerekli, plan'a "Önkoşul" bölümüne eklenmeli.
 
 Bu task **kullanıcı terminalinde** çalıştırılır (Mosquitto kurulu olmalı). Bir agent çalıştıramaz; kullanıcı yapar ve sonucu paylaşır.
 
-- [ ] **Step 7.1: Mosquitto'nun çalıştığını doğrula**
+- [x] **Step 7.1: Mosquitto'nun çalıştığını doğrula**
 
 ```bash
 brew services list | grep mosquitto
 ```
 Beklenen: `mosquitto started`. Değilse: `brew services start mosquitto`.
 
-- [ ] **Step 7.2: Lokal config dosyalarını oluştur**
+- [x] **Step 7.2: Lokal config dosyalarını oluştur**
 
 ```bash
 cd /Users/cemalozcan/Desktop/mast-anomaly-detection
@@ -1014,7 +1016,7 @@ cp config/devices.yaml.example config/devices.yaml
 cp config/simulator.yaml.example config/simulator.yaml
 ```
 
-- [ ] **Step 7.3: İki terminalde uçtan uca test**
+- [x] **Step 7.3: İki terminalde uçtan uca test**
 
 Terminal A (subscriber, önce başlat):
 ```bash
@@ -1033,7 +1035,7 @@ Beklenen: Terminal A'da ~her saniye bir mesaj görünür, örneğin:
 telemetry/device_001/motor_current {"device_id": "device_001", "timestamp": "2026-05-18T15:30:00.123Z", "state": "idle", "sensor": "motor_current", "value": 0.487, "unit": "A"}
 ```
 
-- [ ] **Step 7.4: Graceful shutdown doğrula**
+- [x] **Step 7.4: Graceful shutdown doğrula**
 
 Terminal B'de `Ctrl+C` bas. Beklenen Loguru çıktısı:
 ```
@@ -1042,7 +1044,7 @@ INFO     | MQTT bağlantısı kapatılıyor
 ```
 Process exit 0 ile çıkmalı.
 
-- [ ] **Step 7.5: Iterasyon 1 kabul kriterleri kontrol listesi**
+- [x] **Step 7.5: Iterasyon 1 kabul kriterleri kontrol listesi**
 
 Spec § 3 Iterasyon 1 bitti kriterleri:
 - [x] `python -m simulator` çalışır, çökmez. → Step 7.3
