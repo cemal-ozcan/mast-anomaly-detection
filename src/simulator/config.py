@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -26,11 +27,29 @@ class SensorConfig:
     noise_std: float
 
 
+class DeviceState(StrEnum):
+    IDLE = "idle"
+    RAISING = "raising"
+    HOLDING = "holding"
+    LOWERING = "lowering"
+
+
+@dataclass(frozen=True)
+class StateDurations:
+    idle: tuple[float, float]      # (min_s, max_s)
+    raising: tuple[float, float]
+    holding: tuple[float, float]
+    lowering: tuple[float, float]
+
+
 @dataclass(frozen=True)
 class DeviceConfig:
     id: str
     type: str
     sensors: list[SensorConfig]
+    state_durations: StateDurations
+    target_height_mm: float
+    seed: int | None = None
 
 
 @dataclass(frozen=True)
@@ -83,17 +102,18 @@ def load_mqtt_config(path: Path) -> MQTTConfig:
 
 
 def load_devices(path: Path) -> list[DeviceConfig]:
-    """Cihaz listesini YAML dosyasından yükle.
+    """Cihaz yapılandırmalarını YAML dosyasından yükle.
 
     Args:
         path: devices.yaml dosyasının yolu.
 
     Returns:
-        Cihaz yapılandırmalarının listesi (her biri sensör tanımlarını içerir).
+        DeviceConfig listesi.
 
     Raises:
         FileNotFoundError: Config dosyası yoksa.
-        ValueError: YAML bozuksa veya şema geçersizse.
+        ValueError: YAML bozuksa veya şema geçersizse (eksik state_durations,
+            target_height_mm vb.).
     """
     data = _read_yaml(path)
     try:
@@ -111,11 +131,21 @@ def load_devices(path: Path) -> list[DeviceConfig]:
                 )
                 for s in d["sensors"]
             ]
+            sd = d["state_durations"]
+            state_durations = StateDurations(
+                idle=(float(sd["idle"][0]), float(sd["idle"][1])),
+                raising=(float(sd["raising"][0]), float(sd["raising"][1])),
+                holding=(float(sd["holding"][0]), float(sd["holding"][1])),
+                lowering=(float(sd["lowering"][0]), float(sd["lowering"][1])),
+            )
             devices.append(
                 DeviceConfig(
                     id=str(d["id"]),
                     type=str(d["type"]),
                     sensors=sensors,
+                    state_durations=state_durations,
+                    target_height_mm=float(d["target_height_mm"]),
+                    seed=int(d["seed"]) if "seed" in d else None,
                 )
             )
         return devices
