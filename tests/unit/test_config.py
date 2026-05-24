@@ -59,3 +59,46 @@ def test_invalid_yaml_raises_value_error(tmp_path: Path) -> None:
     bad.write_text("broker:\n  host: localhost\n  port: not_a_number\n")
     with pytest.raises(ValueError):
         load_mqtt_config(bad)
+
+
+def test_load_devices_parses_state_durations_as_tuples() -> None:
+    devices = load_devices(FIXTURES / "devices_minimal.yaml")
+    device = devices[0]
+    assert device.state_durations.idle == (5.0, 30.0)
+    assert device.state_durations.raising == (10.0, 60.0)
+    assert device.state_durations.holding == (60.0, 300.0)
+    assert device.state_durations.lowering == (10.0, 60.0)
+
+
+def test_load_devices_includes_target_height_and_seed() -> None:
+    devices = load_devices(FIXTURES / "devices_minimal.yaml")
+    device = devices[0]
+    assert device.target_height_mm == 5000.0
+    assert device.seed == 42
+
+
+def test_load_devices_rejects_missing_state_durations(tmp_path: Path) -> None:
+    bad = tmp_path / "devices.yaml"
+    bad.write_text(
+        """
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    target_height_mm: 5000
+    sensors:
+      - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
+"""
+    )
+    with pytest.raises(ValueError, match="state_durations"):
+        load_devices(bad)
+
+
+def test_device_state_is_str_enum() -> None:
+    from simulator.config import DeviceState
+    assert DeviceState.IDLE == "idle"
+    assert DeviceState.RAISING == "raising"
+    assert DeviceState.HOLDING == "holding"
+    assert DeviceState.LOWERING == "lowering"
+    # JSON serialization works without .value:
+    import json
+    assert json.dumps({"s": DeviceState.IDLE}) == '{"s": "idle"}'
