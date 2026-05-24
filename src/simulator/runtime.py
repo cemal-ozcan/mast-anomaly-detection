@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from random import Random
 
-from simulator.config import DeviceState
+from simulator.config import DeviceState, StateDurations
 
 
 @dataclass
@@ -42,3 +42,47 @@ class DeviceRuntimeState:
     def device_elapsed_s(self) -> float:
         """Cihaz engine'de spawn olduğundan beri geçen toplam süre (senaryolar için)."""
         return self.clock() - self.started_at_monotonic
+
+
+_NEXT_STATE: dict[DeviceState, DeviceState] = {
+    DeviceState.IDLE: DeviceState.RAISING,
+    DeviceState.RAISING: DeviceState.HOLDING,
+    DeviceState.HOLDING: DeviceState.LOWERING,
+    DeviceState.LOWERING: DeviceState.IDLE,
+}
+
+
+def _state_bounds(state: DeviceState, durations: StateDurations) -> tuple[float, float]:
+    """State için (min_s, max_s) süre aralığı döndür."""
+    match state:
+        case DeviceState.IDLE:
+            return durations.idle
+        case DeviceState.RAISING:
+            return durations.raising
+        case DeviceState.HOLDING:
+            return durations.holding
+        case DeviceState.LOWERING:
+            return durations.lowering
+
+
+def advance_state_machine(runtime: DeviceRuntimeState, durations: StateDurations) -> None:
+    """State süresi dolduysa sıradaki state'e geç. Aksi halde no-op.
+
+    Transition anında current_state_duration_s YENİDEN seçilir (invaryant 1).
+    Tam IDLE→IDLE döngüsünde cycle_count artar.
+
+    Args:
+        runtime: Mutate edilecek runtime durumu.
+        durations: State başına (min, max) süre aralıkları.
+    """
+    if runtime.elapsed_in_state_s < runtime.current_state_duration_s:
+        return
+
+    next_state = _NEXT_STATE[runtime.state]
+    next_min, next_max = _state_bounds(next_state, durations)
+
+    runtime.state = next_state
+    runtime.current_state_duration_s = runtime.rng.uniform(next_min, next_max)
+    runtime.state_entered_at_monotonic = runtime.clock()
+    if next_state == DeviceState.IDLE:
+        runtime.cycle_count += 1

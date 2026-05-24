@@ -4,7 +4,7 @@ from __future__ import annotations
 from random import Random
 
 from simulator.config import DeviceState, StateDurations
-from simulator.runtime import DeviceRuntimeState
+from simulator.runtime import DeviceRuntimeState, advance_state_machine
 
 
 class FakeClock:
@@ -74,3 +74,68 @@ def test_device_elapsed_uses_started_at_monotonic() -> None:
     # State'e 30s önce girdik, cihaz spawn'dan da 30s geçti
     assert runtime.device_elapsed_s == 30.0
     assert runtime.elapsed_in_state_s == 30.0
+
+
+def test_no_transition_before_duration_elapses() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    clock.advance(4.999)
+    advance_state_machine(runtime, _fixed_durations())
+    assert runtime.state == DeviceState.IDLE
+
+
+def test_transition_happens_when_duration_elapses() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    clock.advance(5.0)
+    advance_state_machine(runtime, _fixed_durations())
+    assert runtime.state == DeviceState.RAISING
+
+
+def test_transition_resamples_current_state_duration() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    clock.advance(5.0)
+    advance_state_machine(runtime, _fixed_durations())
+    # _fixed_durations: raising=(10, 10), so resampled value must be 10.0
+    assert runtime.current_state_duration_s == 10.0
+
+
+def test_transition_updates_state_entered_at_to_clock() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    clock.advance(5.0)
+    advance_state_machine(runtime, _fixed_durations())
+    assert runtime.state_entered_at_monotonic == 5.0
+
+
+def test_full_cycle_returns_to_idle_and_increments_count() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    durations = _fixed_durations()
+
+    # IDLE → RAISING
+    clock.advance(5.0)
+    advance_state_machine(runtime, durations)
+    assert runtime.state == DeviceState.RAISING
+    assert runtime.cycle_count == 0
+
+    # RAISING → HOLDING
+    # Not: advance_state_machine runtime'ı mutate eder ama mypy önceki assert'ten
+    # gelen literal narrowing'i fonksiyon çağrısından sonra sıfırlamaz (bilinen mypy
+    # kısıtı). Karşılaştırma runtime'da doğru; comparison-overlap false positive bastırılır.
+    # İlk pragma'dan sonra mypy narrowing'i bıraktığı için sonraki assert'ler temiz.
+    clock.advance(10.0)
+    advance_state_machine(runtime, durations)
+    assert runtime.state == DeviceState.HOLDING  # type: ignore[comparison-overlap]
+
+    # HOLDING → LOWERING
+    clock.advance(60.0)
+    advance_state_machine(runtime, durations)
+    assert runtime.state == DeviceState.LOWERING
+
+    # LOWERING → IDLE (cycle complete)
+    clock.advance(10.0)
+    advance_state_machine(runtime, durations)
+    assert runtime.state == DeviceState.IDLE
+    assert runtime.cycle_count == 1
