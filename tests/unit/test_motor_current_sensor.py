@@ -41,3 +41,13 @@ def test_rejects_wrong_sensor_name() -> None:
     bad = SensorConfig(name="hydraulic_pressure", unit="bar", baseline=10.0, noise_std=2.0)
     with pytest.raises(ValueError, match="motor_current"):
         MotorCurrentSensor(bad, random.Random())
+
+
+def test_base_sensor_cannot_be_instantiated() -> None:
+    """BaseSensor ABC abstract — direkt instance edilemez."""
+    from simulator.config import SensorConfig
+    from simulator.sensors.base import BaseSensor
+
+    config = SensorConfig(name="x", unit="X", baseline=0.0, noise_std=0.0)
+    with pytest.raises(TypeError, match="abstract"):
+        BaseSensor(config)  # type: ignore[abstract]
