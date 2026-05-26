@@ -101,3 +101,17 @@ def test_base_sensor_cannot_be_instantiated() -> None:
     config = SensorConfig(name="x", unit="X", baseline=0.0, noise_std=0.0)
     with pytest.raises(TypeError, match="abstract"):
         BaseSensor(config)  # type: ignore[abstract]
+
+
+def test_sensor_registry_contains_motor_current() -> None:
+    from simulator.sensors import SENSOR_REGISTRY
+
+    assert "motor_current" in SENSOR_REGISTRY
+    assert SENSOR_REGISTRY["motor_current"] is MotorCurrentSensor
+
+
+def test_sensor_registry_only_iterasyon_2a_sensors() -> None:
+    """Iterasyon 2a'da sadece motor_current kayıtlı. 5 sensör daha 2b'de gelecek."""
+    from simulator.sensors import SENSOR_REGISTRY
+
+    assert set(SENSOR_REGISTRY.keys()) == {"motor_current"}
