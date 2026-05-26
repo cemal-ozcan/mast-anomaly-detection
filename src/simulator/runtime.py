@@ -86,3 +86,29 @@ def advance_state_machine(runtime: DeviceRuntimeState, durations: StateDurations
     runtime.state_entered_at_monotonic = runtime.clock()
     if next_state == DeviceState.IDLE:
         runtime.cycle_count += 1
+
+
+def compute_position(runtime: DeviceRuntimeState, target_mm: float) -> float:
+    """State ve elapsed'e göre lineer pozisyon hesabı.
+
+    Saf fonksiyon — runtime'ı mutate etmez. Sensörler (özellikle mast_position
+    Iterasyon 2b'de) bu fonksiyondan pozisyon okur.
+
+    Args:
+        runtime: Cihaz çalışma durumu.
+        target_mm: Cihazın hedef yüksekliği (config'den).
+
+    Returns:
+        Şu anki pozisyon (mm). IDLE→0, RAISING→0..target lineer,
+        HOLDING→target, LOWERING→target..0 lineer.
+    """
+    progress = min(1.0, runtime.elapsed_in_state_s / runtime.current_state_duration_s)
+    match runtime.state:
+        case DeviceState.IDLE:
+            return 0.0
+        case DeviceState.RAISING:
+            return target_mm * progress
+        case DeviceState.HOLDING:
+            return target_mm
+        case DeviceState.LOWERING:
+            return target_mm * (1.0 - progress)

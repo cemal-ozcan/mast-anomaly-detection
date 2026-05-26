@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from random import Random
 
+import pytest
+
 from simulator.config import DeviceState, StateDurations
-from simulator.runtime import DeviceRuntimeState, advance_state_machine
+from simulator.runtime import DeviceRuntimeState, advance_state_machine, compute_position
 
 
 class FakeClock:
@@ -139,3 +141,42 @@ def test_full_cycle_returns_to_idle_and_increments_count() -> None:
     advance_state_machine(runtime, durations)
     assert runtime.state == DeviceState.IDLE
     assert runtime.cycle_count == 1
+
+
+def test_compute_position_idle_returns_zero() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.IDLE, duration=5.0)
+    assert compute_position(runtime, target_mm=5000.0) == 0.0
+
+
+def test_compute_position_raising_returns_linear_progress() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.RAISING, duration=10.0)
+    # 0 elapsed → 0 progress
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(0.0)
+    clock.advance(5.0)
+    # 5/10 elapsed → 50% progress
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(2500.0)
+    clock.advance(5.0)
+    # 10/10 elapsed → 100% progress
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(5000.0)
+
+
+def test_compute_position_holding_returns_target() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.HOLDING, duration=60.0)
+    clock.advance(30.0)
+    assert compute_position(runtime, target_mm=5000.0) == 5000.0
+
+
+def test_compute_position_lowering_returns_decreasing() -> None:
+    clock = FakeClock(0.0)
+    runtime = _make_runtime(clock=clock, state=DeviceState.LOWERING, duration=10.0)
+    # 0 elapsed → still at target
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(5000.0)
+    clock.advance(5.0)
+    # 5/10 elapsed → 50% down
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(2500.0)
+    clock.advance(5.0)
+    # 10/10 elapsed → fully down
+    assert compute_position(runtime, target_mm=5000.0) == pytest.approx(0.0)
