@@ -3,8 +3,6 @@ import json
 import re
 from unittest.mock import MagicMock
 
-import pytest
-
 from simulator.config import MQTTConfig
 from simulator.publisher import MQTTPublisher, _now_iso
 

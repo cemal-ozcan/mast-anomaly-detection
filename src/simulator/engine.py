@@ -11,7 +11,6 @@ from loguru import logger
 
 from simulator.config import (
     DeviceConfig,
-    EngineConfig,
     MQTTConfig,
     load_devices,
     load_engine_config,

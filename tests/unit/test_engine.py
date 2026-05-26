@@ -46,10 +46,22 @@ def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.Monkey
 devices:
   - id: device_001
     type: telescopic_mast_v1
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
     sensors:
       - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
   - id: device_002
     type: telescopic_mast_v1
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
     sensors:
       - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
 """
@@ -73,6 +85,12 @@ def test_run_rejects_unsupported_sensor(tmp_path: Path, monkeypatch: pytest.Monk
 devices:
   - id: device_001
     type: telescopic_mast_v1
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
     sensors:
       - {name: hydraulic_pressure, unit: bar, baseline: 10, noise_std: 2}
 """
