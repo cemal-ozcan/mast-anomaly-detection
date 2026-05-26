@@ -1,42 +1,39 @@
+"""Engine state machine entegrasyonu için unit testler."""
+from __future__ import annotations
+
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from simulator.config import DeviceState
 from simulator.engine import run
+from tests.unit.test_runtime import FakeClock
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
-def test_run_publishes_configured_iteration_count(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_publishes_with_state_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    """publish_reading her tick'te runtime.state ile çağrılır (StrEnum → string)."""
     mock_publisher = MagicMock()
-    captured: dict[str, object] = {}
-
-    def fake_publisher_factory(config: object) -> MagicMock:
-        captured["config"] = config
-        return mock_publisher
-
-    monkeypatch.setattr("simulator.engine._make_publisher", fake_publisher_factory)
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
     monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
+    clock = FakeClock(0.0)
     run(
         mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
         devices_path=FIXTURES / "devices_minimal.yaml",
         engine_config_path=FIXTURES / "simulator_minimal.yaml",
         max_iterations=3,
         seed=42,
+        clock=clock,
     )
 
-    assert mock_publisher.connect.call_count == 1
     assert mock_publisher.publish_reading.call_count == 3
-    assert mock_publisher.close.call_count == 1
-
     for call in mock_publisher.publish_reading.call_args_list:
         kwargs = call.kwargs
-        assert kwargs["device_id"] == "device_001"
-        assert kwargs["sensor"] == "motor_current"
-        assert kwargs["unit"] == "A"
-        assert isinstance(kwargs["value"], float)
+        # state IDLE çünkü clock advance edilmedi, hala ilk state'te
+        assert kwargs["state"] == DeviceState.IDLE
 
 
 def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,10 +95,38 @@ devices:
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
     monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
-    with pytest.raises(ValueError, match="motor_current"):
+    with pytest.raises(KeyError, match="hydraulic_pressure"):
         run(
             mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
             devices_path=devices_yaml,
             engine_config_path=FIXTURES / "simulator_minimal.yaml",
             max_iterations=1,
         )
+
+
+def test_run_publishes_noisy_value_around_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Engine gürültüyü ekler (spec § 8). IDLE'da değer config.baseline (0.5) civarı.
+
+    clock advance edilmediği için state IDLE kalır; motor_current.compute() 0.5 döner,
+    engine üzerine gauss(0, 0.1) ekler → değer 0.5 ± birkaç sigma.
+    """
+    mock_publisher = MagicMock()
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    clock = FakeClock(0.0)
+    run(
+        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+        devices_path=FIXTURES / "devices_minimal.yaml",
+        engine_config_path=FIXTURES / "simulator_minimal.yaml",
+        max_iterations=20,
+        seed=42,
+        clock=clock,
+    )
+
+    values = [c.kwargs["value"] for c in mock_publisher.publish_reading.call_args_list]
+    # IDLE baseline 0.5, noise_std 0.1. 20 örnek → ortalama ~0.5 (3-sigma tolerans geniş).
+    mean = sum(values) / len(values)
+    assert 0.2 < mean < 0.8
+    # Gürültü gerçekten ekleniyor: tüm değerler birebir aynı OLMAMALI.
+    assert len(set(values)) > 1

@@ -1,9 +1,10 @@
-"""Iterasyon 1 engine: tek cihaz, tek sensör, 1 Hz blocking loop."""
+"""Iterasyon 2a engine: tek cihaz, state machine ile motor_current yayını."""
 from __future__ import annotations
 
 import random
 import signal
 import time
+from collections.abc import Callable
 from pathlib import Path
 from types import FrameType
 
@@ -18,42 +19,29 @@ from simulator.config import (
     load_mqtt_config,
 )
 from simulator.publisher import MQTTPublisher
-from simulator.runtime import DeviceRuntimeState
-from simulator.sensors.motor_current import MotorCurrentSensor
+from simulator.runtime import (
+    DeviceRuntimeState,
+    advance_state_machine,
+    compute_position,
+)
+from simulator.sensors import SENSOR_REGISTRY
 
 
 def _make_publisher(config: MQTTConfig) -> MQTTPublisher:
-    """Test edilebilirlik için factory; monkeypatch ile değiştirilebilir.
-
-    Args:
-        config: MQTT konfigürasyonu.
-
-    Returns:
-        MQTTPublisher örneği.
-    """
+    """Test edilebilirlik için factory; monkeypatch ile değiştirilebilir."""
     return MQTTPublisher(config)
 
 
-def _validate_iteration1_constraints(devices: list[DeviceConfig]) -> DeviceConfig:
-    """Iterasyon 1 kısıtlamalarını doğrula: tek cihaz, motor_current sensörü.
-
-    Args:
-        devices: Cihaz konfigürasyonları listesi.
-
-    Returns:
-        Tek cihaz (DeviceConfig).
-
-    Raises:
-        ValueError: Cihaz sayısı != 1 veya sensör != motor_current ise.
-    """
+def _validate_iteration2a_constraints(devices: list[DeviceConfig]) -> DeviceConfig:
+    """Iterasyon 2a kısıtlamaları: tam 1 cihaz + tam 1 sensör (tip SENSOR_REGISTRY'de kontrol edilir)."""
     if len(devices) != 1:
         raise ValueError(
-            f"Iterasyon 1 exactly 1 device destekliyor, alınan: {len(devices)}"
+            f"Iterasyon 2a exactly 1 device destekliyor, alınan: {len(devices)}"
         )
     device = devices[0]
-    if len(device.sensors) != 1 or device.sensors[0].name != "motor_current":
+    if len(device.sensors) != 1:
         raise ValueError(
-            "Iterasyon 1: cihaz tam olarak bir 'motor_current' sensörü içermeli"
+            "Iterasyon 2a: cihaz tam olarak bir sensör içermeli"
         )
     return device
 
@@ -64,32 +52,47 @@ def run(
     engine_config_path: Path = Path("config/simulator.yaml"),
     max_iterations: int | None = None,
     seed: int | None = None,
+    clock: Callable[[], float] = time.monotonic,
 ) -> None:
-    """Engine'i başlatır. max_iterations=None → SIGINT/SIGTERM gelene dek sonsuz.
-
-    max_iterations verilirse testler için sınırlı yinelemeler çalışır.
-    seed verilirse RNG deterministik (test/regresyon için).
+    """Engine'i başlatır. State machine sürer, sensör compute() çağırır.
 
     Args:
-        mqtt_config_path: MQTT konfigürasyonu dosya yolu.
-        devices_path: Cihaz konfigürasyonu dosya yolu.
-        engine_config_path: Engine konfigürasyonu dosya yolu.
-        max_iterations: Sonsuz döngüyü sonlandırmak için maksimum yineleme sayısı.
-                       None ise SIGINT/SIGTERM sinyali gelene kadar çalışır.
-        seed: RNG için seed değeri. Test/regresyon için deterministiklik sağlar.
+        mqtt_config_path: MQTT YAML config.
+        devices_path: Cihaz YAML config.
+        engine_config_path: Engine YAML config.
+        max_iterations: None → SIGINT/SIGTERM gelene dek sonsuz.
+        seed: RNG seed; verilmezse YAML'deki device.seed kullanılır.
+        clock: Saat kaynağı (DI). Test'lerde FakeClock inject edilebilir.
 
     Raises:
-        ValueError: Iterasyon 1 kısıtlamalarına uymayan konfigürasyonlar.
+        FileNotFoundError: Config dosyası yoksa.
+        ValueError: Config geçersizse veya Iterasyon 2a kısıtlamaları ihlal edilmişse.
+        KeyError: SENSOR_REGISTRY'de bilinmeyen sensör adı.
     """
     mqtt_config = load_mqtt_config(mqtt_config_path)
     devices = load_devices(devices_path)
     engine_config = load_engine_config(engine_config_path)
     logger.level(engine_config.log_level)
 
-    device = _validate_iteration1_constraints(devices)
+    device = _validate_iteration2a_constraints(devices)
     sensor_config = device.sensors[0]
-    rng = random.Random(seed) if seed is not None else random.Random()
-    sensor = MotorCurrentSensor(sensor_config)
+
+    sensor_cls = SENSOR_REGISTRY[sensor_config.name]
+    sensor = sensor_cls(sensor_config)
+
+    rng = random.Random(seed if seed is not None else device.seed)
+    now = clock()
+    initial_duration = rng.uniform(*device.state_durations.idle)
+    runtime = DeviceRuntimeState(
+        state=DeviceState.IDLE,
+        state_entered_at_monotonic=now,
+        current_state_duration_s=initial_duration,
+        position_mm=0.0,
+        cycle_count=0,
+        rng=rng,
+        started_at_monotonic=now,
+        clock=clock,
+    )
 
     publisher = _make_publisher(mqtt_config)
     publisher.connect()
@@ -107,28 +110,19 @@ def run(
     tick_interval = 1.0 / engine_config.tick_hz
     iterations = 0
     try:
-        # Iterasyon 1: minimal state (IDLE sadece) + deterministik Gauss gürültü
-        # Task 8'de state machine entegrasyonu ve engine refactor yapılacak.
-        runtime = DeviceRuntimeState(
-            state=DeviceState.IDLE,
-            state_entered_at_monotonic=0.0,
-            current_state_duration_s=0.0,
-            position_mm=0.0,
-            cycle_count=0,
-            rng=rng,
-            started_at_monotonic=time.monotonic(),
-        )
         while not stop:
-            # compute() saf sensor değeri (gürültü yok); gürültü engine'de (Task 8).
-            base_value = sensor.compute(runtime, position_mm=0.0)
-            # Iterasyon 1: Gauss gürültüsü burada ekleniyor (Task 8'de spec'e uygun hale getirilecek)
-            value = base_value + rng.gauss(0.0, sensor_config.noise_std)
+            advance_state_machine(runtime, device.state_durations)
+            runtime.position_mm = compute_position(runtime, device.target_height_mm)
+
+            clean_value = sensor.compute(runtime, runtime.position_mm)
+            noisy_value = clean_value + rng.gauss(0.0, sensor_config.noise_std)
+
             publisher.publish_reading(
                 device_id=device.id,
                 sensor=sensor_config.name,
-                value=value,
+                value=noisy_value,
                 unit=sensor_config.unit,
-                state="idle",
+                state=runtime.state,  # StrEnum → JSON serializable
             )
             iterations += 1
             if max_iterations is not None and iterations >= max_iterations:
