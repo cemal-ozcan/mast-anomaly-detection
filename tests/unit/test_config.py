@@ -94,11 +94,14 @@ devices:
 
 
 def test_device_state_is_str_enum() -> None:
-    from simulator.config import DeviceState
-    assert DeviceState.IDLE == "idle"
-    assert DeviceState.RAISING == "raising"
-    assert DeviceState.HOLDING == "holding"
-    assert DeviceState.LOWERING == "lowering"
-    # JSON serialization works without .value:
     import json
+
+    from simulator.config import DeviceState
+
+    # StrEnum üyeleri string değeriyle tanımlı.
+    assert DeviceState.IDLE.value == "idle"
+    assert DeviceState.RAISING.value == "raising"
+    assert DeviceState.HOLDING.value == "holding"
+    assert DeviceState.LOWERING.value == "lowering"
+    # StrEnum'un asıl faydası: JSON'a .value çağırmadan string olarak serialize olur.
     assert json.dumps({"s": DeviceState.IDLE}) == '{"s": "idle"}'
