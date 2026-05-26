@@ -1,35 +1,33 @@
-"""Iterasyon 1: Minimal motor akımı sensörü. Sabit baseline + Gauss gürültü."""
+"""Iterasyon 2: state-aware motor akımı sensörü. State'e göre baseline değişir."""
 from __future__ import annotations
 
-import random
+from simulator.config import DeviceState, SensorConfig
+from simulator.runtime import DeviceRuntimeState
+from simulator.sensors.base import BaseSensor
 
-from simulator.config import SensorConfig
+# DOMAIN.md sat. 58 — hareket halinde 5-15A kararlı tüketim. 8.0 bu aralığın
+# merkezi-altı, gerçekçi nominal yük. RAISING ve LOWERING aynı kategori.
+_ACTIVE_BASELINE_A = 8.0
 
 
-class MotorCurrentSensor:
-    """Motor akımı (A) ölçer. Iterasyon 1'de state machine yok — sabit baseline."""
+class MotorCurrentSensor(BaseSensor):
+    """Motor akımı (A). IDLE/HOLDING'de düşük (config.baseline), RAISING/LOWERING'de yüksek."""
 
-    def __init__(self, config: SensorConfig, rng: random.Random) -> None:
-        """Motor akımı sensörü oluştur.
-
-        Args:
-            config: Sensör yapılandırması (name, unit, baseline, noise_std).
-            rng: Rastgele sayı üreteci.
-
-        Raises:
-            ValueError: config.name != "motor_current" ise.
-        """
+    def __init__(self, config: SensorConfig) -> None:
         if config.name != "motor_current":
             raise ValueError(
-                f"MotorCurrentSensor sensör adı 'motor_current' bekler, alınan: {config.name!r}"
+                f"MotorCurrentSensor 'motor_current' bekler, alınan: {config.name!r}"
             )
-        self.config = config
-        self._rng = rng
+        super().__init__(config)
 
-    def sample(self) -> float:
-        """Bu tick için (baseline + Gauss gürültü) değerini döndür.
+    def compute(self, runtime: DeviceRuntimeState, position_mm: float) -> float:
+        """State'e göre temiz motor akımı değeri.
 
-        Returns:
-            Motor akımı değeri (A) — baseline + Gaussian(0, noise_std).
+        IDLE/HOLDING: config.baseline (sensör boşta, motor durmuş).
+        RAISING/LOWERING: _ACTIVE_BASELINE_A (motor enerjili, yük altında).
         """
-        return self.config.baseline + self._rng.gauss(0.0, self.config.noise_std)
+        match runtime.state:
+            case DeviceState.IDLE | DeviceState.HOLDING:
+                return self.config.baseline
+            case DeviceState.RAISING | DeviceState.LOWERING:
+                return _ACTIVE_BASELINE_A

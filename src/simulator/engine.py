@@ -11,12 +11,14 @@ from loguru import logger
 
 from simulator.config import (
     DeviceConfig,
+    DeviceState,
     MQTTConfig,
     load_devices,
     load_engine_config,
     load_mqtt_config,
 )
 from simulator.publisher import MQTTPublisher
+from simulator.runtime import DeviceRuntimeState
 from simulator.sensors.motor_current import MotorCurrentSensor
 
 
@@ -87,7 +89,7 @@ def run(
     device = _validate_iteration1_constraints(devices)
     sensor_config = device.sensors[0]
     rng = random.Random(seed) if seed is not None else random.Random()
-    sensor = MotorCurrentSensor(sensor_config, rng)
+    sensor = MotorCurrentSensor(sensor_config)
 
     publisher = _make_publisher(mqtt_config)
     publisher.connect()
@@ -105,8 +107,22 @@ def run(
     tick_interval = 1.0 / engine_config.tick_hz
     iterations = 0
     try:
+        # Iterasyon 1: minimal state (IDLE sadece) + deterministik Gauss gürültü
+        # Task 8'de state machine entegrasyonu ve engine refactor yapılacak.
+        runtime = DeviceRuntimeState(
+            state=DeviceState.IDLE,
+            state_entered_at_monotonic=0.0,
+            current_state_duration_s=0.0,
+            position_mm=0.0,
+            cycle_count=0,
+            rng=rng,
+            started_at_monotonic=time.monotonic(),
+        )
         while not stop:
-            value = sensor.sample()
+            # compute() saf sensor değeri (gürültü yok); gürültü engine'de (Task 8).
+            base_value = sensor.compute(runtime, position_mm=0.0)
+            # Iterasyon 1: Gauss gürültüsü burada ekleniyor (Task 8'de spec'e uygun hale getirilecek)
+            value = base_value + rng.gauss(0.0, sensor_config.noise_std)
             publisher.publish_reading(
                 device_id=device.id,
                 sensor=sensor_config.name,
