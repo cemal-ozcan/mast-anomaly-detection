@@ -1,11 +1,18 @@
-# Simülasyon için cihaz tanımları örneği — Iterasyon 1 (walking skeleton)
+# Simülasyon için cihaz tanımları örneği — Iterasyon 2a (state machine)
 # Gerçek devices.yaml dosyasını bu örnekten oluşturun: cp devices.yaml.example devices.yaml
 
 devices:
   - id: device_001
     type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle:     [5, 30]      # [min_s, max_s]
+      raising:  [10, 60]
+      holding:  [60, 300]
+      lowering: [10, 60]
     sensors:
       - name: motor_current
         unit: A
-        baseline: 0.5
+        baseline: 0.5        # IDLE/HOLDING değeri; RAISING/LOWERING sensör sınıfında 8.0A
         noise_std: 0.1
