@@ -83,16 +83,21 @@ Faz 1 bu prensibe **walking skeleton + iterasyon** modelinde uyar. Her iterasyon
 
 **Kapsam:**
 - Engine asyncio loop'a geçer
-- Her cihaz `async def run()` task'ı, paralel
+- Her cihaz `async def run_device(...)` task'ı, paralel
 - Her cihazın kendi `DeviceRuntimeState` ve `random.Random(seed)` instance'ı
 - YAML'de N cihaz tanımlanabilir
+- **Paylaşılan tek `MQTTPublisher` instance** — per-device değil. Gerekçe: `paho.mqtt.client.publish()` thread-safe, kendi network loop'una sıraya alır; N cihaz için N TCP bağlantısı kaynak israfıdır ve Faz 2 ingestion zaten tek subscriber olarak okuyacak.
+- **Cihaz ID disiplini:** `device.id` değerleri unique olmalı (aynı topic'e iki yayıncı çakışmasın). Birden fazla cihazda aynı `seed` varsa engine boot'ta WARN log basar, hata değil — § 3 Iter 3 bitti kriteri #2 (deterministik regresyon) bu durumu meşru kullanım olarak içerir.
+- **Validation refactor:** `_validate_iteration2b_constraints` → `_validate_devices`. Cihaz sayısı ≥1, her cihaz tam 6-sensör seti (§ 6 disiplini Faz 1 boyunca mutlak), ID'ler unique. Iter 2b'nin "tam 1 cihaz" katı kuralı düşer.
+- **Shutdown:** `loop.add_signal_handler(SIGINT|SIGTERM, shutdown.set)` + `asyncio.Event`. Her `run_device` döngüsü tick başında `shutdown.is_set()` kontrol eder; engine `await asyncio.gather(*tasks)` sonrası `publisher.close()` çağırır. § 11 satırı zaten bu yöne işaret ediyordu, Iter 3 implementasyonu somutlaştırır.
 
 **Bitti kriterleri:**
-1. YAML'de 3 cihaz tanımlanır, üçü de bağımsız topic'lere yayın yapar.
-2. İki cihaz aynı seed ile yan yana çalıştırılınca üretilen değerler birebir aynı (regresyon testi).
-3. Integration test: 2 cihaz spawn, 10 saniye boyunca her ikisinden de mesaj alındığı doğrulanır (`tests/integration/`).
+1. YAML'de 3 cihaz tanımlanır, üçü de bağımsız topic'lere (`telemetry/{device_id}/...`) yayın yapar; mesajlar paralel akar (tek cihazın gecikmesi diğerlerini bloklamaz).
+2. İki cihaz aynı seed + aynı state_durations + aynı tick sayısı ile çalıştırılınca yayınlanan `value` dizileri birebir aynı (regresyon testi — per-device RNG izolasyonu garantisinin doğrulaması).
+3. Integration test: 2 cihaz spawn, simüle 10 saniye (`asyncio.sleep` no-op'lanır, gerçek wall-clock değil) boyunca her ikisinden de mesaj geldiği doğrulanır (`tests/integration/`).
+4. `tests/unit/` mevcut 71 test yeşil kalır + yeni asyncio engine testleri eklenir. Toplam kapsama ≥%80.
 
-**Integration test broker stratejisi:** paho-mqtt mock veya test-loop kullanılır — gerçek Mosquitto'ya karşı testler ayrı bir **smoke** kategorisindedir, CI'da çalışmaz, sadece lokal/manuel. Gerekçe: Faz 1'in test odağı simulator'ın mesaj üretimi; gerçek broker davranışı Faz 2 (ingestion) sorumluluğu. Network bağımlılığı CI flakiness yaratır.
+**Integration test broker stratejisi:** paho-mqtt mock kullanılır — gerçek Mosquitto'ya karşı testler ayrı bir **smoke** kategorisindedir, CI'da çalışmaz, sadece lokal/manuel. Gerekçe: Faz 1'in test odağı simulator'ın mesaj üretimi; gerçek broker davranışı Faz 2 (ingestion) sorumluluğu. Network bağımlılığı CI flakiness yaratır.
 
 ### Iterasyon 4 — Üç Arıza Senaryosu
 
@@ -571,6 +576,18 @@ class FakeClock:
 
 - Broker: **paho-mqtt mock veya test-loop**. Gerçek Mosquitto'ya karşı testler `tests/smoke/` (CI dışı, sadece lokal/manuel).
 - Deterministik seed ile 60 sn'lik run → mesaj sayısı + sıra + şema fixture snapshot'una karşı doğrulanır.
+
+### Asyncio Test Pattern (Iterasyon 3+)
+
+Engine asyncio'ya geçtiğinde `asyncio.sleep` gerçek wall-clock değerlerini bekler; testlerde bu kabul edilemez (10 sn'lik integration testi 10 sn sürmemeli). Pattern:
+
+- **`pytest-asyncio` (auto mode)** dev dependency olarak eklenir. `@pytest.mark.asyncio` decorator zorunlu değil — auto-mode `async def test_*` fonksiyonlarını yakalar.
+- **`asyncio.sleep` no-op'lanır:** `monkeypatch.setattr("asyncio.sleep", lambda _seconds: asyncio.sleep(0))`. Bu, event loop'a yield eder ama gerçek beklemez — diğer task'lar koşar, deterministik ilerleme sağlanır.
+- **Zaman `FakeClock.advance(1.0)` ile sürülür:** Her tick öncesi (veya tick batch sonrası) test FakeClock'u manuel ilerletir → `runtime.clock()` doğru elapsed döndürür → state machine geçişleri tetiklenir.
+- **`max_iterations` parametresi per-device korunur:** Test'te her cihaz N tick sonra normal exit verir; `asyncio.gather(*tasks)` await'i kilitlenmez.
+- **Shutdown event testi:** `shutdown.set()` doğrudan çağrılır; tüm task'ların temiz çıktığı `asyncio.wait_for(gather, timeout=...)` ile doğrulanır.
+
+Production'da `clock=time.monotonic` ve gerçek `asyncio.sleep(1.0)` senkronize çalışır (sleep gerçek 1 sn, clock gerçek 1 sn ilerler). Test'te ikisi birden ayrı kontrol edilir.
 
 ### Senaryo İmza Testleri (Iterasyon 4)
 
