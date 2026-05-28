@@ -87,15 +87,21 @@ pip install -r requirements.txt
 ```
 Beklenen: `Successfully installed pytest-asyncio-0.23.7` (veya zaten kuruluysa "Requirement already satisfied").
 
-- [ ] **Step 1.3: `pyproject.toml` içine `[tool.pytest_asyncio]` ekle**
+- [x] **Step 1.3: `pyproject.toml` içine `asyncio_mode = "auto"` ekle**
 
-Mevcut `[tool.pytest.ini_options]` bloğunun ALTINA şu bloğu ekle (yeni satır):
+`asyncio_mode` pytest-asyncio'nun pytest-ini option'ı; ayrı bir `[tool.pytest_asyncio]` section'a DEĞİL, mevcut `[tool.pytest.ini_options]` bloğunun İÇİNE eklenir (örn. `addopts` satırının altına):
+
 ```toml
-[tool.pytest_asyncio]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers --cov=src --cov-report=term-missing"
 asyncio_mode = "auto"
 ```
 
-Bu, `@pytest.mark.asyncio` decorator gerekmeden `async def test_*` fonksiyonlarının otomatik koşturulmasını sağlar.
+Bu, `@pytest.mark.asyncio` decorator gerekmeden `async def test_*` fonksiyonlarının otomatik koşturulmasını sağlar. (İlk yazımda ayrı `[tool.pytest_asyncio]` section önerilmişti — pytest-asyncio 0.23.7 o key'i okumuyor, async testler SKIPPED kalıyor.)
 
 - [ ] **Step 1.4: Sanity async test dosyası yaz**
 
