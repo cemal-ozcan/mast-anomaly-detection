@@ -150,7 +150,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-28-faz1-iterasyon2b-tum-sensorler.md` (8/8 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (8/8 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
-- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz × 6 sensör yayın yapar.
+- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit` + `ruff check src/simulator tests/unit`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
