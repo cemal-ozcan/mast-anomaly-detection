@@ -1,0 +1,33 @@
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle:     [5, 5]
+      raising:  [10, 10]
+      holding:  [60, 60]
+      lowering: [10, 10]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+  - id: device_002
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle:     [5, 5]
+      raising:  [10, 10]
+      holding:  [60, 60]
+      lowering: [10, 10]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
