@@ -70,7 +70,7 @@ Yeni dev dependency + pyproject config + sanity async test. Bu task'ın amacı a
 - Modify: `pyproject.toml`
 - Create: `tests/unit/test_async_infrastructure.py`
 
-- [ ] **Step 1.1: `requirements.txt` içine pytest-asyncio ekle**
+- [x] **Step 1.1: `requirements.txt` içine pytest-asyncio ekle**
 
 Mevcut "# Testing" bloğunu şuna güncelle:
 ```
@@ -80,7 +80,7 @@ pytest-cov==5.0.0
 pytest-asyncio==0.23.7
 ```
 
-- [ ] **Step 1.2: pip install ile dependency'yi kur**
+- [x] **Step 1.2: pip install ile dependency'yi kur**
 
 ```bash
 pip install -r requirements.txt
@@ -103,7 +103,7 @@ asyncio_mode = "auto"
 
 Bu, `@pytest.mark.asyncio` decorator gerekmeden `async def test_*` fonksiyonlarının otomatik koşturulmasını sağlar. (İlk yazımda ayrı `[tool.pytest_asyncio]` section önerilmişti — pytest-asyncio 0.23.7 o key'i okumuyor, async testler SKIPPED kalıyor.)
 
-- [ ] **Step 1.4: Sanity async test dosyası yaz**
+- [x] **Step 1.4: Sanity async test dosyası yaz**
 
 Create `tests/unit/test_async_infrastructure.py`:
 ```python
@@ -137,14 +137,14 @@ async def test_asyncio_sleep_can_be_monkeypatched_without_recursion(
     assert True  # Sonsuz döngü olsa buraya gelmezdik
 ```
 
-- [ ] **Step 1.5: Testi çalıştır ve yeşil gör**
+- [x] **Step 1.5: Testi çalıştır ve yeşil gör**
 
 ```bash
 pytest tests/unit/test_async_infrastructure.py -v
 ```
 Beklenen: 2 passed.
 
-- [ ] **Step 1.6: Tam suite + mypy + ruff yeşil**
+- [x] **Step 1.6: Tam suite + mypy + ruff yeşil**
 
 ```bash
 pytest tests/ -q                          # 71 + 2 = 73 passed
@@ -152,7 +152,7 @@ mypy src/simulator tests/unit             # Success
 ruff check src/simulator tests/unit       # All checks passed
 ```
 
-- [ ] **Step 1.7: Commit**
+- [x] **Step 1.7: Commit**
 
 ```bash
 git add requirements.txt pyproject.toml tests/unit/test_async_infrastructure.py
@@ -178,7 +178,7 @@ Validation fonksiyonunu N cihaza açar; her cihaz hâlâ tam 6-sensör setini i�
 - Modify: `src/simulator/engine.py` (sadece validation fonksiyonu + import + bir çağrı satırı)
 - Create: `tests/unit/test_validation.py`
 
-- [ ] **Step 2.1: `tests/unit/test_validation.py` yaz (TDD failing tests)**
+- [x] **Step 2.1: `tests/unit/test_validation.py` yaz (TDD failing tests)**
 
 ```python
 """_validate_devices testleri (Iter 3 — N cihaz desteği)."""
@@ -276,14 +276,14 @@ def test_validate_warns_when_two_devices_share_seed(
                for record in caplog.records)
 ```
 
-- [ ] **Step 2.2: Testleri çalıştır, FAIL gör (fonksiyon henüz yok)**
+- [x] **Step 2.2: Testleri çalıştır, FAIL gör (fonksiyon henüz yok)**
 
 ```bash
 pytest tests/unit/test_validation.py -v
 ```
 Beklenen: `ImportError` veya `AttributeError: _validate_devices` — fonksiyon henüz yok.
 
-- [ ] **Step 2.3: `src/simulator/engine.py` içinde `_validate_iteration2b_constraints` yerine `_validate_devices` yaz**
+- [x] **Step 2.3: `src/simulator/engine.py` içinde `_validate_iteration2b_constraints` yerine `_validate_devices` yaz**
 
 Mevcut `_validate_iteration2b_constraints` fonksiyonunu (line ~46-65) TAMAMEN SİL ve yerine şunu koy:
 
@@ -350,21 +350,21 @@ _validate_devices(devices)
 device = devices[0]  # Iter 3 ara durum: validation N cihazı kabul ediyor ama engine hâlâ tek çalıştırıyor
 ```
 
-- [ ] **Step 2.4: Validation testlerini koş, yeşil gör**
+- [x] **Step 2.4: Validation testlerini koş, yeşil gör**
 
 ```bash
 pytest tests/unit/test_validation.py -v
 ```
 Beklenen: 6 passed.
 
-- [ ] **Step 2.5: Tam suite (mevcut testler kırılmamalı)**
+- [x] **Step 2.5: Tam suite (mevcut testler kırılmamalı)**
 
 ```bash
 pytest tests/ -q
 ```
 Beklenen: 73 + 6 = 79 passed. Iter 2b engine testleri hâlâ yeşil çünkü `devices_minimal.yaml` zaten geçerli tek cihaz.
 
-- [ ] **Step 2.6: mypy + ruff yeşil**
+- [x] **Step 2.6: mypy + ruff yeşil**
 
 ```bash
 mypy src/simulator tests/unit
@@ -372,7 +372,7 @@ ruff check src/simulator tests/unit
 ```
 Beklenen: ikisi de clean.
 
-- [ ] **Step 2.7: Commit**
+- [x] **Step 2.7: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/unit/test_validation.py
@@ -403,7 +403,7 @@ Engine'in tick döngüsünü async fonksiyona taşır. `engine.run()` artık `as
 - Modify: `src/simulator/engine.py` (major refactor)
 - Modify: `tests/unit/test_engine.py` (mevcut testlerin asyncio'ya uyumlu hale getirilmesi)
 
-- [ ] **Step 3.1: Mevcut test_engine.py testlerinin DURUMUNU NOTLA**
+- [x] **Step 3.1: Mevcut test_engine.py testlerinin DURUMUNU NOTLA**
 
 Şunları çalıştır ve baseline'ı kayda al:
 ```bash
@@ -411,7 +411,7 @@ pytest tests/unit/test_engine.py -v
 ```
 Beklenen: tüm mevcut engine testleri (4-6 adet) PASS. Bu task sonunda hepsi hâlâ PASS olmalı (davranış aynı, sadece iç implementasyon async).
 
-- [ ] **Step 3.2: `src/simulator/engine.py` üst tarafına import ve yardımcı sleep ekle**
+- [x] **Step 3.2: `src/simulator/engine.py` üst tarafına import ve yardımcı sleep ekle**
 
 Mevcut import'lar arasına `import asyncio` ekle (alfabetik sıra: `import asyncio` `random`'ın üstüne). `time` import'u kalsın — `time.monotonic` clock default'u için hâlâ lazım. `signal` import'u Task 4'te güncellenecek, şimdilik dursun.
 
@@ -468,7 +468,7 @@ async def run_device(
         await asyncio.sleep(tick_interval)
 ```
 
-- [ ] **Step 3.3: `engine.run()` gövdesini yeniden yaz — asyncio'ya geçiş ama tek cihaz**
+- [x] **Step 3.3: `engine.run()` gövdesini yeniden yaz — asyncio'ya geçiş ama tek cihaz**
 
 Mevcut `run()` fonksiyonunun gövdesini AŞAĞIDAKİ İLE TAM DEĞİŞTİR (signature aynı kalır):
 
@@ -543,7 +543,7 @@ def run(
 
 ESKİ `signal.signal(...)` ÇAĞRILARINI VE `stop = False` `nonlocal` PATTERN'İNİ KALDIR. (Task 4 asyncio sinyal yöneticisini ekleyecek.) `signal` import'u şimdilik kalabilir (Task 4 kaldıracak), ya da bu task'ta `# noqa: F401` ile bırakabilirsin — daha temiz olan: şimdi sil, Task 4 zaten ekleyecek (asyncio versiyonu kullanmayacak). Ruff F401 unused import yakalar — sil.
 
-- [ ] **Step 3.4: Mevcut `tests/unit/test_engine.py` testlerinde `time.sleep` monkeypatch'ini `asyncio.sleep`'e çevir**
+- [x] **Step 3.4: Mevcut `tests/unit/test_engine.py` testlerinde `time.sleep` monkeypatch'ini `asyncio.sleep`'e çevir**
 
 `tests/unit/test_engine.py` içinde GLOBAL search-replace:
 
@@ -562,14 +562,14 @@ Dosyanın en üstündeki import bloğuna `import asyncio` ekle (alfabetik).
 
 ÖNEMLİ: `_original_sleep` her test fonksiyonunun lokal scope'unda tanımlanmalı (test izolasyonu). Eğer modul-seviyesinde tanımlarsan import sırasında zaten doğru asyncio.sleep yakalanır, ama her test başında re-snapshot daha güvenli.
 
-- [ ] **Step 3.5: `test_engine.py`'deki engine.run testlerini koş, yeşil gör**
+- [x] **Step 3.5: `test_engine.py`'deki engine.run testlerini koş, yeşil gör**
 
 ```bash
 pytest tests/unit/test_engine.py -v
 ```
 Beklenen: tüm mevcut engine testleri PASS. Eğer FAIL varsa: muhtemelen sleep monkeypatch path yanlış (`simulator.engine.asyncio.sleep`) — `import asyncio` engine.py'de top-level olmalı (Step 3.2'de eklendi).
 
-- [ ] **Step 3.6: Yeni test ekle — `run_device` doğrudan çağrı**
+- [x] **Step 3.6: Yeni test ekle — `run_device` doğrudan çağrı**
 
 `tests/unit/test_engine.py` SONUNA ekle:
 
@@ -639,7 +639,7 @@ async def test_run_device_respects_max_iterations(
     assert publisher.publish_reading.call_count == 18
 ```
 
-- [ ] **Step 3.7: Tam suite + mypy + ruff**
+- [x] **Step 3.7: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -648,7 +648,7 @@ ruff check src/simulator tests/unit
 ```
 Beklenen: 80 passed (79 + 1 yeni), mypy clean, ruff clean. `signal` unused import varsa Step 3.3'te kaldırıldığını doğrula.
 
-- [ ] **Step 3.8: Manuel duman testi — `python -m simulator` hâlâ yayın yapıyor mu?**
+- [x] **Step 3.8: Manuel duman testi — `python -m simulator` hâlâ yayın yapıyor mu?**
 
 Ayrı terminalde mosquitto açık olmalı:
 ```bash
@@ -660,7 +660,7 @@ python -m simulator
 ```
 Beklenen: Saniyede 6 satır mesaj (motor_current, motor_voltage, hydraulic_pressure, motor_temperature, mast_position, vibration), `device_001` topic'inden. Ctrl+C → KeyboardInterrupt → temiz çıkış. Task 4 asyncio sinyal yönetimini ekleyecek.
 
-- [ ] **Step 3.9: Commit**
+- [x] **Step 3.9: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/unit/test_engine.py
@@ -692,7 +692,7 @@ EOF
 - Modify: `src/simulator/engine.py` (_amain içine signal handler ekle, KeyboardInterrupt fallback'i sadeleştir)
 - Modify: `tests/unit/test_engine.py` (shutdown event testi ekle)
 
-- [ ] **Step 4.1: Failing test ekle — shutdown event tetiklendiğinde run_device temiz çıkar**
+- [x] **Step 4.1: Failing test ekle — shutdown event tetiklendiğinde run_device temiz çıkar**
 
 `tests/unit/test_engine.py` SONUNA:
 
@@ -757,14 +757,14 @@ async def test_run_device_exits_when_shutdown_event_set(
     assert publisher.publish_reading.call_count > 0
 ```
 
-- [ ] **Step 4.2: Testi koş, FAIL gör (henüz shutdown handler eklenmedi ama run_device zaten event kontrol ediyor — bu test PASS olabilir)**
+- [x] **Step 4.2: Testi koş, FAIL gör (henüz shutdown handler eklenmedi ama run_device zaten event kontrol ediyor — bu test PASS olabilir)**
 
 ```bash
 pytest tests/unit/test_engine.py::test_run_device_exits_when_shutdown_event_set -v
 ```
 Sonuç: Eğer Task 3'teki run_device shutdown_event.is_set() kontrolünü doğru yapıyorsa bu test PASS olabilir. Sadece behaviour'u garantilemek için yazıldı; FAIL ederse run_device'da `while not shutdown_event.is_set():` döngüsünün doğru çalıştığını incele.
 
-- [ ] **Step 4.3: `engine.run()` içindeki `_amain`'e signal handler ekle**
+- [x] **Step 4.3: `engine.run()` içindeki `_amain`'e signal handler ekle**
 
 Mevcut `_amain` gövdesini şununla değiştir:
 
@@ -804,14 +804,14 @@ asyncio.run(_amain())
 
 (KeyboardInterrupt'ın asyncio.run'dan dışarı sızması Unix'te add_signal_handler sayesinde gerçekleşmez; Windows'ta KeyboardInterrupt _amain'in run_device awaiti içinde patlar → asyncio.run bunu CancelledError'a sarar ve publisher.close finally bloğu yine de çalışır. Yeterince temiz.)
 
-- [ ] **Step 4.4: Shutdown event testini tekrar koş, PASS olduğundan emin ol**
+- [x] **Step 4.4: Shutdown event testini tekrar koş, PASS olduğundan emin ol**
 
 ```bash
 pytest tests/unit/test_engine.py::test_run_device_exits_when_shutdown_event_set -v
 ```
 Beklenen: PASS.
 
-- [ ] **Step 4.5: Tam suite + mypy + ruff**
+- [x] **Step 4.5: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -820,7 +820,7 @@ ruff check src/simulator tests/unit
 ```
 Beklenen: 81 passed (80 + 1 yeni), mypy clean, ruff clean.
 
-- [ ] **Step 4.6: Manuel SIGINT testi**
+- [x] **Step 4.6: Manuel SIGINT testi**
 
 ```bash
 mosquitto_sub -t 'telemetry/+/+' &
@@ -828,7 +828,7 @@ python -m simulator
 ```
 3-4 saniye sonra Ctrl+C bas. Beklenen: "Shutdown sinyali alındı: 2" log, sonra "engine kapanıyor" benzeri, sonra temiz exit (0). Publisher disconnect olmuş olmalı.
 
-- [ ] **Step 4.7: Commit**
+- [x] **Step 4.7: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/unit/test_engine.py
@@ -858,7 +858,7 @@ Engine artık `devices[0]` yerine TÜM cihazları paralel task'lar halinde başl
 - Create: `tests/fixtures/devices_multi.yaml` (2 cihaz, farklı seed)
 - Modify: `tests/unit/test_engine.py` (multi-device test ekle)
 
-- [ ] **Step 5.1: `tests/fixtures/devices_multi.yaml` yarat**
+- [x] **Step 5.1: `tests/fixtures/devices_multi.yaml` yarat**
 
 ```yaml
 devices:
@@ -896,7 +896,7 @@ devices:
       - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
 ```
 
-- [ ] **Step 5.2: Failing test — 2 cihaz, her biri 6 sensör × N tick yayın yapar**
+- [x] **Step 5.2: Failing test — 2 cihaz, her biri 6 sensör × N tick yayın yapar**
 
 `tests/unit/test_engine.py` SONUNA ekle:
 
@@ -929,14 +929,14 @@ def test_run_spawns_all_devices_in_parallel(monkeypatch: pytest.MonkeyPatch) -> 
     assert device_ids == {"device_001", "device_002"}
 ```
 
-- [ ] **Step 5.3: Testi koş, FAIL gör (engine hâlâ tek cihaz çalıştırıyor)**
+- [x] **Step 5.3: Testi koş, FAIL gör (engine hâlâ tek cihaz çalıştırıyor)**
 
 ```bash
 pytest tests/unit/test_engine.py::test_run_spawns_all_devices_in_parallel -v
 ```
 Beklenen: FAIL — yalnızca device_001'in publish'leri var (12), 24 değil.
 
-- [ ] **Step 5.4: `engine.run()` içindeki single-device bloğunu multi-device loop'a çevir**
+- [x] **Step 5.4: `engine.run()` içindeki single-device bloğunu multi-device loop'a çevir**
 
 `engine.run()` içinde mevcut:
 ```python
@@ -1024,21 +1024,21 @@ async def _amain() -> None:
 
 ÖNEMLİ: `publisher = _make_publisher(...); publisher.connect()` artık `_amain` ÖNCESİNDE (yukarıdaki blokta), bu zaten doğru — `_amain` closure üzerinden publisher'ı görür.
 
-- [ ] **Step 5.5: Multi-device testi koş, PASS gör**
+- [x] **Step 5.5: Multi-device testi koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_engine.py::test_run_spawns_all_devices_in_parallel -v
 ```
 Beklenen: PASS.
 
-- [ ] **Step 5.6: Tüm engine testlerini koş — mevcut tek-cihaz testleri kırılmamalı**
+- [x] **Step 5.6: Tüm engine testlerini koş — mevcut tek-cihaz testleri kırılmamalı**
 
 ```bash
 pytest tests/unit/test_engine.py -v
 ```
 Beklenen: tüm engine testleri PASS. `devices_minimal.yaml` hâlâ 1 cihaz içerir, multi-device kod path 1 cihazlı listede de doğru çalışır.
 
-- [ ] **Step 5.7: Tam suite + mypy + ruff**
+- [x] **Step 5.7: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -1047,7 +1047,7 @@ ruff check src/simulator tests/unit
 ```
 Beklenen: 82 passed, mypy clean, ruff clean.
 
-- [ ] **Step 5.8: Commit**
+- [x] **Step 5.8: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/fixtures/devices_multi.yaml tests/unit/test_engine.py
@@ -1078,7 +1078,7 @@ Spec § 3 Iter 3 bitti kriteri #2: iki cihaz aynı seed + aynı state_durations 
 - Create: `tests/fixtures/devices_same_seed.yaml`
 - Modify: `tests/unit/test_engine.py` (regresyon testi ekle)
 
-- [ ] **Step 6.1: `tests/fixtures/devices_same_seed.yaml` yarat**
+- [x] **Step 6.1: `tests/fixtures/devices_same_seed.yaml` yarat**
 
 Task 5'teki `devices_multi.yaml`'ın AYNISI ama `device_002`'nin `seed: 7` yerine `seed: 42`:
 
@@ -1118,7 +1118,7 @@ devices:
       - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
 ```
 
-- [ ] **Step 6.2: Regresyon testi yaz**
+- [x] **Step 6.2: Regresyon testi yaz**
 
 `tests/unit/test_engine.py` SONUNA ekle:
 
@@ -1193,7 +1193,7 @@ def test_different_seeds_produce_different_value_sequences(
     assert by_device["device_001"] != by_device["device_002"]
 ```
 
-- [ ] **Step 6.3: Testleri koş**
+- [x] **Step 6.3: Testleri koş**
 
 ```bash
 pytest tests/unit/test_engine.py::test_same_seed_devices_produce_identical_value_sequences \
@@ -1201,7 +1201,7 @@ pytest tests/unit/test_engine.py::test_same_seed_devices_produce_identical_value
 ```
 Beklenen: ikisi de PASS. Eğer same-seed testi FAIL ederse: muhtemelen Task 5'te `device_rng = random.Random(effective_seed)` her cihaz için ayrı oluşturulmadı — engine.py'yi gözden geçir.
 
-- [ ] **Step 6.4: Tam suite + mypy + ruff**
+- [x] **Step 6.4: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -1210,7 +1210,7 @@ ruff check src/simulator tests/unit
 ```
 Beklenen: 84 passed, mypy clean, ruff clean.
 
-- [ ] **Step 6.5: Commit**
+- [x] **Step 6.5: Commit**
 
 ```bash
 git add tests/fixtures/devices_same_seed.yaml tests/unit/test_engine.py
@@ -1238,7 +1238,7 @@ Spec § 3 Iter 3 bitti kriteri #3: 2 cihaz spawn, simüle 10 sn boyunca her ikis
 - Create: `tests/integration/__init__.py` (yoksa)
 - Create: `tests/integration/test_multi_device_engine.py`
 
-- [ ] **Step 7.1: `tests/integration/__init__.py` yarat (boş dosya)**
+- [x] **Step 7.1: `tests/integration/__init__.py` yarat (boş dosya)**
 
 ```bash
 mkdir -p tests/integration
@@ -1247,7 +1247,7 @@ touch tests/integration/__init__.py
 
 (Eğer zaten varsa Step atla — `ls tests/integration/__init__.py` ile kontrol et.)
 
-- [ ] **Step 7.2: Integration test dosyası yaz**
+- [x] **Step 7.2: Integration test dosyası yaz**
 
 Create `tests/integration/test_multi_device_engine.py`:
 
@@ -1368,14 +1368,14 @@ def test_topic_disambiguation_uses_device_id(
         assert call.kwargs["device_id"] in {"device_001", "device_002"}
 ```
 
-- [ ] **Step 7.3: Integration testleri koş**
+- [x] **Step 7.3: Integration testleri koş**
 
 ```bash
 pytest tests/integration/test_multi_device_engine.py -v
 ```
 Beklenen: 3 passed.
 
-- [ ] **Step 7.4: Tam suite + mypy + ruff**
+- [x] **Step 7.4: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -1384,14 +1384,14 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 87 passed, mypy/ruff clean. (mypy ve ruff'a `tests/integration` da eklendi.)
 
-- [ ] **Step 7.5: Coverage kontrolü**
+- [x] **Step 7.5: Coverage kontrolü**
 
 ```bash
 pytest tests/ --cov=src/simulator --cov-report=term-missing -q
 ```
 Beklenen: ≥%80 coverage. Eğer altındaysa hangi engine satırları kapsanmamış incele.
 
-- [ ] **Step 7.6: Commit**
+- [x] **Step 7.6: Commit**
 
 ```bash
 git add tests/integration/__init__.py tests/integration/test_multi_device_engine.py
@@ -1422,7 +1422,7 @@ EOF
 - Modify: `CLAUDE.md` (Mevcut Faz bölümü)
 - Modify: `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (bu dosya — tamamlandı işaretleri)
 
-- [ ] **Step 8.1: `config/devices.yaml.example` 3 cihaza genişlet**
+- [x] **Step 8.1: `config/devices.yaml.example` 3 cihaza genişlet**
 
 Mevcut tek cihaz config'i (Iter 2b sonu) ŞUNUNLA DEĞİŞTİR:
 
@@ -1480,7 +1480,7 @@ devices:
       - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
 ```
 
-- [ ] **Step 8.2: `config/devices.yaml` lokal kopyasını güncelle**
+- [x] **Step 8.2: `config/devices.yaml` lokal kopyasını güncelle**
 
 `config/devices.yaml` `.gitignore`'da olduğu için repo dışı. Manuel smoke için lokal kopyala:
 ```bash
@@ -1488,7 +1488,7 @@ cp config/devices.yaml.example config/devices.yaml
 ```
 (Eğer mevcut bir lokal yaml'i overwrite ediyorsan onayını al.)
 
-- [ ] **Step 8.3: Manuel uçtan uca — mosquitto açık + python -m simulator**
+- [x] **Step 8.3: Manuel uçtan uca — mosquitto açık + python -m simulator**
 
 İki ayrı terminal kullan.
 
@@ -1519,7 +1519,7 @@ telemetry/device_003/motor_current   {"device_id":"device_003","timestamp":"..."
 
 EĞER bir cihaz yayın yapmıyorsa veya hata varsa: STOP, Task 5'e geri dön.
 
-- [ ] **Step 8.4: `CLAUDE.md` "Mevcut Faz" bölümünü güncelle**
+- [x] **Step 8.4: `CLAUDE.md` "Mevcut Faz" bölümünü güncelle**
 
 `CLAUDE.md` içinde "## Mevcut Faz" başlığı altındaki:
 ```
@@ -1550,11 +1550,11 @@ Kapsam (spec § 3 Iterasyon 4): MechanicalWear / HydraulicLeak / ElectricalFault
 senaryoları + istatistiksel imza testleri (`scipy.stats`).
 ```
 
-- [ ] **Step 8.5: Bu plan dosyasının tüm checkbox'larını `[x]` yap**
+- [x] **Step 8.5: Bu plan dosyasının tüm checkbox'larını `[x]` yap**
 
 `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` dosyasındaki tüm `- [ ]` ifadelerini `- [x]` yap (sed veya manuel editör — global replace). Plan dosyası bir milestone artifact'i; tamamlanmış bir iterasyonun progres izi olarak repo'da kalır.
 
-- [ ] **Step 8.6: Tam suite son kez**
+- [x] **Step 8.6: Tam suite son kez**
 
 ```bash
 pytest tests/ -q
@@ -1563,7 +1563,7 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 87 passed, mypy/ruff clean.
 
-- [ ] **Step 8.7: Milestone commit**
+- [x] **Step 8.7: Milestone commit**
 
 ```bash
 git add config/devices.yaml.example CLAUDE.md docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md
@@ -1589,10 +1589,10 @@ EOF
 
 ## Iter 3 Sonu — Bitti Kriterleri (spec § 3 ile birebir)
 
-- [ ] **Kriter 1:** `config/devices.yaml.example` 3 cihaz içeriyor, üçü de paralel akıyor (Task 8.3 manuel smoke).
-- [ ] **Kriter 2:** Aynı seed iki cihaz → birebir aynı value dizisi (Task 6).
-- [ ] **Kriter 3:** 2 cihaz integration test, simüle 10 sn (Task 7).
-- [ ] **Kriter 4:** 71 Iter 2b testi yeşil + yeni asyncio engine testleri (Task 1-7 boyunca).
+- [x] **Kriter 1:** `config/devices.yaml.example` 3 cihaz içeriyor, üçü de paralel akıyor (Task 8.3 manuel smoke).
+- [x] **Kriter 2:** Aynı seed iki cihaz → birebir aynı value dizisi (Task 6).
+- [x] **Kriter 3:** 2 cihaz integration test, simüle 10 sn (Task 7).
+- [x] **Kriter 4:** 71 Iter 2b testi yeşil + yeni asyncio engine testleri (Task 1-7 boyunca).
 
 Her task'ın sonunda DiscIPLİN (CLAUDE.md kuralı): tam pytest suite + mypy(src+tests) + ruff(src+tests) yeşil — per-file değil.
 
