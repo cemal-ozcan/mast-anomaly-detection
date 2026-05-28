@@ -172,7 +172,10 @@ def run(
         KeyError: SENSOR_REGISTRY'de bilinmeyen sensör adı.
 
     Note (Iter 3):
-        Bu task tek cihaz çalıştırır; Task 5 multi-device spawn ekler.
+        Tüm cihazlar paralel `asyncio.create_task(run_device(...))` ile spawn edilir
+        ve `asyncio.gather(*tasks)` ile beklenir. Publisher ve `engine_boot_at`
+        paylaşılır; her cihazın kendi `DeviceRuntimeState` + `random.Random(seed)`
+        + sensor instance listesi vardır (cihazlar arası shared state YOK).
         Sinyal yönetimi: SIGINT/SIGTERM `loop.add_signal_handler` ile asyncio.Event
         set eder; `run_device` tick başında `is_set()` kontrolüyle temiz çıkar.
         Windows'ta `NotImplementedError` yakalanır (KeyboardInterrupt asyncio.run
@@ -184,30 +187,34 @@ def run(
     logger.level(engine_config.log_level)
 
     _validate_devices(devices)
-    device = devices[0]  # Iter 3 ara durum: Task 5'te N cihaz spawn edilecek
 
-    sensors: list[BaseSensor] = [
-        SENSOR_REGISTRY[sc.name](sc) for sc in device.sensors
-    ]
-
-    rng = random.Random(seed if seed is not None else device.seed)
-    engine_boot_at = clock()
-    initial_duration = rng.uniform(*device.state_durations.idle)
-    runtime = DeviceRuntimeState(
-        state=DeviceState.IDLE,
-        state_entered_at_monotonic=engine_boot_at,
-        current_state_duration_s=initial_duration,
-        position_mm=0.0,
-        cycle_count=0,
-        rng=rng,
-        started_at_monotonic=engine_boot_at,
-        clock=clock,
-    )
+    engine_boot_at = clock()  # Tüm cihazlar için ortak referans (spec § 5)
+    tick_interval = 1.0 / engine_config.tick_hz
 
     publisher = _make_publisher(mqtt_config)
     publisher.connect()
 
-    tick_interval = 1.0 / engine_config.tick_hz
+    # Her cihaz için: sensors + rng + runtime üret (cihazlar arasında shared state YOK).
+    # rng `runtime.rng` üzerinden taşınır — run_device içinde noise da oradan akar.
+    device_setups: list[tuple[DeviceConfig, DeviceRuntimeState, list[BaseSensor]]] = []
+    for device in devices:
+        device_sensors: list[BaseSensor] = [
+            SENSOR_REGISTRY[sc.name](sc) for sc in device.sensors
+        ]
+        effective_seed = seed if seed is not None else device.seed
+        device_rng = random.Random(effective_seed)
+        initial_duration = device_rng.uniform(*device.state_durations.idle)
+        device_runtime = DeviceRuntimeState(
+            state=DeviceState.IDLE,
+            state_entered_at_monotonic=engine_boot_at,
+            current_state_duration_s=initial_duration,
+            position_mm=0.0,
+            cycle_count=0,
+            rng=device_rng,
+            started_at_monotonic=engine_boot_at,
+            clock=clock,
+        )
+        device_setups.append((device, device_runtime, device_sensors))
 
     async def _amain() -> None:
         shutdown = asyncio.Event()
@@ -225,16 +232,24 @@ def run(
                 # KeyboardInterrupt yakalayıp clean log basacak.
                 logger.warning("add_signal_handler {} desteklenmiyor (Windows?)", sig)
 
-        try:
-            await run_device(
-                device=device,
-                runtime=runtime,
-                sensors=sensors,
-                publisher=publisher,
-                tick_interval=tick_interval,
-                shutdown_event=shutdown,
-                max_iterations=max_iterations,
+        tasks = [
+            asyncio.create_task(
+                run_device(
+                    device=d,
+                    runtime=r,
+                    sensors=s,
+                    publisher=publisher,
+                    tick_interval=tick_interval,
+                    shutdown_event=shutdown,
+                    max_iterations=max_iterations,
+                ),
+                name=f"run_device:{d.id}",
             )
+            for (d, r, s) in device_setups
+        ]
+
+        try:
+            await asyncio.gather(*tasks)
         finally:
             publisher.close()
 
