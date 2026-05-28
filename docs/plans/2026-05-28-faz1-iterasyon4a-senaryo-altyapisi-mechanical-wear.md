@@ -68,7 +68,7 @@ tests/
 - Modify: `src/simulator/config.py`
 - Modify: `tests/unit/test_config.py`
 
-- [ ] **Step 1.1: `tests/unit/test_config.py` SONUNA 3 failing test ekle**
+- [x] **Step 1.1: `tests/unit/test_config.py` SONUNA 3 failing test ekle**
 
 ```python
 def test_load_devices_with_no_scenarios_field_returns_empty_list(tmp_path: Path) -> None:
@@ -154,14 +154,14 @@ def test_scenario_window_is_frozen_dataclass() -> None:
         w.name = "other"  # type: ignore[misc]
 ```
 
-- [ ] **Step 1.2: Testleri koş, FAIL gör**
+- [x] **Step 1.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_config.py -v
 ```
 Beklenen: 3 yeni test FAIL — `ScenarioWindow` ImportError, `DeviceConfig.scenarios` attribute yok.
 
-- [ ] **Step 1.3: `src/simulator/config.py` içine `ScenarioWindow` dataclass ekle**
+- [x] **Step 1.3: `src/simulator/config.py` içine `ScenarioWindow` dataclass ekle**
 
 `StateDurations` ile `DeviceConfig` arasına (alfabetik yere değil, anlamsal bütünlüğe göre — Config dataclass'larından önce):
 
@@ -181,7 +181,7 @@ class ScenarioWindow:
 
 `Mapping` import'u için config.py üst tarafına `from collections.abc import Mapping` ekle (henüz yoksa).
 
-- [ ] **Step 1.4: `DeviceConfig`'e `scenarios` field ekle**
+- [x] **Step 1.4: `DeviceConfig`'e `scenarios` field ekle**
 
 Mevcut `DeviceConfig`'i şu hale güncelle (yeni `scenarios` satırı):
 
@@ -197,7 +197,7 @@ class DeviceConfig:
     scenarios: list[ScenarioWindow] = field(default_factory=list)
 ```
 
-- [ ] **Step 1.5: `load_devices` YAML loader'ında scenarios bloğunu parse et**
+- [x] **Step 1.5: `load_devices` YAML loader'ında scenarios bloğunu parse et**
 
 Mevcut `load_devices` içindeki `DeviceConfig(...)` çağrısının HEMEN ÖNCESİNE şu bloğu ekle (per-device döngüsü içinde):
 
@@ -217,14 +217,14 @@ Mevcut `load_devices` içindeki `DeviceConfig(...)` çağrısının HEMEN ÖNCES
 
 Sonra `DeviceConfig(...)` çağrısına `scenarios=scenarios,` parametresini ekle (kwarg).
 
-- [ ] **Step 1.6: Testleri koş, PASS gör**
+- [x] **Step 1.6: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_config.py -v
 ```
 Beklenen: tüm config testleri PASS (yeni 3 + mevcut config testleri).
 
-- [ ] **Step 1.7: Tam suite + mypy + ruff yeşil**
+- [x] **Step 1.7: Tam suite + mypy + ruff yeşil**
 
 ```bash
 pytest tests/ -q
@@ -233,7 +233,7 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 88 + 3 = 91 passed, mypy clean, ruff clean.
 
-- [ ] **Step 1.8: Commit**
+- [x] **Step 1.8: Commit**
 
 ```bash
 git add src/simulator/config.py tests/unit/test_config.py
@@ -265,14 +265,14 @@ EOF
 - Create: `tests/unit/test_scenarios/__init__.py`
 - Create: `tests/unit/test_scenarios/test_base.py`
 
-- [ ] **Step 2.1: `tests/unit/test_scenarios/__init__.py` (boş dosya)**
+- [x] **Step 2.1: `tests/unit/test_scenarios/__init__.py` (boş dosya)**
 
 ```bash
 mkdir -p tests/unit/test_scenarios
 touch tests/unit/test_scenarios/__init__.py
 ```
 
-- [ ] **Step 2.2: `tests/unit/test_scenarios/test_base.py` failing testleri yaz**
+- [x] **Step 2.2: `tests/unit/test_scenarios/test_base.py` failing testleri yaz**
 
 ```python
 """FaultScenario ABC + ScenarioContext + active_scenarios_at helper testleri (Iter 4a)."""
@@ -351,14 +351,14 @@ def test_active_scenarios_at_excludes_window_before_start_and_after_end() -> Non
         del SCENARIO_REGISTRY["dummy"]
 ```
 
-- [ ] **Step 2.3: Testleri koş, FAIL gör**
+- [x] **Step 2.3: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_base.py -v
 ```
 Beklenen: hepsi ImportError ile FAIL (`scenarios` package yok).
 
-- [ ] **Step 2.4: `src/simulator/scenarios/base.py` yarat**
+- [x] **Step 2.4: `src/simulator/scenarios/base.py` yarat**
 
 ```python
 """FaultScenario ABC + ScenarioContext (Iter 4 senaryo altyapısı, spec § 9)."""
@@ -422,7 +422,7 @@ class FaultScenario(ABC):
         """
 ```
 
-- [ ] **Step 2.5: `src/simulator/scenarios/__init__.py` yarat**
+- [x] **Step 2.5: `src/simulator/scenarios/__init__.py` yarat**
 
 ```python
 """Scenarios package: SCENARIO_REGISTRY + active_scenarios_at helper (spec § 4 + § 8)."""
@@ -471,14 +471,14 @@ def active_scenarios_at(
 __all__ = ["SCENARIO_REGISTRY", "active_scenarios_at", "FaultScenario"]
 ```
 
-- [ ] **Step 2.6: Testleri koş, PASS gör**
+- [x] **Step 2.6: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_base.py -v
 ```
 Beklenen: 5 passed.
 
-- [ ] **Step 2.7: Tam suite + mypy + ruff**
+- [x] **Step 2.7: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -487,7 +487,7 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 91 + 5 = 96 passed, mypy clean, ruff clean.
 
-- [ ] **Step 2.8: Commit**
+- [x] **Step 2.8: Commit**
 
 ```bash
 git add src/simulator/scenarios/__init__.py \
@@ -522,7 +522,7 @@ Spec § 9 A formülünü implement et. State filter (sadece RAISING + HOLDING ak
 - Modify: `src/simulator/scenarios/__init__.py` (registry'ye 1 entry)
 - Create: `tests/unit/test_scenarios/test_mechanical_wear.py`
 
-- [ ] **Step 3.1: `tests/unit/test_scenarios/test_mechanical_wear.py` failing testleri yaz**
+- [x] **Step 3.1: `tests/unit/test_scenarios/test_mechanical_wear.py` failing testleri yaz**
 
 ```python
 """MechanicalWear (spec § 9 A) modify behavior testleri."""
@@ -639,14 +639,14 @@ def test_mechanical_wear_registered_in_global_registry() -> None:
     assert SCENARIO_REGISTRY["mechanical_wear"] is MechanicalWear
 ```
 
-- [ ] **Step 3.2: Testleri koş, FAIL gör**
+- [x] **Step 3.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_mechanical_wear.py -v
 ```
 Beklenen: 8 yeni test ImportError ile FAIL.
 
-- [ ] **Step 3.3: `src/simulator/scenarios/mechanical_wear.py` yarat**
+- [x] **Step 3.3: `src/simulator/scenarios/mechanical_wear.py` yarat**
 
 ```python
 """MechanicalWear arıza senaryosu (spec § 9 A, DOMAIN.md sat. 78-83)."""
@@ -701,7 +701,7 @@ class MechanicalWear(FaultScenario):
         return clean_value
 ```
 
-- [ ] **Step 3.4: `src/simulator/scenarios/__init__.py`'de registry'ye kayıt ekle**
+- [x] **Step 3.4: `src/simulator/scenarios/__init__.py`'de registry'ye kayıt ekle**
 
 `SCENARIO_REGISTRY: dict[str, type[FaultScenario]] = {}` satırını şununla değiştir:
 
@@ -715,14 +715,14 @@ SCENARIO_REGISTRY: dict[str, type[FaultScenario]] = {
 }
 ```
 
-- [ ] **Step 3.5: Testleri koş, PASS gör**
+- [x] **Step 3.5: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_mechanical_wear.py -v
 ```
 Beklenen: 8 passed.
 
-- [ ] **Step 3.6: Tam suite + mypy + ruff**
+- [x] **Step 3.6: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -731,7 +731,7 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 96 + 8 = 104 passed, mypy clean, ruff clean.
 
-- [ ] **Step 3.7: Commit**
+- [x] **Step 3.7: Commit**
 
 ```bash
 git add src/simulator/scenarios/mechanical_wear.py \
@@ -769,7 +769,7 @@ EOF
 - Modify: `src/simulator/engine.py`
 - Modify: `tests/unit/test_engine_run_device.py`
 
-- [ ] **Step 4.1: `tests/unit/test_engine_run_device.py` SONUNA 2 failing test ekle**
+- [x] **Step 4.1: `tests/unit/test_engine_run_device.py` SONUNA 2 failing test ekle**
 
 ```python
 async def test_run_device_applies_active_scenario_modify(
@@ -884,7 +884,7 @@ async def test_run_device_no_scenario_keeps_clean_baseline(
     assert 0.0 < value < 1.0, f"Beklenen ~0.5 (IDLE baseline), alınan {value}"
 ```
 
-- [ ] **Step 4.2: Testleri koş, ilki FAIL ikincisi PASS olmalı**
+- [x] **Step 4.2: Testleri koş, ilki FAIL ikincisi PASS olmalı**
 
 ```bash
 pytest tests/unit/test_engine_run_device.py -v
@@ -893,7 +893,7 @@ Beklenen: `test_run_device_applies_active_scenario_modify` FAIL (henüz fault.mo
 
 Eğer ilk test'in beklenen error mesajı şu şekildeyse: "Beklenen ~10.4, alınan 8.X" — fault.modify entegrasyonu eksik demektir, Step 4.3'e geç.
 
-- [ ] **Step 4.3: `src/simulator/engine.py` `run_device` body'sini güncelle**
+- [x] **Step 4.3: `src/simulator/engine.py` `run_device` body'sini güncelle**
 
 Mevcut `run_device` body'sindeki:
 
@@ -957,14 +957,14 @@ from simulator.scenarios.base import ScenarioContext
         spec § 8 invariant).
 ```
 
-- [ ] **Step 4.4: Testleri tekrar koş, PASS gör**
+- [x] **Step 4.4: Testleri tekrar koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_engine_run_device.py -v
 ```
 Beklenen: tüm engine_run_device testleri PASS (mevcut 3 + 2 yeni = 5).
 
-- [ ] **Step 4.5: Tam suite + mypy + ruff**
+- [x] **Step 4.5: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -973,7 +973,7 @@ ruff check src/simulator tests/unit tests/integration
 ```
 Beklenen: 104 + 2 = 106 passed, mypy clean, ruff clean.
 
-- [ ] **Step 4.6: Commit**
+- [x] **Step 4.6: Commit**
 
 ```bash
 git add src/simulator/engine.py tests/unit/test_engine_run_device.py
@@ -1008,14 +1008,14 @@ Spec § 12 bitti kriteri A: 60+ örnek üzerinde RAISING motor_current ortalamas
 - Create: `tests/fixtures/devices_with_mechanical_wear.yaml`
 - Create: `tests/scenarios/test_mechanical_wear_signature.py`
 
-- [ ] **Step 5.1: `tests/scenarios/__init__.py` (boş dosya)**
+- [x] **Step 5.1: `tests/scenarios/__init__.py` (boş dosya)**
 
 ```bash
 mkdir -p tests/scenarios
 touch tests/scenarios/__init__.py
 ```
 
-- [ ] **Step 5.2: `tests/fixtures/devices_with_mechanical_wear.yaml` yarat**
+- [x] **Step 5.2: `tests/fixtures/devices_with_mechanical_wear.yaml` yarat**
 
 Sabit state_durations (kontrollü örnekleme için RAISING [60, 60]) + scenarios bloğu:
 
@@ -1046,7 +1046,7 @@ devices:
           ramp_up_s: 5      # hızlı ramp: 5 tick içinde peak'e ulaşır → RAISING'in büyük çoğunluğu factor=0.25
 ```
 
-- [ ] **Step 5.3: `tests/scenarios/test_mechanical_wear_signature.py` yaz**
+- [x] **Step 5.3: `tests/scenarios/test_mechanical_wear_signature.py` yaz**
 
 ```python
 """MechanicalWear istatistiksel imza testi (spec § 12 bitti kriteri A).
@@ -1149,7 +1149,7 @@ def test_mechanical_wear_raising_current_mean_significantly_above_baseline(
     )
 ```
 
-- [ ] **Step 5.4: Testi koş, PASS gör**
+- [x] **Step 5.4: Testi koş, PASS gör**
 
 ```bash
 pytest tests/scenarios/test_mechanical_wear_signature.py -v
@@ -1159,7 +1159,7 @@ Beklenen: 1 passed. Eğer FAIL ederse:
 - Mean aralık dışı → state_durations RAISING'i daha uzun yap veya start_after_s'i ileri al (rampa için)
 - p-value ≥ 0.05 → severity'yi 0.30'a çıkar (sinyal güçlendir)
 
-- [ ] **Step 5.5: Tam suite + mypy + ruff (tests/scenarios da dahil)**
+- [x] **Step 5.5: Tam suite + mypy + ruff (tests/scenarios da dahil)**
 
 ```bash
 pytest tests/ -q
@@ -1168,7 +1168,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 106 + 1 = 107 passed, mypy/ruff clean.
 
-- [ ] **Step 5.6: Commit**
+- [x] **Step 5.6: Commit**
 
 ```bash
 git add tests/scenarios/__init__.py \
@@ -1202,7 +1202,7 @@ EOF
 - Modify: `CLAUDE.md`
 - Modify: `docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md`
 
-- [ ] **Step 6.1: `config/devices.yaml.example`'da 1 cihaza scenarios ekle**
+- [x] **Step 6.1: `config/devices.yaml.example`'da 1 cihaza scenarios ekle**
 
 Mevcut 3 cihazlı dosyada `device_002` (target_height_mm: 6000) bloğunun sonuna (sensors listesinin altına) ekle:
 
@@ -1218,13 +1218,13 @@ Mevcut 3 cihazlı dosyada `device_002` (target_height_mm: 6000) bloğunun sonuna
 
 device_001 ve device_003'te scenarios eklemiyoruz (kıyaslama için sağlıklı/arızalı cihaz yan yana akacak).
 
-- [ ] **Step 6.2: `config/devices.yaml` lokal kopya güncelle**
+- [x] **Step 6.2: `config/devices.yaml` lokal kopya güncelle**
 
 ```bash
 cp config/devices.yaml.example config/devices.yaml
 ```
 
-- [ ] **Step 6.3: Manuel uçtan uca — mosquitto + python -m simulator**
+- [x] **Step 6.3: Manuel uçtan uca — mosquitto + python -m simulator**
 
 İki terminal:
 - Terminal A: `mosquitto_sub -v -t 'telemetry/device_002/motor_current'`
@@ -1240,7 +1240,7 @@ EĞER device_002 motor_current artmıyorsa veya hata varsa: STOP, BLOCKED raporl
 
 **NOTE FOR SUBAGENT:** Mosquitto kuruluysa otomatize edilebilir; değilse SKIP edip raporda belirt.
 
-- [ ] **Step 6.4: `CLAUDE.md` "Mevcut Faz" güncelle**
+- [x] **Step 6.4: `CLAUDE.md` "Mevcut Faz" güncelle**
 
 Header satırını şuna güncelle:
 ```
@@ -1273,7 +1273,7 @@ Kapsam (spec § 3 Iter 4b): `HydraulicLeak` (B) + `ElectricalFault` (C) + Spearm
 ve F-testi imza setleri. scipy explicit pin (`scipy==1.17.1`). Faz 1 closure.
 ```
 
-- [ ] **Step 6.5: Plan dosyasının tüm checkbox'larını [x] yap**
+- [x] **Step 6.5: Plan dosyasının tüm checkbox'larını [x] yap**
 
 ```bash
 sed -i.bak 's/^- \[ \]/- [x]/g' docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md && rm docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md.bak
@@ -1284,7 +1284,7 @@ macOS sed uyumsuzluk verirse perl ile:
 perl -i -pe 's/^- \[ \]/- [x]/g' docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md
 ```
 
-- [ ] **Step 6.6: Tam suite son kez**
+- [x] **Step 6.6: Tam suite son kez**
 
 ```bash
 pytest tests/ -q
@@ -1293,7 +1293,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 107 passed, mypy/ruff clean.
 
-- [ ] **Step 6.7: Milestone commit**
+- [x] **Step 6.7: Milestone commit**
 
 ```bash
 git add config/devices.yaml.example CLAUDE.md docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md
@@ -1328,12 +1328,12 @@ EOF
 
 ## Iter 4a Sonu — Bitti Kriterleri (spec § 3 ile birebir)
 
-- [ ] **Kriter 1:** `ScenarioWindow` + `DeviceConfig.scenarios` field + YAML loader (Task 1).
-- [ ] **Kriter 2:** `simulator/scenarios/` package: `FaultScenario` ABC + `ScenarioContext` + `SCENARIO_REGISTRY` + `active_scenarios_at` helper (Task 2).
-- [ ] **Kriter 3:** `MechanicalWear` (A) — RAISING+HOLDING aktif, 4 sensor formülü, boot-time params validation, registry entry (Task 3).
-- [ ] **Kriter 4:** `engine.run_device` compute order: clean → fault.modify → noise; active_scenarios_at sensor döngüsü dışında per-tick (Task 4).
-- [ ] **Kriter 5:** Unit testler: config (3) + base/helper (5) + MechanicalWear (8) + engine integration (2) — toplam 18 yeni unit test.
-- [ ] **Kriter 6:** İstatistiksel imza testi: RAISING `motor_current` mean ∈ [baseline×1.15, baseline×1.30], scipy.stats.ttest_1samp p<0.05 (Task 5).
+- [x] **Kriter 1:** `ScenarioWindow` + `DeviceConfig.scenarios` field + YAML loader (Task 1).
+- [x] **Kriter 2:** `simulator/scenarios/` package: `FaultScenario` ABC + `ScenarioContext` + `SCENARIO_REGISTRY` + `active_scenarios_at` helper (Task 2).
+- [x] **Kriter 3:** `MechanicalWear` (A) — RAISING+HOLDING aktif, 4 sensor formülü, boot-time params validation, registry entry (Task 3).
+- [x] **Kriter 4:** `engine.run_device` compute order: clean → fault.modify → noise; active_scenarios_at sensor döngüsü dışında per-tick (Task 4).
+- [x] **Kriter 5:** Unit testler: config (3) + base/helper (5) + MechanicalWear (8) + engine integration (2) — toplam 18 yeni unit test.
+- [x] **Kriter 6:** İstatistiksel imza testi: RAISING `motor_current` mean ∈ [baseline×1.15, baseline×1.30], scipy.stats.ttest_1samp p<0.05 (Task 5).
 
 Her task'ın sonunda **DiscIPLİN** (CLAUDE.md kuralı): tam pytest suite + mypy(src+tests) + ruff(src+tests) yeşil — per-file değil.
 

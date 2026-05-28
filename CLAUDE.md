@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 4: Üç Arıza Senaryosu** (sıradaki)
+**Faz 1 — Iterasyon 4b: HydraulicLeak + ElectricalFault + Tam İmza Seti** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Tamamlanan iterasyonlar:**
@@ -149,6 +149,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon2b-tum-sensorler.md` (8/8 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (8/8 ✅)
+  - `docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md` (6/6 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit` + `ruff check src/simulator tests/unit`.
@@ -176,10 +177,22 @@ sensör). `pytest-asyncio==0.23.7` dev dep, auto-mode. Toplam 87 test (71 Iter 2
 async sanity 2, validation 6, engine asyncio 5, integration 3). Manuel uçtan uca: 3 cihaz
 paralel akıyor, topic disambiguation doğru, SIGINT temiz shutdown.
 
-### Iterasyon 4 (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 4a (Senaryo Altyapısı + MechanicalWear) — Tamamlandı (2026-05-28)
 
-Kapsam (spec § 3 Iterasyon 4): MechanicalWear / HydraulicLeak / ElectricalFault
-senaryoları + istatistiksel imza testleri (`scipy.stats`).
+`src/simulator/scenarios/` package: `FaultScenario` ABC + `ScenarioContext` (frozen),
+`SCENARIO_REGISTRY` + `active_scenarios_at` helper. `MechanicalWear` (A) senaryosu:
+RAISING+HOLDING aktif, params {severity, ramp_up_s} boot-time validation.
+`config.ScenarioWindow` + `DeviceConfig.scenarios` field + YAML loader scenarios bloğunu
+parse eder. `engine.run_device` compute order: clean → fault.modify → noise (spec § 8).
+İstatistiksel imza testi: `tests/scenarios/test_mechanical_wear_signature.py` scipy.stats
+ttest_1samp ile baseline'a karşı +%25 artışı p<0.05'te doğrular. Toplam 107 test, ≥%85
+coverage. Manuel uçtan uca: device_002'de scenario aktif, motor_current ramp davranışı
+gözlemli.
+
+### Iterasyon 4b (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iter 4b): `HydraulicLeak` (B) + `ElectricalFault` (C) + Spearman ρ<0
+ve F-testi imza setleri. scipy explicit pin (`scipy==1.17.1`). Faz 1 closure.
 
 Faz seyri: `docs/ROADMAP.md`.
 
