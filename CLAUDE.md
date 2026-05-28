@@ -141,24 +141,32 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 2: State Machine + Tüm Sensörler** (sıradaki)
+**Faz 1 — Iterasyon 2b: Kalan 5 Sensör + Sensör Formülleri** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
-- **Tamamlanan iterasyon:** `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 task ✅)
+- **Tamamlanan iterasyonlar:**
+  - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
+  - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz yayın yapar.
+- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit` + `ruff check src/simulator tests/unit`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
 
-Çalışan parça: tek `motor_current` sensörü, 1 Hz Gauss gürültülü MQTT yayını, SIGINT/SIGTERM graceful shutdown, 17 unit test (≥84% kapsama). State machine yok, sabit `state="idle"`. Paketleme: `src/simulator/` PEP 660 src layout.
+Tek `motor_current` sensörü, 1 Hz Gauss gürültülü MQTT yayını, SIGINT/SIGTERM graceful shutdown, 17 unit test. Sabit `state="idle"`.
 
-### Iterasyon 2 (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 2a (State Machine) — Tamamlandı (2026-05-28)
 
-Kapsam (spec § 3 Iterasyon 2):
-- 6 sensör (motor_current, motor_voltage, hydraulic_pressure, motor_temperature, mast_position, vibration)
-- `DeviceState` enum + `DeviceRuntimeState` (mutable runtime), state machine transitions
-- `BaseSensor` ABC + her sensörün durum-bazlı davranış formülleri
-- Sensörler arası implicit korelasyon
+State machine altyapısı: `DeviceState` StrEnum, `DeviceRuntimeState` (clock DI), `advance_state_machine`, `compute_position`, `BaseSensor` ABC, `SENSOR_REGISTRY`. `motor_current` refactor (`sample()` → `compute(runtime, position)`), state-aware (IDLE/HOLDING ~0.5A, RAISING/LOWERING ~8A). Engine state machine sürüyor, gürültü engine'de (spec § 8). 42 unit test (~90% coverage), tam IDLE→RAISING→HOLDING→LOWERING→IDLE döngüsü canlı doğrulandı.
+
+### Iterasyon 2b (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iterasyon 2 — motor_current dışı):
+- 5 yeni sensör: motor_voltage, hydraulic_pressure, motor_temperature (stateful, lineer ısınma/soğuma), mast_position (compute_position'dan okur), vibration
+- Her sensörün durum-bazlı davranış formülleri (spec § 6 tablo)
+- SENSOR_REGISTRY genişler (6 sensör), engine N-sensör loop'una geçer
+- Sensörler arası implicit korelasyon (state ortak girdi)
+- Engine'in `_validate_iteration2a_constraints` kısıtı kalkar (artık 6 sensör)
 
 Faz seyri: `docs/ROADMAP.md`.
 
