@@ -1,4 +1,4 @@
-# Simülasyon için cihaz tanımları örneği — Iterasyon 2a (state machine)
+# Simülasyon için cihaz tanımları örneği — Iterasyon 2b (6 sensör)
 # Gerçek devices.yaml dosyasını bu örnekten oluşturun: cp devices.yaml.example devices.yaml
 
 devices:
@@ -12,7 +12,10 @@ devices:
       holding:  [60, 300]
       lowering: [10, 60]
     sensors:
-      - name: motor_current
-        unit: A
-        baseline: 0.5        # IDLE/HOLDING değeri; RAISING/LOWERING sensör sınıfında 8.0A
-        noise_std: 0.1
+      # baseline alanı IDLE durumu için; state-bazlı diğer değerler sensör sınıfında kodlu.
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
