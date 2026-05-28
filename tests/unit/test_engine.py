@@ -71,8 +71,8 @@ def test_run_publishes_state_field_idle_when_clock_not_advanced(
         assert call.kwargs["state"] == DeviceState.IDLE
 
 
-def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """1'den fazla cihaz → ValueError 'exactly 1 device'."""
+def test_run_rejects_duplicate_device_ids(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Aynı device.id iki kez → ValueError 'unique' (Iter 3 _validate_devices)."""
     devices_yaml = tmp_path / "devices.yaml"
     six_sensors_block = """
     sensors:
@@ -93,13 +93,13 @@ def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.Monkey
 devices:
   - id: device_001
     type: telescopic_mast_v1{sd_block}{six_sensors_block}
-  - id: device_002
+  - id: device_001
     type: telescopic_mast_v1{sd_block}{six_sensors_block}
 """)
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
     monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
-    with pytest.raises(ValueError, match="exactly 1 device"):
+    with pytest.raises(ValueError, match="unique"):
         run(
             mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
             devices_path=devices_yaml,
