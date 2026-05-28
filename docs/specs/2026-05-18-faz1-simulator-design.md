@@ -252,12 +252,15 @@ class BaseSensor(ABC):
 
 **Stateful sensör notu:** `motor_temperature` lineer ısınma/soğuma için önceki tick'in değerine ihtiyaç duyar — instance attribute olarak son değerini saklar. Diğer 5 sensör stateless (sadece `runtime` + `position_mm`'den hesaplar). Test edilebilirlik korunur çünkü her testte yeni sensör instance'ı oluşturulur, başlangıç state'i belirlidir.
 
+**Tick interval varsayımı (Iterasyon 2b kararı):** Stateful sensörler `delta_per_tick = 1.0 s` sabit varsayımıyla yazılır (engine `tick_hz=1.0` ile uyumlu). Sensör compute() çağrısı başına 1 saniyelik fiziksel zaman geçtiği varsayılır. Engine farklı `tick_hz` ile çalıştırılırsa stateful sensörlerin ısınma hızı orantısız olur. Iterasyon 4'te scenario timing gerektiğinde `BaseSensor.compute()` sözleşmesine `dt: float` parametresi eklenir veya engine'den `tick_interval` sensora inject edilir.
+
 ### Kritik İnvaryantlar
 
 1. **`current_state_duration_s` sadece state transition anında seçilir** ve o durum süresince değişmez. Sensörler ve `compute_position()` bu sabit değeri runtime state'ten okur, kendileri rastgele seçmez. Aksi halde her tick yeni bir doğrusal denklem → kaos.
 2. **`runtime.clock()` kullanılır** (default `time.monotonic`), `time.time()` değil. Wall clock değişiklikleri (NTP, manuel saat ayarı) elapsed hesabını bozmaz. Test'lerde `clock=FakeClock(0)` inject edilir.
 3. **Per-device RNG**: Cihazlar birbirinin rastgelelik durumunu etkilemez. Aynı seed ile aynı çıktı → regresyon testleri mümkün.
 4. **State geçişi tek yönlü**: IDLE → RAISING → HOLDING → LOWERING → IDLE.
+5. **Sensor instance state**: Stateful sensörlerin (örn. `motor_temperature._current_temp_c`) instance attribute'ları cihazın yaşam süresi boyunca taşınır; state machine transition'ları reset etmez. Test'lerde her test fresh sensor instance oluşturur, böylece başlangıç state'i belirli kalır.
 
 ### State Süre Aralıkları (default, YAML override edilebilir)
 
@@ -282,9 +285,11 @@ Toplam döngü: 85-450 saniye.
 | ↳ LOWERING için | A | — | 8.0 (RAISING ile aynı kategori — DOMAIN.md "hareket halinde 5-15A" hem RAISING hem LOWERING'i kapsar) | — | — | sat. 58 |
 | motor_voltage | V | 24.0 | 24.0 | 24.0 | 0.2 | sat. 21 |
 | hydraulic_pressure | bar | 10 (5-20) | 150 (100-200) | 80 (50-150) | 2 | sat. 60 |
+| ↳ LOWERING için | bar | — | 80 (HOLDING ile aynı kategori — motor enerjili tutucu basınç) | — | — | sat. 60 |
 | motor_temperature | °C | 25 (çevre) | motor enerjili durumlarda (RAISING, HOLDING, LOWERING) lineer artış 0.08 °C/s, üst sınır 35 | IDLE'da lineer azalış 0.04 °C/s, alt sınır 25 | 0.5 | sat. 67 |
 | mast_position | mm | 0 | 0 → target lineer | target | 1 | sat. 63 |
 | vibration | g | 0.05 | 0.3 (0.1-0.5 RMS) | 0.05 | 0.01 | sat. 64 |
+| ↳ LOWERING için | g | — | 0.3 (RAISING ile aynı kategori — motor enerjili hareket) | — | — | sat. 64 |
 
 Tüm değerler DOMAIN.md aralıklarının içinde. Her sensör kendi `compute(runtime, position)` metodunda state'e göre baseline'ı seçer ve geçiş anlarında yumuşatma yapar (örn. RAISING'in ilk saniyesinde inrush peak).
 
