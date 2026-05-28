@@ -307,3 +307,31 @@ async def test_run_device_exits_when_shutdown_event_set(
     await _asyncio.wait_for(task, timeout=1.0)
 
     assert publisher.publish_reading.call_count > 0
+
+
+def test_run_spawns_all_devices_in_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
+    """2 cihaz fixture'ı: her cihaz 2 tick × 6 sensör = 12 publish, toplam 24."""
+    import asyncio as _asyncio
+
+    mock_publisher = MagicMock()
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
+
+    original_sleep = _asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: original_sleep(0))
+
+    clock = FakeClock(0.0)
+    run(
+        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+        devices_path=FIXTURES / "devices_multi.yaml",
+        engine_config_path=FIXTURES / "simulator_minimal.yaml",
+        max_iterations=2,
+        seed=None,  # YAML'deki per-device seed kullan
+        clock=clock,
+    )
+
+    # 2 cihaz × 2 tick × 6 sensör = 24 publish
+    assert mock_publisher.publish_reading.call_count == 24
+
+    # Her iki cihaz da yayın yaptı (device_id alanı kontrolü)
+    device_ids = {c.kwargs["device_id"] for c in mock_publisher.publish_reading.call_args_list}
+    assert device_ids == {"device_001", "device_002"}
