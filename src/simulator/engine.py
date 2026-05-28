@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+import signal
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -158,9 +159,9 @@ def run(
         mqtt_config_path: MQTT YAML config.
         devices_path: Cihaz YAML config.
         engine_config_path: Engine YAML config.
-        max_iterations: None → shutdown_event (Task 4 sinyal handler) veya
-            KeyboardInterrupt gelene dek sonsuz. Int verilirse o kadar tick sonra
-            temiz çıkış.
+        max_iterations: None → SIGINT/SIGTERM (asyncio add_signal_handler ile
+            shutdown Event set edilir) gelene dek sonsuz. Int verilirse o kadar
+            tick sonra temiz çıkış.
         seed: RNG seed; verilmezse YAML'deki device.seed kullanılır.
         clock: Saat kaynağı (DI). Test'lerde FakeClock inject edilebilir.
 
@@ -172,8 +173,10 @@ def run(
 
     Note (Iter 3):
         Bu task tek cihaz çalıştırır; Task 5 multi-device spawn ekler.
-        Sinyal yöneticisi (SIGINT/SIGTERM → add_signal_handler) Task 4'te gelecek;
-        şimdilik tek çıkış yolu max_iterations veya KeyboardInterrupt.
+        Sinyal yönetimi: SIGINT/SIGTERM `loop.add_signal_handler` ile asyncio.Event
+        set eder; `run_device` tick başında `is_set()` kontrolüyle temiz çıkar.
+        Windows'ta `NotImplementedError` yakalanır (KeyboardInterrupt asyncio.run
+        tarafından sarmalanır, `publisher.close()` finally bloğunda yine çalışır).
     """
     mqtt_config = load_mqtt_config(mqtt_config_path)
     devices = load_devices(devices_path)
@@ -208,8 +211,19 @@ def run(
 
     async def _amain() -> None:
         shutdown = asyncio.Event()
-        # Task 4'te add_signal_handler eklenecek; Task 3 sonu sinyal yok,
-        # max_iterations veya KeyboardInterrupt ile çıkış.
+        loop = asyncio.get_running_loop()
+
+        def _set_shutdown(signum: int) -> None:
+            logger.info("Shutdown sinyali alındı: {}", signum)
+            shutdown.set()
+
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, _set_shutdown, sig)
+            except NotImplementedError:
+                # Windows asyncio signal handlers desteklemez; KeyboardInterrupt fallback'i bırak.
+                logger.warning("add_signal_handler {} desteklenmiyor (Windows?)", sig)
+
         try:
             await run_device(
                 device=device,
@@ -223,9 +237,4 @@ def run(
         finally:
             publisher.close()
 
-    try:
-        asyncio.run(_amain())
-    except KeyboardInterrupt:
-        logger.info(
-            "KeyboardInterrupt — Task 4'te add_signal_handler ile temiz shutdown gelecek"
-        )
+    asyncio.run(_amain())
