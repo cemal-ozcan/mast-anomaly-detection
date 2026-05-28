@@ -423,7 +423,6 @@ async def run_device(
     runtime: DeviceRuntimeState,
     sensors: list[BaseSensor],
     publisher: MQTTPublisher,
-    rng: random.Random,
     tick_interval: float,
     shutdown_event: asyncio.Event,
     max_iterations: int | None = None,
@@ -433,11 +432,11 @@ async def run_device(
     Args:
         device: Cihaz config'i (id, sensors, state_durations, target_height_mm).
         runtime: Önceden başlatılmış `DeviceRuntimeState` (clock + started_at_monotonic
-            engine'de set edilmiş).
+            engine'de set edilmiş). Tüm randomness `runtime.rng` üzerinden akar —
+            engine-side noise dahil bu cihaza ait tek `random.Random(seed)` kaynağıdır
+            (spec § 5 invaryantı).
         sensors: Önceden registry'den inşa edilmiş sensor instance listesi.
         publisher: Paylaşılan MQTTPublisher (N cihazlı engine'de aynı instance).
-        rng: Bu cihaza ait `random.Random(seed)` — sensor compute'tan AYRI olarak
-            sadece engine-side noise için kullanılır.
         tick_interval: Saniye cinsinden tick periyodu (engine_config.tick_hz'den).
         shutdown_event: Set edildiğinde döngü tick başında çıkar (SIGINT/SIGTERM
             veya test-side .set()).
@@ -455,7 +454,7 @@ async def run_device(
 
         for sensor in sensors:
             clean_value = sensor.compute(runtime, runtime.position_mm)
-            noisy_value = clean_value + rng.gauss(0.0, sensor.config.noise_std)
+            noisy_value = clean_value + runtime.rng.gauss(0.0, sensor.config.noise_std)
             publisher.publish_reading(
                 device_id=device.id,
                 sensor=sensor.config.name,
@@ -529,7 +528,6 @@ def run(
                 runtime=runtime,
                 sensors=sensors,
                 publisher=publisher,
-                rng=rng,
                 tick_interval=tick_interval,
                 shutdown_event=shutdown,
                 max_iterations=max_iterations,
@@ -576,10 +574,10 @@ Beklenen: tüm mevcut engine testleri PASS. Eğer FAIL varsa: muhtemelen sleep m
 `tests/unit/test_engine.py` SONUNA ekle:
 
 ```python
-async def test_run_device_respects_max_iterations_and_shutdown(
+async def test_run_device_respects_max_iterations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_device max_iterations'a ulaşınca temiz biter; shutdown.set ile de erken çıkar."""
+    """run_device max_iterations'a ulaşınca temiz biter (shutdown.set path Task 4'te ayrı test)."""
     import asyncio as _asyncio
     import random as _random
 
@@ -634,7 +632,7 @@ async def test_run_device_respects_max_iterations_and_shutdown(
 
     await run_device(
         device=device, runtime=runtime, sensors=sensors,
-        publisher=publisher, rng=rng, tick_interval=1.0,
+        publisher=publisher, tick_interval=1.0,
         shutdown_event=shutdown, max_iterations=3,
     )
     # 3 tick × 6 sensör = 18 publish
@@ -745,7 +743,7 @@ async def test_run_device_exits_when_shutdown_event_set(
     async def runner() -> None:
         await run_device(
             device=device, runtime=runtime, sensors=sensors,
-            publisher=publisher, rng=rng, tick_interval=1.0,
+            publisher=publisher, tick_interval=1.0,
             shutdown_event=shutdown, max_iterations=None,  # sonsuz, sadece shutdown ile bitsin
         )
 
@@ -789,7 +787,7 @@ async def _amain() -> None:
     try:
         await run_device(
             device=device, runtime=runtime, sensors=sensors,
-            publisher=publisher, rng=rng, tick_interval=tick_interval,
+            publisher=publisher, tick_interval=tick_interval,
             shutdown_event=shutdown, max_iterations=max_iterations,
         )
     finally:
@@ -966,8 +964,9 @@ tick_interval = 1.0 / engine_config.tick_hz
 publisher = _make_publisher(mqtt_config)
 publisher.connect()
 
-# Her cihaz için: sensors + rng + runtime üret (cihazlar arasında shared state YOK)
-device_setups: list[tuple[DeviceConfig, DeviceRuntimeState, list[BaseSensor], random.Random]] = []
+# Her cihaz için: sensors + rng + runtime üret (cihazlar arasında shared state YOK).
+# rng `runtime.rng` üzerinden taşınır — run_device içinde noise da oradan akar.
+device_setups: list[tuple[DeviceConfig, DeviceRuntimeState, list[BaseSensor]]] = []
 for device in devices:
     device_sensors: list[BaseSensor] = [
         SENSOR_REGISTRY[sc.name](sc) for sc in device.sensors
@@ -985,7 +984,7 @@ for device in devices:
         started_at_monotonic=engine_boot_at,
         clock=clock,
     )
-    device_setups.append((device, device_runtime, device_sensors, device_rng))
+    device_setups.append((device, device_runtime, device_sensors))
 ```
 
 Sonra `_amain` içindeki tek-cihaz `await run_device(...)` çağrısını şununla değiştir:
@@ -1009,12 +1008,12 @@ async def _amain() -> None:
         asyncio.create_task(
             run_device(
                 device=d, runtime=r, sensors=s, publisher=publisher,
-                rng=g, tick_interval=tick_interval,
+                tick_interval=tick_interval,
                 shutdown_event=shutdown, max_iterations=max_iterations,
             ),
             name=f"run_device:{d.id}",
         )
-        for (d, r, s, g) in device_setups
+        for (d, r, s) in device_setups
     ]
 
     try:
