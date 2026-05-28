@@ -43,26 +43,56 @@ _REQUIRED_SENSORS = frozenset({
 })
 
 
-def _validate_iteration2b_constraints(devices: list[DeviceConfig]) -> DeviceConfig:
-    """Iterasyon 2b kısıtlamaları: tam 1 cihaz + tam 6 sensör seti."""
-    if len(devices) != 1:
+def _validate_devices(devices: list[DeviceConfig]) -> None:
+    """Iter 3 validasyonu: N cihaz, her biri tam 6 sensör seti, unique ID'ler.
+
+    Args:
+        devices: YAML'den yüklenmiş cihaz config'leri.
+
+    Raises:
+        ValueError: Liste boşsa, herhangi bir cihazda 6 sensör setinden sapma varsa,
+            veya device.id değerleri arasında duplikasyon varsa.
+
+    Aynı `seed` birden fazla cihazda görülürse hata DEĞİL, WARN log basılır
+    (spec § 3 Iter 3 bitti kriteri #2 — aynı seed regresyon testi meşru kullanım).
+    """
+    if len(devices) < 1:
+        raise ValueError("Iterasyon 3: en az 1 cihaz tanımlı olmalı")
+
+    # ID uniqueness
+    ids = [d.id for d in devices]
+    if len(ids) != len(set(ids)):
+        dupes = sorted({i for i in ids if ids.count(i) > 1})
         raise ValueError(
-            f"Iterasyon 2b exactly 1 device destekliyor, alınan: {len(devices)}"
+            f"Iterasyon 3: device.id değerleri unique olmalı (duplikatlar: {dupes})"
         )
-    device = devices[0]
-    names = {s.name for s in device.sensors}
-    if names != _REQUIRED_SENSORS:
-        parts: list[str] = []
-        missing = _REQUIRED_SENSORS - names
-        extra = names - _REQUIRED_SENSORS
-        if missing:
-            parts.append(f"eksik: {sorted(missing)}")
-        if extra:
-            parts.append(f"fazla: {sorted(extra)}")
-        raise ValueError(
-            f"Iterasyon 2b: cihaz tam olarak 6 sensör içermeli ({', '.join(parts)})"
+
+    # Her cihazda tam 6-sensör seti
+    for device in devices:
+        names = {s.name for s in device.sensors}
+        if names != _REQUIRED_SENSORS:
+            parts: list[str] = []
+            missing = _REQUIRED_SENSORS - names
+            extra = names - _REQUIRED_SENSORS
+            if missing:
+                parts.append(f"eksik: {sorted(missing)}")
+            if extra:
+                parts.append(f"fazla: {sorted(extra)}")
+            raise ValueError(
+                f"Iterasyon 3: cihaz '{device.id}' tam 6-sensör seti içermeli "
+                f"({', '.join(parts)})"
+            )
+
+    # Same-seed → WARN (hata değil)
+    seeds = [d.seed for d in devices if d.seed is not None]
+    duplicated_seeds = sorted({s for s in seeds if seeds.count(s) > 1})
+    if duplicated_seeds:
+        logger.warning(
+            "Birden fazla cihazda aynı seed kullanılıyor: {} — "
+            "bu deterministik regresyon senaryosu için meşru, ama production'da "
+            "cihazların aynı değer dizilerini üreteceğini unutmayın.",
+            duplicated_seeds,
         )
-    return device
 
 
 def run(
@@ -93,7 +123,8 @@ def run(
     engine_config = load_engine_config(engine_config_path)
     logger.level(engine_config.log_level)
 
-    device = _validate_iteration2b_constraints(devices)
+    _validate_devices(devices)
+    device = devices[0]  # Iter 3 ara durum: validation N cihazı kabul ediyor ama engine hâlâ tek çalıştırıyor
 
     # Sensörleri config sırasıyla inşa et (Iter 2b: list-based, 1+ sensör).
     sensors: list[BaseSensor] = [
