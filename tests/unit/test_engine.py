@@ -130,3 +130,27 @@ def test_run_publishes_noisy_value_around_baseline(monkeypatch: pytest.MonkeyPat
     assert 0.2 < mean < 0.8
     # Gürültü gerçekten ekleniyor: tüm değerler birebir aynı OLMAMALI.
     assert len(set(values)) > 1
+
+
+def test_run_iterates_all_sensors_per_tick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Engine her tick'te tüm sensörler için publish_reading çağırır."""
+    mock_publisher = MagicMock()
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    clock = FakeClock(0.0)
+    run(
+        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+        devices_path=FIXTURES / "devices_minimal.yaml",
+        engine_config_path=FIXTURES / "simulator_minimal.yaml",
+        max_iterations=2,
+        seed=42,
+        clock=clock,
+    )
+
+    # devices_minimal.yaml'da Iter 2a sonu 1 sensör (motor_current).
+    # 2 tick × 1 sensör = 2 publish_reading çağrısı bekleniyor.
+    assert mock_publisher.publish_reading.call_count == 2
+    # Sensör adları config'deki sensör listesindeki sırada yayınlanır.
+    sensor_names = [c.kwargs["sensor"] for c in mock_publisher.publish_reading.call_args_list]
+    assert sensor_names == ["motor_current", "motor_current"]
