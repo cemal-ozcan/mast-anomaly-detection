@@ -1,4 +1,4 @@
-"""Simulator engine: cihaz config'lerini validate eder, state machine + N sensör asyncio loop'unu sürer (Iter 3)."""
+"""Simulator engine: cihaz config'lerini validate eder, asyncio loop'unda N cihaz × 6 sensör tick'ler + fault scenarios uygular."""
 from __future__ import annotations
 
 import asyncio
@@ -46,7 +46,7 @@ _REQUIRED_SENSORS = frozenset({
 
 
 def _validate_devices(devices: list[DeviceConfig]) -> None:
-    """Iter 3 validasyonu: N cihaz, her biri tam 6 sensör seti, unique ID'ler.
+    """Cihaz config validasyonu: N cihaz, her biri tam 6 sensör seti, unique ID'ler.
 
     Args:
         devices: YAML'den yüklenmiş cihaz config'leri.
@@ -56,17 +56,17 @@ def _validate_devices(devices: list[DeviceConfig]) -> None:
             veya device.id değerleri arasında duplikasyon varsa.
 
     Aynı `seed` birden fazla cihazda görülürse hata DEĞİL, WARN log basılır
-    (spec § 3 Iter 3 bitti kriteri #2 — aynı seed regresyon testi meşru kullanım).
+    (spec § 3 — aynı seed regresyon testi meşru kullanım).
     """
     if len(devices) < 1:
-        raise ValueError("Iterasyon 3: en az 1 cihaz tanımlı olmalı")
+        raise ValueError("Cihaz config: en az 1 cihaz tanımlı olmalı")
 
     # ID uniqueness
     ids = [d.id for d in devices]
     if len(ids) != len(set(ids)):
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         raise ValueError(
-            f"Iterasyon 3: device.id değerleri unique olmalı (duplikatlar: {dupes})"
+            f"Cihaz config: device.id değerleri unique olmalı (duplikatlar: {dupes})"
         )
 
     # Her cihazda tam 6-sensör seti
@@ -81,7 +81,7 @@ def _validate_devices(devices: list[DeviceConfig]) -> None:
             if extra:
                 parts.append(f"fazla: {sorted(extra)}")
             raise ValueError(
-                f"Iterasyon 3: cihaz '{device.id}' tam 6-sensör seti içermeli "
+                f"Cihaz config: cihaz '{device.id}' tam 6-sensör seti içermeli "
                 f"({', '.join(parts)})"
             )
 
@@ -191,7 +191,7 @@ def run(
             (boş cihaz listesi, duplikat device.id, eksik/fazla sensör).
         KeyError: SENSOR_REGISTRY'de bilinmeyen sensör adı.
 
-    Note (Iter 3):
+    Note:
         Tüm cihazlar paralel `asyncio.create_task(run_device(...))` ile spawn edilir
         ve `asyncio.gather(*tasks)` ile beklenir. Publisher ve `engine_boot_at`
         paylaşılır; her cihazın kendi `DeviceRuntimeState` + `random.Random(seed)`
