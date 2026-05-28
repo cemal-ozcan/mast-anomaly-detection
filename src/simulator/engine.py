@@ -221,7 +221,8 @@ def run(
             try:
                 loop.add_signal_handler(sig, _set_shutdown, sig)
             except NotImplementedError:
-                # Windows asyncio signal handlers desteklemez; KeyboardInterrupt fallback'i bırak.
+                # Windows asyncio signal handlers desteklemez; outer try/except
+                # KeyboardInterrupt yakalayıp clean log basacak.
                 logger.warning("add_signal_handler {} desteklenmiyor (Windows?)", sig)
 
         try:
@@ -237,4 +238,10 @@ def run(
         finally:
             publisher.close()
 
-    asyncio.run(_amain())
+    try:
+        asyncio.run(_amain())
+    except KeyboardInterrupt:
+        # Windows fallback: add_signal_handler desteklenmiyor, KeyboardInterrupt
+        # asyncio.run'dan propagate ediyor. POSIX'te bu blok hiç tetiklenmez
+        # çünkü _amain'in signal handler'ı önce yakalıyor.
+        logger.info("KeyboardInterrupt — engine kapanıyor (Windows fallback)")
