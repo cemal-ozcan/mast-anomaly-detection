@@ -141,13 +141,14 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 3: asyncio + Çoklu Cihaz** (sıradaki)
+**Faz 1 — Iterasyon 4: Üç Arıza Senaryosu** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon2b-tum-sensorler.md` (8/8 ✅)
+  - `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (8/8 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz × 6 sensör yayın yapar.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit` + `ruff check src/simulator tests/unit`.
@@ -164,15 +165,21 @@ State machine altyapısı: `DeviceState` StrEnum, `DeviceRuntimeState` (clock DI
 
 6 sensör tam set: motor_current, motor_voltage (sabit 24V), hydraulic_pressure (4 state baseline), motor_temperature (TEK stateful — lineer ısınma/soğuma, instance attribute), mast_position (compute_position passthrough), vibration. Engine N-sensör loop, `_validate_iteration2b_constraints` strict 6-sensör seti. 71 unit test, ~%93 coverage. Manuel uçtan uca: 6 sensör 1 Hz paralel akıyor, JSON şeması doğru, gauss noise + state-bazlı baseline'lar gözlemlendi.
 
-### Iterasyon 3 (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 3 (asyncio + Çoklu Cihaz) — Tamamlandı (2026-05-28)
 
-Kapsam (spec § 3 Iterasyon 3):
-- Engine asyncio loop'a geçer
-- Her cihaz `async def run()` task'ı, paralel çalışır
-- Her cihazın kendi `DeviceRuntimeState` + `random.Random(seed)` instance'ı
-- YAML'de N cihaz tanımlanabilir
-- Integration test: 2 cihaz spawn, 10 sn boyunca her ikisinden mesaj alındığını doğrula
-- Smoke test kategorisi (gerçek Mosquitto, CI dışı)
+Engine asyncio loop'a geçti. `engine.run()` artık `asyncio.run(_amain(...))` çağırıyor;
+`async def run_device(...)` per-cihaz task'ı. N cihaz `asyncio.gather(*tasks)` ile paralel.
+Paylaşılan tek `MQTTPublisher`, ortak `engine_boot_at` (regresyon testi için). SIGINT/SIGTERM
+`loop.add_signal_handler` + `asyncio.Event` ile yönetiliyor. `_validate_iteration2b_constraints`
+→ `_validate_devices` rename + N cihaz desteği (unique ID, same-seed WARN, her cihaz tam 6
+sensör). `pytest-asyncio==0.23.7` dev dep, auto-mode. Toplam 87 test (71 Iter 2b + 16 yeni:
+async sanity 2, validation 6, engine asyncio 5, integration 3). Manuel uçtan uca: 3 cihaz
+paralel akıyor, topic disambiguation doğru, SIGINT temiz shutdown.
+
+### Iterasyon 4 (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iterasyon 4): MechanicalWear / HydraulicLeak / ElectricalFault
+senaryoları + istatistiksel imza testleri (`scipy.stats`).
 
 Faz seyri: `docs/ROADMAP.md`.
 

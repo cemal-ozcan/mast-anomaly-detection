@@ -1,18 +1,48 @@
-# Simülasyon için cihaz tanımları örneği — Iterasyon 2b (6 sensör)
-# Gerçek devices.yaml dosyasını bu örnekten oluşturun: cp devices.yaml.example devices.yaml
-
 devices:
   - id: device_001
     type: telescopic_mast_v1
     seed: 42
     target_height_mm: 5000
     state_durations:
-      idle:     [5, 30]      # [min_s, max_s]
+      idle:     [5, 30]
       raising:  [10, 60]
       holding:  [60, 300]
       lowering: [10, 60]
     sensors:
-      # baseline alanı IDLE durumu için; state-bazlı diğer değerler sensör sınıfında kodlu.
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+
+  - id: device_002
+    type: telescopic_mast_v1
+    seed: 7
+    target_height_mm: 6000
+    state_durations:
+      idle:     [5, 30]
+      raising:  [10, 60]
+      holding:  [60, 300]
+      lowering: [10, 60]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+
+  - id: device_003
+    type: telescopic_mast_v1
+    seed: 123
+    target_height_mm: 4500
+    state_durations:
+      idle:     [5, 30]
+      raising:  [10, 60]
+      holding:  [60, 300]
+      lowering: [10, 60]
+    sensors:
       - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
       - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
       - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
