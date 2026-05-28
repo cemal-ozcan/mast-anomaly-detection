@@ -99,7 +99,6 @@ async def run_device(
     runtime: DeviceRuntimeState,
     sensors: list[BaseSensor],
     publisher: MQTTPublisher,
-    rng: random.Random,
     tick_interval: float,
     shutdown_event: asyncio.Event,
     max_iterations: int | None = None,
@@ -109,11 +108,11 @@ async def run_device(
     Args:
         device: Cihaz config'i (id, sensors, state_durations, target_height_mm).
         runtime: Önceden başlatılmış `DeviceRuntimeState` (clock + started_at_monotonic
-            engine'de set edilmiş).
+            engine'de set edilmiş). Tüm randomness `runtime.rng` üzerinden akar —
+            engine-side noise dahil bu cihaza ait tek `random.Random(seed)` kaynağıdır
+            (spec § 5 invaryantı).
         sensors: Önceden registry'den inşa edilmiş sensor instance listesi.
         publisher: Paylaşılan MQTTPublisher (N cihazlı engine'de aynı instance).
-        rng: Bu cihaza ait `random.Random(seed)` — sensor compute'tan AYRI olarak
-            sadece engine-side noise için kullanılır.
         tick_interval: Saniye cinsinden tick periyodu (engine_config.tick_hz'den).
         shutdown_event: Set edildiğinde döngü tick başında çıkar (SIGINT/SIGTERM
             veya test-side .set()).
@@ -131,7 +130,7 @@ async def run_device(
 
         for sensor in sensors:
             clean_value = sensor.compute(runtime, runtime.position_mm)
-            noisy_value = clean_value + rng.gauss(0.0, sensor.config.noise_std)
+            noisy_value = clean_value + runtime.rng.gauss(0.0, sensor.config.noise_std)
             publisher.publish_reading(
                 device_id=device.id,
                 sensor=sensor.config.name,
@@ -217,7 +216,6 @@ def run(
                 runtime=runtime,
                 sensors=sensors,
                 publisher=publisher,
-                rng=rng,
                 tick_interval=tick_interval,
                 shutdown_event=shutdown,
                 max_iterations=max_iterations,
