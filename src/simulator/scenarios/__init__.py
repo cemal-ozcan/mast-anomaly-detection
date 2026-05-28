@@ -3,12 +3,14 @@ from __future__ import annotations
 
 from simulator.config import ScenarioWindow
 from simulator.scenarios.base import FaultScenario, ScenarioContext
+from simulator.scenarios.hydraulic_leak import HydraulicLeak
 from simulator.scenarios.mechanical_wear import MechanicalWear
 
 # Registry: YAML'deki ad-string'i sınıfa eşler. Yeni senaryo eklemek
 # yeni dosya yazıp bu dict'e bir satır eklemekten ibaret (spec § 4).
 SCENARIO_REGISTRY: dict[str, type[FaultScenario]] = {
     "mechanical_wear": MechanicalWear,
+    "hydraulic_leak": HydraulicLeak,
 }
 
 
@@ -50,4 +52,5 @@ __all__ = [
     "FaultScenario",
     "ScenarioContext",
     "MechanicalWear",
+    "HydraulicLeak",
 ]
