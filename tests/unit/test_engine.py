@@ -89,13 +89,13 @@ devices:
       holding: [60, 300]
       lowering: [10, 60]
     sensors:
-      - {name: hydraulic_pressure, unit: bar, baseline: 10, noise_std: 2}
+      - {name: unknown_sensor, unit: X, baseline: 10, noise_std: 2}
 """
     )
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
     monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
 
-    with pytest.raises(KeyError, match="hydraulic_pressure"):
+    with pytest.raises(KeyError, match="unknown_sensor"):
         run(
             mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
             devices_path=devices_yaml,
