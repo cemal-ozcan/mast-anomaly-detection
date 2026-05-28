@@ -111,7 +111,7 @@ def test_sensor_registry_contains_motor_current() -> None:
 
 
 def test_sensor_registry_only_iterasyon_2a_sensors() -> None:
-    """Iterasyon 2b'de motor_current + motor_voltage. 4 sensör daha Task 3-6'da gelecek."""
+    """Iterasyon 2b'de motor_current + motor_voltage + mast_position (Task 3). 3 sensör daha Task 4-6'da gelecek."""
     from simulator.sensors import SENSOR_REGISTRY
 
-    assert set(SENSOR_REGISTRY.keys()) == {"motor_current", "motor_voltage"}
+    assert set(SENSOR_REGISTRY.keys()) == {"motor_current", "motor_voltage", "mast_position"}
