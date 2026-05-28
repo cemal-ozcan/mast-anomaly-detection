@@ -24,6 +24,8 @@ from simulator.runtime import (
     advance_state_machine,
     compute_position,
 )
+from simulator.scenarios import active_scenarios_at
+from simulator.scenarios.base import ScenarioContext
 from simulator.sensors import SENSOR_REGISTRY
 from simulator.sensors.base import BaseSensor
 
@@ -120,6 +122,10 @@ async def run_device(
         max_iterations: None → shutdown_event'e kadar sonsuz. 0 → hiç tick yapmaz
             (erken çıkış). N → tam N tick yayını yapar ve temiz çıkar.
 
+        Tick içinde active scenarios sensor döngüsü DIŞINDA hesaplanır;
+        her sensör için fault.modify zincirlenir (clean → modify → noise,
+        spec § 8 invariant).
+
     Note:
         Bu fonksiyon kendi engine'i başlatmaz, kendi publisher'ını connect etmez —
         bunları engine.run() / _amain orkestre eder. Burada sadece tick gövdesi var.
@@ -131,8 +137,19 @@ async def run_device(
         advance_state_machine(runtime, device.state_durations)
         runtime.position_mm = compute_position(runtime, device.target_height_mm)
 
+        # Senaryo planlamasını sensor döngüsü DIŞINDA per-tick bir kez yap (spec § 8).
+        device_t = runtime.device_elapsed_s
+        active_windows = active_scenarios_at(device.scenarios, device_t)
+
         for sensor in sensors:
             clean_value = sensor.compute(runtime, runtime.position_mm)
+            # Spec § 8 kritik fiziksel sıra: clean → fault.modify → noise.
+            for scenario, window in active_windows:
+                ctx = ScenarioContext(
+                    runtime=runtime,
+                    scenario_elapsed_s=device_t - window.start_after_s,
+                )
+                clean_value = scenario.modify(sensor.config.name, clean_value, ctx)
             noisy_value = clean_value + runtime.rng.gauss(0.0, sensor.config.noise_std)
             publisher.publish_reading(
                 device_id=device.id,

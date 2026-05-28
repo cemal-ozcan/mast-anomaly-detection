@@ -10,6 +10,7 @@ import pytest
 from simulator.config import (
     DeviceConfig,
     DeviceState,
+    ScenarioWindow,
     SensorConfig,
     StateDurations,
 )
@@ -36,11 +37,12 @@ def make_device(
     target_height_mm: float = 5000.0,
     sensors: list[SensorConfig] | None = None,
     state_durations: StateDurations | None = None,
+    scenarios: list[ScenarioWindow] | None = None,
 ) -> DeviceConfig:
     """Test'lerde DeviceConfig hızlı kurulumu için factory.
 
     Defaults: tam 6-sensör seti, fixed state_durations (her aralık min==max),
-    seed=42, target_height=5000mm. Override gerekirse kwarg ile.
+    seed=42, target_height=5000mm, scenarios=[]. Override gerekirse kwarg ile.
     """
     return DeviceConfig(
         id=device_id,
@@ -54,6 +56,7 @@ def make_device(
         ),
         target_height_mm=target_height_mm,
         seed=seed,
+        scenarios=list(scenarios) if scenarios is not None else [],
     )
 
 
