@@ -141,14 +141,15 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 2b: Kalan 5 Sensör + Sensör Formülleri** (sıradaki)
+**Faz 1 — Iterasyon 3: asyncio + Çoklu Cihaz** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
+  - `docs/plans/2026-05-28-faz1-iterasyon2b-tum-sensorler.md` (8/8 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
-- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz yayın yapar.
+- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye 1 Hz × 6 sensör yayın yapar.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit` + `ruff check src/simulator tests/unit`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
@@ -157,16 +158,21 @@ Tek `motor_current` sensörü, 1 Hz Gauss gürültülü MQTT yayını, SIGINT/SI
 
 ### Iterasyon 2a (State Machine) — Tamamlandı (2026-05-28)
 
-State machine altyapısı: `DeviceState` StrEnum, `DeviceRuntimeState` (clock DI), `advance_state_machine`, `compute_position`, `BaseSensor` ABC, `SENSOR_REGISTRY`. `motor_current` refactor (`sample()` → `compute(runtime, position)`), state-aware (IDLE/HOLDING ~0.5A, RAISING/LOWERING ~8A). Engine state machine sürüyor, gürültü engine'de (spec § 8). 42 unit test (~90% coverage), tam IDLE→RAISING→HOLDING→LOWERING→IDLE döngüsü canlı doğrulandı.
+State machine altyapısı: `DeviceState` StrEnum, `DeviceRuntimeState` (clock DI), `advance_state_machine`, `compute_position`, `BaseSensor` ABC, `SENSOR_REGISTRY`. `motor_current` refactor (`sample()` → `compute(runtime, position)`). 42 unit test.
 
-### Iterasyon 2b (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 2b (Kalan 5 Sensör) — Tamamlandı (2026-05-28)
 
-Kapsam (spec § 3 Iterasyon 2 — motor_current dışı):
-- 5 yeni sensör: motor_voltage, hydraulic_pressure, motor_temperature (stateful, lineer ısınma/soğuma), mast_position (compute_position'dan okur), vibration
-- Her sensörün durum-bazlı davranış formülleri (spec § 6 tablo)
-- SENSOR_REGISTRY genişler (6 sensör), engine N-sensör loop'una geçer
-- Sensörler arası implicit korelasyon (state ortak girdi)
-- Engine'in `_validate_iteration2a_constraints` kısıtı kalkar (artık 6 sensör)
+6 sensör tam set: motor_current, motor_voltage (sabit 24V), hydraulic_pressure (4 state baseline), motor_temperature (TEK stateful — lineer ısınma/soğuma, instance attribute), mast_position (compute_position passthrough), vibration. Engine N-sensör loop, `_validate_iteration2b_constraints` strict 6-sensör seti. 71 unit test, ~%93 coverage. Manuel uçtan uca: 6 sensör 1 Hz paralel akıyor, JSON şeması doğru, gauss noise + state-bazlı baseline'lar gözlemlendi.
+
+### Iterasyon 3 (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iterasyon 3):
+- Engine asyncio loop'a geçer
+- Her cihaz `async def run()` task'ı, paralel çalışır
+- Her cihazın kendi `DeviceRuntimeState` + `random.Random(seed)` instance'ı
+- YAML'de N cihaz tanımlanabilir
+- Integration test: 2 cihaz spawn, 10 sn boyunca her ikisinden mesaj alındığını doğrula
+- Smoke test kategorisi (gerçek Mosquitto, CI dışı)
 
 Faz seyri: `docs/ROADMAP.md`.
 
