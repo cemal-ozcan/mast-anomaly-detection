@@ -25,6 +25,7 @@ from simulator.runtime import (
     compute_position,
 )
 from simulator.sensors import SENSOR_REGISTRY
+from simulator.sensors.base import BaseSensor
 
 
 def _make_publisher(config: MQTTConfig) -> MQTTPublisher:
@@ -75,10 +76,11 @@ def run(
     logger.level(engine_config.log_level)
 
     device = _validate_iteration2a_constraints(devices)
-    sensor_config = device.sensors[0]
 
-    sensor_cls = SENSOR_REGISTRY[sensor_config.name]
-    sensor = sensor_cls(sensor_config)
+    # Sensörleri config sırasıyla inşa et (Iter 2b: list-based, 1+ sensör).
+    sensors: list[BaseSensor] = [
+        SENSOR_REGISTRY[sc.name](sc) for sc in device.sensors
+    ]
 
     rng = random.Random(seed if seed is not None else device.seed)
     now = clock()
@@ -114,16 +116,16 @@ def run(
             advance_state_machine(runtime, device.state_durations)
             runtime.position_mm = compute_position(runtime, device.target_height_mm)
 
-            clean_value = sensor.compute(runtime, runtime.position_mm)
-            noisy_value = clean_value + rng.gauss(0.0, sensor_config.noise_std)
-
-            publisher.publish_reading(
-                device_id=device.id,
-                sensor=sensor_config.name,
-                value=noisy_value,
-                unit=sensor_config.unit,
-                state=runtime.state,  # StrEnum → JSON serializable
-            )
+            for sensor in sensors:
+                clean_value = sensor.compute(runtime, runtime.position_mm)
+                noisy_value = clean_value + rng.gauss(0.0, sensor.config.noise_std)
+                publisher.publish_reading(
+                    device_id=device.id,
+                    sensor=sensor.config.name,
+                    value=noisy_value,
+                    unit=sensor.config.unit,
+                    state=runtime.state,  # StrEnum → JSON serializable
+                )
             iterations += 1
             if max_iterations is not None and iterations >= max_iterations:
                 break
