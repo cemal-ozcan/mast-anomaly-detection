@@ -184,10 +184,10 @@ devices:
         )
 
 
-async def test_run_device_respects_max_iterations_and_shutdown(
+async def test_run_device_respects_max_iterations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """run_device max_iterations'a ulaşınca temiz biter; shutdown.set ile de erken çıkar."""
+    """run_device max_iterations'a ulaşınca temiz biter (shutdown.set path Task 4'te ayrı test)."""
     import asyncio as _asyncio
     import random as _random
 
@@ -242,7 +242,7 @@ async def test_run_device_respects_max_iterations_and_shutdown(
 
     await run_device(
         device=device, runtime=runtime, sensors=sensors,
-        publisher=publisher, rng=rng, tick_interval=1.0,
+        publisher=publisher, tick_interval=1.0,
         shutdown_event=shutdown, max_iterations=3,
     )
     # 3 tick × 6 sensör = 18 publish
