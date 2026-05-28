@@ -33,13 +33,25 @@ def test_load_devices_returns_list_of_device_configs() -> None:
     assert isinstance(device, DeviceConfig)
     assert device.id == "device_001"
     assert device.type == "telescopic_mast_v1"
-    assert len(device.sensors) == 1
+    assert len(device.sensors) == 6
+    # Check first sensor (motor_current)
     sensor = device.sensors[0]
     assert isinstance(sensor, SensorConfig)
     assert sensor.name == "motor_current"
     assert sensor.unit == "A"
     assert sensor.baseline == 0.5
     assert sensor.noise_std == 0.1
+    # Check all 6 required sensors are present
+    sensor_names = {s.name for s in device.sensors}
+    expected_names = {
+        "motor_current",
+        "motor_voltage",
+        "hydraulic_pressure",
+        "motor_temperature",
+        "mast_position",
+        "vibration",
+    }
+    assert sensor_names == expected_names
 
 
 def test_load_engine_config() -> None:
