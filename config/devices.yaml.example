@@ -37,7 +37,7 @@ devices:
         start_after_s: 120        # 2 dakika sonra başlar
         duration_s: 1800           # 30 dakika sürer
         params:
-          severity: 0.25           # peak +%25 motor akımı / titreşim
+          severity: 0.25           # peak factor; motor_current, vibration, motor_temperature, mast_position'a uygulanır
           ramp_up_s: 300           # 5 dakikada peak'e ulaşır
 
   - id: device_003
