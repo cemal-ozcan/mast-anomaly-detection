@@ -1,7 +1,8 @@
 """YAML konfigürasyon yükleyicisi. Iterasyon 1: minimum şema."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,20 @@ class StateDurations:
 
 
 @dataclass(frozen=True)
+class ScenarioWindow:
+    """Bir senaryo penceresi: kayıt anahtarı + zaman aralığı + parametreler.
+
+    `start_after_s` ve `duration_s` cihazın spawn anından itibaren sayılır
+    (engine_boot_at, spec § 5). `params` immutable bir Mapping olarak saklanır.
+    """
+
+    name: str  # SCENARIO_REGISTRY key
+    start_after_s: float
+    duration_s: float
+    params: Mapping[str, float] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class DeviceConfig:
     id: str
     type: str
@@ -50,6 +65,7 @@ class DeviceConfig:
     state_durations: StateDurations
     target_height_mm: float
     seed: int | None = None
+    scenarios: list[ScenarioWindow] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -138,6 +154,17 @@ def load_devices(path: Path) -> list[DeviceConfig]:
                 holding=(float(sd["holding"][0]), float(sd["holding"][1])),
                 lowering=(float(sd["lowering"][0]), float(sd["lowering"][1])),
             )
+            scenarios_raw = d.get("scenarios", []) or []
+            scenarios: list[ScenarioWindow] = []
+            for s in scenarios_raw:
+                scenarios.append(
+                    ScenarioWindow(
+                        name=str(s["name"]),
+                        start_after_s=float(s["start_after_s"]),
+                        duration_s=float(s["duration_s"]),
+                        params=dict(s.get("params") or {}),
+                    )
+                )
             devices.append(
                 DeviceConfig(
                     id=str(d["id"]),
@@ -146,6 +173,7 @@ def load_devices(path: Path) -> list[DeviceConfig]:
                     state_durations=state_durations,
                     target_height_mm=float(d["target_height_mm"]),
                     seed=int(d["seed"]) if "seed" in d else None,
+                    scenarios=scenarios,
                 )
             )
         return devices
