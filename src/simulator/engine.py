@@ -162,7 +162,10 @@ def run(
         max_iterations: None → SIGINT/SIGTERM (asyncio add_signal_handler ile
             shutdown Event set edilir) gelene dek sonsuz. Int verilirse o kadar
             tick sonra temiz çıkış.
-        seed: RNG seed; verilmezse YAML'deki device.seed kullanılır.
+        seed: RNG seed; verilmezse YAML'deki device.seed kullanılır. Multi-device
+            durumunda bu parametre verilirse TÜM cihazlara aynı seed gider — same-seed
+            WARN tetiklenir; deterministik regresyon senaryosu için per-device YAML
+            seed kullanmak tercih edilir.
         clock: Saat kaynağı (DI). Test'lerde FakeClock inject edilebilir.
 
     Raises:

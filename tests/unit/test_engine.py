@@ -309,8 +309,12 @@ async def test_run_device_exits_when_shutdown_event_set(
     assert publisher.publish_reading.call_count > 0
 
 
-def test_run_spawns_all_devices_in_parallel(monkeypatch: pytest.MonkeyPatch) -> None:
-    """2 cihaz fixture'ı: her cihaz 2 tick × 6 sensör = 12 publish, toplam 24."""
+def test_run_spawns_all_configured_devices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """2 cihaz fixture'ı: her cihaz 2 tick × 6 sensör = 12 publish, toplam 24.
+
+    "Her iki cihaz da yayın yaptı" garantisidir; interleaved scheduling
+    (paralelizm) doğrulaması Task 7 integration testindedir.
+    """
     import asyncio as _asyncio
 
     mock_publisher = MagicMock()
