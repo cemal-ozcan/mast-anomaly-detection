@@ -90,6 +90,7 @@ Faz 1 bu prensibe **walking skeleton + iterasyon** modelinde uyar. Her iterasyon
 - **Cihaz ID disiplini:** `device.id` değerleri unique olmalı (aynı topic'e iki yayıncı çakışmasın). Birden fazla cihazda aynı `seed` varsa engine boot'ta WARN log basar, hata değil — § 3 Iter 3 bitti kriteri #2 (deterministik regresyon) bu durumu meşru kullanım olarak içerir.
 - **Validation refactor:** `_validate_iteration2b_constraints` → `_validate_devices`. Cihaz sayısı ≥1, her cihaz tam 6-sensör seti (§ 6 disiplini Faz 1 boyunca mutlak), ID'ler unique. Iter 2b'nin "tam 1 cihaz" katı kuralı düşer.
 - **Shutdown:** `loop.add_signal_handler(SIGINT|SIGTERM, shutdown.set)` + `asyncio.Event`. Her `run_device` döngüsü tick başında `shutdown.is_set()` kontrol eder; engine `await asyncio.gather(*tasks)` sonrası `publisher.close()` çağırır. § 11 satırı zaten bu yöne işaret ediyordu, Iter 3 implementasyonu somutlaştırır.
+- **`started_at_monotonic` ortak referans:** Tüm cihazlar için `started_at_monotonic = engine_boot_at` (engine'in tüm cihazları spawn etmeden önce bir kez okuduğu `clock()` snapshot'ı). Her cihaz kendi asyncio task'ında ayrı `clock()` çağırmaz — yoksa task scheduling jitter'ı `device_elapsed_s`'i kayar, bitti kriteri #2'nin (aynı seed → birebir aynı value) regresyon testi geçmez. § 5 `started_at_monotonic` semantiği Iter 3'te "cihaz spawn anı" yerine "engine boot anı" olarak okunur; per-cihaz başlangıç ofseti gerekirse Faz 9+ YAML alanıyla eklenir (şu an YAGNI).
 
 **Bitti kriterleri:**
 1. YAML'de 3 cihaz tanımlanır, üçü de bağımsız topic'lere (`telemetry/{device_id}/...`) yayın yapar; mesajlar paralel akar (tek cihazın gecikmesi diğerlerini bloklamaz).
@@ -379,6 +380,8 @@ def active_scenarios_at(
 
 Bu sıra gerçek dünyayı yansıtır: arıza fiziksel olayı değiştirir, sensör onu okurken üzerine kendi gürültüsünü ekler. Faz 4 dedektörleri bu fiziksel modeli varsayar.
 
+**Çoklu cihaz (Iterasyon 3+):** Yukarıdaki tick döngüsü her cihaz için bağımsız bir `async def run_device(device, runtime, sensors, publisher, shutdown, ...)` task'ında koşar. Cihazlar arasında shared state yok: her cihazın kendi `DeviceRuntimeState` instance'ı, kendi `random.Random(seed)`, kendi sensor instance listesi vardır. `MQTTPublisher` paylaşılır (§ 3 Iter 3 gerekçesi). `publisher.publish_reading(...)` sync metoddur ama `paho.client.publish()` çağrısı non-blocking (internal kuyruğa atar, paho'nun network thread'i yazar) — asyncio event loop'u bloklamaz, async dönüşüm gerekmez.
+
 ---
 
 ## 9. Arıza Senaryoları
@@ -527,7 +530,7 @@ devices:
 | MQTT runtime disconnect | paho-mqtt `reconnect_delay_set` ile otomatik | Servis ayağa kalkmalı |
 | Sensör `compute()` istisna (spesifik tip) | Loguru ERROR, o sensör için tick'i atla, devam et | Bir sensör buggy ise tüm cihaz düşmesin |
 | asyncio task crash | Loguru CRITICAL, engine durur, exit 1 | Sistemli yeniden başlatma (systemd / docker restart) |
-| SIGINT / SIGTERM | Engine `signal.SIGTERM` ve `SIGINT` için `asyncio.get_event_loop().add_signal_handler` ile shutdown event'i set eder. Cihaz task'ları event'i kontrol edip döngüden çıkar. `MQTTPublisher.close()` → `paho.disconnect()` + son mesajların flush'ı. Engine exit 0. | Container/systemd ortamında temiz kapanma — açık MQTT bağlantısı/yarım mesajlar kalmasın |
+| SIGINT / SIGTERM | Engine `asyncio.run()` içinde `asyncio.get_running_loop().add_signal_handler(SIGINT/SIGTERM, shutdown.set)` ile shutdown event'i set eder. Cihaz task'ları event'i kontrol edip döngüden çıkar. `MQTTPublisher.close()` → `paho.disconnect()` + son mesajların flush'ı. Engine exit 0. (Iter 2a/2b'deki `signal.signal` Iter 3'te asyncio pattern'i ile değiştirilir — Python 3.10+ `get_event_loop` deprecated.) | Container/systemd ortamında temiz kapanma — açık MQTT bağlantısı/yarım mesajlar kalmasın |
 
 ---
 
@@ -582,7 +585,12 @@ class FakeClock:
 Engine asyncio'ya geçtiğinde `asyncio.sleep` gerçek wall-clock değerlerini bekler; testlerde bu kabul edilemez (10 sn'lik integration testi 10 sn sürmemeli). Pattern:
 
 - **`pytest-asyncio` (auto mode)** dev dependency olarak eklenir. `@pytest.mark.asyncio` decorator zorunlu değil — auto-mode `async def test_*` fonksiyonlarını yakalar.
-- **`asyncio.sleep` no-op'lanır:** `monkeypatch.setattr("asyncio.sleep", lambda _seconds: asyncio.sleep(0))`. Bu, event loop'a yield eder ama gerçek beklemez — diğer task'lar koşar, deterministik ilerleme sağlanır.
+- **`asyncio.sleep` no-op'lanır:** Lambda gövdesinde tekrar `asyncio.sleep` yazmak monkeypatch'li sembolü çağırır → sonsuz döngü. Doğru pattern orijinal referansı önceden saklamak:
+  ```python
+  original_sleep = asyncio.sleep
+  monkeypatch.setattr("asyncio.sleep", lambda _s: original_sleep(0))
+  ```
+  Bu, event loop'a yield eder ama gerçek beklemez — diğer task'lar koşar, deterministik ilerleme sağlanır. Alternatif olarak engine modülünün gördüğü sembol patch'lenebilir (`"simulator.engine.asyncio.sleep"`), ki bu daha dar bir scope sunar.
 - **Zaman `FakeClock.advance(1.0)` ile sürülür:** Her tick öncesi (veya tick batch sonrası) test FakeClock'u manuel ilerletir → `runtime.clock()` doğru elapsed döndürür → state machine geçişleri tetiklenir.
 - **`max_iterations` parametresi per-device korunur:** Test'te her cihaz N tick sonra normal exit verir; `asyncio.gather(*tasks)` await'i kilitlenmez.
 - **Shutdown event testi:** `shutdown.set()` doğrudan çağrılır; tüm task'ların temiz çıktığı `asyncio.wait_for(gather, timeout=...)` ile doğrulanır.
