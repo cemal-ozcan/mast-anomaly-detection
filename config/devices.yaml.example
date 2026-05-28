@@ -32,6 +32,13 @@ devices:
       - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
       - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
       - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: mechanical_wear
+        start_after_s: 120        # 2 dakika sonra başlar
+        duration_s: 1800           # 30 dakika sürer
+        params:
+          severity: 0.25           # peak +%25 motor akımı / titreşim
+          ramp_up_s: 300           # 5 dakikada peak'e ulaşır
 
   - id: device_003
     type: telescopic_mast_v1
