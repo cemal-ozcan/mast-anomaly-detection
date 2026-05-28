@@ -1,4 +1,4 @@
-"""Iterasyon 2a engine: tek cihaz, state machine ile motor_current yayını."""
+"""Simulator engine: cihaz config'lerini validate eder, state machine + N sensör loop'unu sürer."""
 from __future__ import annotations
 
 import random
@@ -115,7 +115,8 @@ def run(
 
     Raises:
         FileNotFoundError: Config dosyası yoksa.
-        ValueError: Config geçersizse veya Iterasyon 2a kısıtlamaları ihlal edilmişse.
+        ValueError: Config geçersizse veya _validate_devices kısıtlamaları ihlal edilmişse
+            (boş cihaz listesi, duplikat device.id, eksik/fazla sensör).
         KeyError: SENSOR_REGISTRY'de bilinmeyen sensör adı.
     """
     mqtt_config = load_mqtt_config(mqtt_config_path)
