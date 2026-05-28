@@ -247,3 +247,63 @@ async def test_run_device_respects_max_iterations(
     )
     # 3 tick × 6 sensör = 18 publish
     assert publisher.publish_reading.call_count == 18
+
+
+async def test_run_device_exits_when_shutdown_event_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """shutdown.set() çağrılınca run_device bir sonraki tick öncesinde çıkar."""
+    import asyncio as _asyncio
+    import random as _random
+
+    from simulator.config import DeviceConfig, DeviceState, SensorConfig, StateDurations
+    from simulator.engine import run_device
+    from simulator.runtime import DeviceRuntimeState
+    from simulator.sensors import SENSOR_REGISTRY
+
+    sensor_cfgs = [
+        SensorConfig(name="motor_current", unit="A", baseline=0.5, noise_std=0.1),
+        SensorConfig(name="motor_voltage", unit="V", baseline=24.0, noise_std=0.2),
+        SensorConfig(name="hydraulic_pressure", unit="bar", baseline=10.0, noise_std=2.0),
+        SensorConfig(name="motor_temperature", unit="celsius", baseline=25.0, noise_std=0.5),
+        SensorConfig(name="mast_position", unit="mm", baseline=0.0, noise_std=1.0),
+        SensorConfig(name="vibration", unit="g", baseline=0.05, noise_std=0.01),
+    ]
+    sensors = [SENSOR_REGISTRY[sc.name](sc) for sc in sensor_cfgs]
+    device = DeviceConfig(
+        id="d1", type="telescopic_mast_v1", sensors=sensor_cfgs,
+        state_durations=StateDurations(
+            idle=(5.0, 5.0), raising=(10.0, 10.0),
+            holding=(60.0, 60.0), lowering=(10.0, 10.0),
+        ),
+        target_height_mm=5000.0, seed=42,
+    )
+    rng = _random.Random(42)
+    runtime = DeviceRuntimeState(
+        state=DeviceState.IDLE, state_entered_at_monotonic=0.0,
+        current_state_duration_s=rng.uniform(*device.state_durations.idle),
+        position_mm=0.0, cycle_count=0, rng=rng,
+        started_at_monotonic=0.0, clock=FakeClock(0.0),
+    )
+    publisher = MagicMock()
+
+    original_sleep = _asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: original_sleep(0))
+
+    shutdown = _asyncio.Event()
+
+    async def runner() -> None:
+        await run_device(
+            device=device, runtime=runtime, sensors=sensors,
+            publisher=publisher, tick_interval=1.0,
+            shutdown_event=shutdown, max_iterations=None,  # sonsuz, sadece shutdown ile bitsin
+        )
+
+    task = _asyncio.create_task(runner())
+    # Birkaç tick geçsin
+    await _asyncio.sleep(0)
+    await _asyncio.sleep(0)
+    shutdown.set()
+    await _asyncio.wait_for(task, timeout=1.0)
+
+    assert publisher.publish_reading.call_count > 0
