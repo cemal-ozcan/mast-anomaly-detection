@@ -117,3 +117,86 @@ def test_device_state_is_str_enum() -> None:
     assert DeviceState.LOWERING.value == "lowering"
     # StrEnum'un asıl faydası: JSON'a .value çağırmadan string olarak serialize olur.
     assert json.dumps({"s": DeviceState.IDLE}) == '{"s": "idle"}'
+
+
+def test_load_devices_with_no_scenarios_field_returns_empty_list(tmp_path: Path) -> None:
+    """scenarios alanı YAML'de yoksa DeviceConfig.scenarios == []."""
+    devices_yaml = tmp_path / "devices.yaml"
+    devices_yaml.write_text("""
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+""")
+    devices = load_devices(devices_yaml)
+    assert devices[0].scenarios == []
+
+
+def test_load_devices_with_scenarios_block_parses_window(tmp_path: Path) -> None:
+    """scenarios: bloğu ScenarioWindow listesine parse edilir."""
+    devices_yaml = tmp_path / "devices.yaml"
+    devices_yaml.write_text("""
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: mechanical_wear
+        start_after_s: 120
+        duration_s: 600
+        params:
+          severity: 0.25
+          ramp_up_s: 300
+""")
+    from simulator.config import ScenarioWindow
+
+    devices = load_devices(devices_yaml)
+    assert len(devices[0].scenarios) == 1
+    window = devices[0].scenarios[0]
+    assert isinstance(window, ScenarioWindow)
+    assert window.name == "mechanical_wear"
+    assert window.start_after_s == 120.0
+    assert window.duration_s == 600.0
+    assert window.params == {"severity": 0.25, "ramp_up_s": 300}
+
+
+def test_scenario_window_is_frozen_dataclass() -> None:
+    """ScenarioWindow frozen — params Mapping olarak saklanır, mutate edilemez."""
+    from dataclasses import FrozenInstanceError
+
+    from simulator.config import ScenarioWindow
+
+    w = ScenarioWindow(
+        name="mechanical_wear",
+        start_after_s=0.0,
+        duration_s=100.0,
+        params={"severity": 0.2, "ramp_up_s": 300},
+    )
+    with pytest.raises(FrozenInstanceError):
+        w.name = "other"  # type: ignore[misc]
