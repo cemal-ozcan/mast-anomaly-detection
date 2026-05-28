@@ -44,7 +44,7 @@ class FaultScenario(ABC):
                 f"{type(self).__name__}: eksik params: {sorted(missing)} "
                 f"(beklenen: {sorted(self._REQUIRED_PARAMS)})"
             )
-        self.params = params
+        self.params: Mapping[str, float] = params
 
     @abstractmethod
     def modify(
