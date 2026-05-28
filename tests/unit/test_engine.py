@@ -1,6 +1,7 @@
-"""Engine 6 sensör entegrasyonu için unit testler (Iter 2b)."""
+"""Engine 6 sensör entegrasyonu için unit testler (Iter 2b + Iter 3 asyncio)."""
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -27,7 +28,8 @@ def test_run_publishes_all_six_sensors_per_tick(monkeypatch: pytest.MonkeyPatch)
     """Her tick'te 6 sensör için publish_reading çağrılır (6 mesaj/tick)."""
     mock_publisher = MagicMock()
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+    _original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: _original_sleep(0))
 
     clock = FakeClock(0.0)
     run(
@@ -56,7 +58,8 @@ def test_run_publishes_state_field_idle_when_clock_not_advanced(
     """clock advance edilmediğinde tüm sensörler IDLE state ile publish edilir."""
     mock_publisher = MagicMock()
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+    _original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: _original_sleep(0))
 
     run(
         mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
@@ -97,7 +100,8 @@ devices:
     type: telescopic_mast_v1{sd_block}{six_sensors_block}
 """)
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+    _original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: _original_sleep(0))
 
     with pytest.raises(ValueError, match="unique"):
         run(
@@ -131,7 +135,8 @@ devices:
       - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
 """)
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+    _original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: _original_sleep(0))
 
     with pytest.raises(ValueError, match="eksik.*vibration"):
         run(
@@ -167,7 +172,8 @@ devices:
       - {name: gyroscope,          unit: deg,     baseline: 0,    noise_std: 0.1}
 """)
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+    _original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: _original_sleep(0))
 
     with pytest.raises(ValueError, match="fazla.*gyroscope"):
         run(
@@ -176,3 +182,68 @@ devices:
             engine_config_path=FIXTURES / "simulator_minimal.yaml",
             max_iterations=1,
         )
+
+
+async def test_run_device_respects_max_iterations_and_shutdown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """run_device max_iterations'a ulaşınca temiz biter; shutdown.set ile de erken çıkar."""
+    import asyncio as _asyncio
+    import random as _random
+
+    from simulator.config import DeviceState, SensorConfig, StateDurations
+    from simulator.engine import run_device
+    from simulator.runtime import DeviceRuntimeState
+    from simulator.sensors import SENSOR_REGISTRY
+
+    # Sensor config + device-equivalent fixture
+    sensor_cfgs = [
+        SensorConfig(name="motor_current", unit="A", baseline=0.5, noise_std=0.1),
+        SensorConfig(name="motor_voltage", unit="V", baseline=24.0, noise_std=0.2),
+        SensorConfig(name="hydraulic_pressure", unit="bar", baseline=10.0, noise_std=2.0),
+        SensorConfig(name="motor_temperature", unit="celsius", baseline=25.0, noise_std=0.5),
+        SensorConfig(name="mast_position", unit="mm", baseline=0.0, noise_std=1.0),
+        SensorConfig(name="vibration", unit="g", baseline=0.05, noise_std=0.01),
+    ]
+    sensors = [SENSOR_REGISTRY[sc.name](sc) for sc in sensor_cfgs]
+
+    from simulator.config import DeviceConfig
+    device = DeviceConfig(
+        id="d1",
+        type="telescopic_mast_v1",
+        sensors=sensor_cfgs,
+        state_durations=StateDurations(
+            idle=(5.0, 5.0), raising=(10.0, 10.0),
+            holding=(60.0, 60.0), lowering=(10.0, 10.0),
+        ),
+        target_height_mm=5000.0,
+        seed=42,
+    )
+
+    clock = FakeClock(0.0)
+    rng = _random.Random(42)
+    runtime = DeviceRuntimeState(
+        state=DeviceState.IDLE,
+        state_entered_at_monotonic=0.0,
+        current_state_duration_s=rng.uniform(*device.state_durations.idle),
+        position_mm=0.0,
+        cycle_count=0,
+        rng=rng,
+        started_at_monotonic=0.0,
+        clock=clock,
+    )
+
+    publisher = MagicMock()
+    shutdown = _asyncio.Event()
+
+    # asyncio.sleep no-op
+    original_sleep = _asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: original_sleep(0))
+
+    await run_device(
+        device=device, runtime=runtime, sensors=sensors,
+        publisher=publisher, rng=rng, tick_interval=1.0,
+        shutdown_event=shutdown, max_iterations=3,
+    )
+    # 3 tick × 6 sensör = 18 publish
+    assert publisher.publish_reading.call_count == 18

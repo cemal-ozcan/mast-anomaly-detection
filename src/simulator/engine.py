@@ -1,12 +1,11 @@
-"""Simulator engine: cihaz config'lerini validate eder, state machine + N sensör loop'unu sürer."""
+"""Simulator engine: cihaz config'lerini validate eder, state machine + N sensör asyncio loop'unu sürer (Iter 3)."""
 from __future__ import annotations
 
+import asyncio
 import random
-import signal
 import time
 from collections.abc import Callable
 from pathlib import Path
-from types import FrameType
 
 from loguru import logger
 
@@ -95,6 +94,57 @@ def _validate_devices(devices: list[DeviceConfig]) -> None:
         )
 
 
+async def run_device(
+    device: DeviceConfig,
+    runtime: DeviceRuntimeState,
+    sensors: list[BaseSensor],
+    publisher: MQTTPublisher,
+    rng: random.Random,
+    tick_interval: float,
+    shutdown_event: asyncio.Event,
+    max_iterations: int | None = None,
+) -> None:
+    """Tek cihazın asyncio tick döngüsü. Spec § 8 tick akışı asyncio versiyonu.
+
+    Args:
+        device: Cihaz config'i (id, sensors, state_durations, target_height_mm).
+        runtime: Önceden başlatılmış `DeviceRuntimeState` (clock + started_at_monotonic
+            engine'de set edilmiş).
+        sensors: Önceden registry'den inşa edilmiş sensor instance listesi.
+        publisher: Paylaşılan MQTTPublisher (N cihazlı engine'de aynı instance).
+        rng: Bu cihaza ait `random.Random(seed)` — sensor compute'tan AYRI olarak
+            sadece engine-side noise için kullanılır.
+        tick_interval: Saniye cinsinden tick periyodu (engine_config.tick_hz'den).
+        shutdown_event: Set edildiğinde döngü tick başında çıkar (SIGINT/SIGTERM
+            veya test-side .set()).
+        max_iterations: None → shutdown_event'e kadar sonsuz. Int verilirse o kadar
+            tick sonra normal çıkış (testlerde max_iterations=N kullanılır).
+
+    Note:
+        Bu fonksiyon kendi engine'i başlatmaz, kendi publisher'ını connect etmez —
+        bunları engine.run() / _amain orkestre eder. Burada sadece tick gövdesi var.
+    """
+    iterations = 0
+    while not shutdown_event.is_set():
+        advance_state_machine(runtime, device.state_durations)
+        runtime.position_mm = compute_position(runtime, device.target_height_mm)
+
+        for sensor in sensors:
+            clean_value = sensor.compute(runtime, runtime.position_mm)
+            noisy_value = clean_value + rng.gauss(0.0, sensor.config.noise_std)
+            publisher.publish_reading(
+                device_id=device.id,
+                sensor=sensor.config.name,
+                value=noisy_value,
+                unit=sensor.config.unit,
+                state=runtime.state,
+            )
+        iterations += 1
+        if max_iterations is not None and iterations >= max_iterations:
+            return
+        await asyncio.sleep(tick_interval)
+
+
 def run(
     mqtt_config_path: Path = Path("config/mqtt.yaml"),
     devices_path: Path = Path("config/devices.yaml"),
@@ -103,13 +153,15 @@ def run(
     seed: int | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> None:
-    """Engine'i başlatır. State machine sürer, sensör compute() çağırır.
+    """Engine entry — asyncio.run(_amain) sarmalayıcısı.
 
     Args:
         mqtt_config_path: MQTT YAML config.
         devices_path: Cihaz YAML config.
         engine_config_path: Engine YAML config.
-        max_iterations: None → SIGINT/SIGTERM gelene dek sonsuz.
+        max_iterations: None → shutdown_event (Task 4 sinyal handler) veya
+            KeyboardInterrupt gelene dek sonsuz. Int verilirse o kadar tick sonra
+            temiz çıkış.
         seed: RNG seed; verilmezse YAML'deki device.seed kullanılır.
         clock: Saat kaynağı (DI). Test'lerde FakeClock inject edilebilir.
 
@@ -118,6 +170,11 @@ def run(
         ValueError: Config geçersizse veya _validate_devices kısıtlamaları ihlal edilmişse
             (boş cihaz listesi, duplikat device.id, eksik/fazla sensör).
         KeyError: SENSOR_REGISTRY'de bilinmeyen sensör adı.
+
+    Note (Iter 3):
+        Bu task tek cihaz çalıştırır; Task 5 multi-device spawn ekler.
+        Sinyal yöneticisi (SIGINT/SIGTERM → add_signal_handler) Task 4'te gelecek;
+        şimdilik tek çıkış yolu max_iterations veya KeyboardInterrupt.
     """
     mqtt_config = load_mqtt_config(mqtt_config_path)
     devices = load_devices(devices_path)
@@ -125,60 +182,52 @@ def run(
     logger.level(engine_config.log_level)
 
     _validate_devices(devices)
-    device = devices[0]  # Iter 3 ara durum: validation N cihazı kabul ediyor ama engine hâlâ tek çalıştırıyor
+    device = devices[0]  # Iter 3 ara durum: Task 5'te N cihaz spawn edilecek
 
-    # Sensörleri config sırasıyla inşa et (Iter 2b: list-based, 1+ sensör).
     sensors: list[BaseSensor] = [
         SENSOR_REGISTRY[sc.name](sc) for sc in device.sensors
     ]
 
     rng = random.Random(seed if seed is not None else device.seed)
-    now = clock()
+    engine_boot_at = clock()
     initial_duration = rng.uniform(*device.state_durations.idle)
     runtime = DeviceRuntimeState(
         state=DeviceState.IDLE,
-        state_entered_at_monotonic=now,
+        state_entered_at_monotonic=engine_boot_at,
         current_state_duration_s=initial_duration,
         position_mm=0.0,
         cycle_count=0,
         rng=rng,
-        started_at_monotonic=now,
+        started_at_monotonic=engine_boot_at,
         clock=clock,
     )
 
     publisher = _make_publisher(mqtt_config)
     publisher.connect()
 
-    stop = False
-
-    def _shutdown(signum: int, _frame: FrameType | None) -> None:
-        nonlocal stop
-        logger.info("Shutdown sinyali alındı: {}", signum)
-        stop = True
-
-    signal.signal(signal.SIGINT, _shutdown)
-    signal.signal(signal.SIGTERM, _shutdown)
-
     tick_interval = 1.0 / engine_config.tick_hz
-    iterations = 0
-    try:
-        while not stop:
-            advance_state_machine(runtime, device.state_durations)
-            runtime.position_mm = compute_position(runtime, device.target_height_mm)
 
-            for sensor in sensors:
-                clean_value = sensor.compute(runtime, runtime.position_mm)
-                noisy_value = clean_value + rng.gauss(0.0, sensor.config.noise_std)
-                publisher.publish_reading(
-                    device_id=device.id,
-                    sensor=sensor.config.name,
-                    value=noisy_value,
-                    unit=sensor.config.unit,
-                    state=runtime.state,  # StrEnum → JSON serializable
-                )
-            iterations += 1
-            if max_iterations is not None and iterations >= max_iterations:
-                break
-            time.sleep(tick_interval)
-    finally:
-        publisher.close()
+    async def _amain() -> None:
+        shutdown = asyncio.Event()
+        # Task 4'te add_signal_handler eklenecek; Task 3 sonu sinyal yok,
+        # max_iterations veya KeyboardInterrupt ile çıkış.
+        try:
+            await run_device(
+                device=device,
+                runtime=runtime,
+                sensors=sensors,
+                publisher=publisher,
+                rng=rng,
+                tick_interval=tick_interval,
+                shutdown_event=shutdown,
+                max_iterations=max_iterations,
+            )
+        finally:
+            publisher.close()
+
+    try:
+        asyncio.run(_amain())
+    except KeyboardInterrupt:
+        logger.info(
+            "KeyboardInterrupt — Task 4'te add_signal_handler ile temiz shutdown gelecek"
+        )
