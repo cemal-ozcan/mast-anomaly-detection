@@ -1,4 +1,4 @@
-"""Engine state machine entegrasyonu için unit testler."""
+"""Engine 6 sensör entegrasyonu için unit testler (Iter 2b)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -13,127 +13,18 @@ from tests.unit.test_runtime import FakeClock
 FIXTURES = Path(__file__).parent.parent / "fixtures"
 
 
-def test_run_publishes_with_state_field(monkeypatch: pytest.MonkeyPatch) -> None:
-    """publish_reading her tick'te runtime.state ile çağrılır (StrEnum → string)."""
-    mock_publisher = MagicMock()
-    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
-
-    clock = FakeClock(0.0)
-    run(
-        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
-        devices_path=FIXTURES / "devices_minimal.yaml",
-        engine_config_path=FIXTURES / "simulator_minimal.yaml",
-        max_iterations=3,
-        seed=42,
-        clock=clock,
-    )
-
-    assert mock_publisher.publish_reading.call_count == 3
-    for call in mock_publisher.publish_reading.call_args_list:
-        kwargs = call.kwargs
-        # state IDLE çünkü clock advance edilmedi, hala ilk state'te
-        assert kwargs["state"] == DeviceState.IDLE
+_EXPECTED_SENSORS = {
+    "motor_current",
+    "motor_voltage",
+    "hydraulic_pressure",
+    "motor_temperature",
+    "mast_position",
+    "vibration",
+}
 
 
-def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    devices_yaml = tmp_path / "devices.yaml"
-    devices_yaml.write_text(
-        """
-devices:
-  - id: device_001
-    type: telescopic_mast_v1
-    target_height_mm: 5000
-    state_durations:
-      idle: [5, 30]
-      raising: [10, 60]
-      holding: [60, 300]
-      lowering: [10, 60]
-    sensors:
-      - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
-  - id: device_002
-    type: telescopic_mast_v1
-    target_height_mm: 5000
-    state_durations:
-      idle: [5, 30]
-      raising: [10, 60]
-      holding: [60, 300]
-      lowering: [10, 60]
-    sensors:
-      - {name: motor_current, unit: A, baseline: 0.5, noise_std: 0.1}
-"""
-    )
-    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
-
-    with pytest.raises(ValueError, match="exactly 1 device"):
-        run(
-            mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
-            devices_path=devices_yaml,
-            engine_config_path=FIXTURES / "simulator_minimal.yaml",
-            max_iterations=1,
-        )
-
-
-def test_run_rejects_unsupported_sensor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    devices_yaml = tmp_path / "devices.yaml"
-    devices_yaml.write_text(
-        """
-devices:
-  - id: device_001
-    type: telescopic_mast_v1
-    target_height_mm: 5000
-    state_durations:
-      idle: [5, 30]
-      raising: [10, 60]
-      holding: [60, 300]
-      lowering: [10, 60]
-    sensors:
-      - {name: unknown_sensor, unit: X, baseline: 10, noise_std: 2}
-"""
-    )
-    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
-
-    with pytest.raises(KeyError, match="unknown_sensor"):
-        run(
-            mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
-            devices_path=devices_yaml,
-            engine_config_path=FIXTURES / "simulator_minimal.yaml",
-            max_iterations=1,
-        )
-
-
-def test_run_publishes_noisy_value_around_baseline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Engine gürültüyü ekler (spec § 8). IDLE'da değer config.baseline (0.5) civarı.
-
-    clock advance edilmediği için state IDLE kalır; motor_current.compute() 0.5 döner,
-    engine üzerine gauss(0, 0.1) ekler → değer 0.5 ± birkaç sigma.
-    """
-    mock_publisher = MagicMock()
-    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
-    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
-
-    clock = FakeClock(0.0)
-    run(
-        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
-        devices_path=FIXTURES / "devices_minimal.yaml",
-        engine_config_path=FIXTURES / "simulator_minimal.yaml",
-        max_iterations=20,
-        seed=42,
-        clock=clock,
-    )
-
-    values = [c.kwargs["value"] for c in mock_publisher.publish_reading.call_args_list]
-    # IDLE baseline 0.5, noise_std 0.1. 20 örnek → ortalama ~0.5 (3-sigma tolerans geniş).
-    mean = sum(values) / len(values)
-    assert 0.2 < mean < 0.8
-    # Gürültü gerçekten ekleniyor: tüm değerler birebir aynı OLMAMALI.
-    assert len(set(values)) > 1
-
-
-def test_run_iterates_all_sensors_per_tick(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Engine her tick'te tüm sensörler için publish_reading çağırır."""
+def test_run_publishes_all_six_sensors_per_tick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Her tick'te 6 sensör için publish_reading çağrılır (6 mesaj/tick)."""
     mock_publisher = MagicMock()
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
     monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
@@ -148,9 +39,140 @@ def test_run_iterates_all_sensors_per_tick(monkeypatch: pytest.MonkeyPatch) -> N
         clock=clock,
     )
 
-    # devices_minimal.yaml'da Iter 2a sonu 1 sensör (motor_current).
-    # 2 tick × 1 sensör = 2 publish_reading çağrısı bekleniyor.
-    assert mock_publisher.publish_reading.call_count == 2
-    # Sensör adları config'deki sensör listesindeki sırada yayınlanır.
-    sensor_names = [c.kwargs["sensor"] for c in mock_publisher.publish_reading.call_args_list]
-    assert sensor_names == ["motor_current", "motor_current"]
+    # 2 tick × 6 sensör = 12 publish çağrısı
+    assert mock_publisher.publish_reading.call_count == 12
+
+    # Her tick'te 6 farklı sensör adı yayınlandı
+    first_tick_sensors = {
+        c.kwargs["sensor"]
+        for c in mock_publisher.publish_reading.call_args_list[:6]
+    }
+    assert first_tick_sensors == _EXPECTED_SENSORS
+
+
+def test_run_publishes_state_field_idle_when_clock_not_advanced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """clock advance edilmediğinde tüm sensörler IDLE state ile publish edilir."""
+    mock_publisher = MagicMock()
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    run(
+        mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+        devices_path=FIXTURES / "devices_minimal.yaml",
+        engine_config_path=FIXTURES / "simulator_minimal.yaml",
+        max_iterations=1,
+        seed=42,
+        clock=FakeClock(0.0),
+    )
+
+    for call in mock_publisher.publish_reading.call_args_list:
+        assert call.kwargs["state"] == DeviceState.IDLE
+
+
+def test_run_rejects_multiple_devices(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """1'den fazla cihaz → ValueError 'exactly 1 device'."""
+    devices_yaml = tmp_path / "devices.yaml"
+    six_sensors_block = """
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}"""
+    sd_block = """
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]"""
+    devices_yaml.write_text(f"""
+devices:
+  - id: device_001
+    type: telescopic_mast_v1{sd_block}{six_sensors_block}
+  - id: device_002
+    type: telescopic_mast_v1{sd_block}{six_sensors_block}
+""")
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    with pytest.raises(ValueError, match="exactly 1 device"):
+        run(
+            mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+            devices_path=devices_yaml,
+            engine_config_path=FIXTURES / "simulator_minimal.yaml",
+            max_iterations=1,
+        )
+
+
+def test_run_rejects_missing_required_sensor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """6 sensörün hepsi zorunlu — vibration eksikse ValueError."""
+    devices_yaml = tmp_path / "devices.yaml"
+    devices_yaml.write_text("""
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+""")
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    with pytest.raises(ValueError, match="eksik.*vibration"):
+        run(
+            mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+            devices_path=devices_yaml,
+            engine_config_path=FIXTURES / "simulator_minimal.yaml",
+            max_iterations=1,
+        )
+
+
+def test_run_rejects_extra_unknown_sensor(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Set tam olmalı — bilinmeyen sensör fazla → ValueError."""
+    devices_yaml = tmp_path / "devices.yaml"
+    devices_yaml.write_text("""
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    target_height_mm: 5000
+    state_durations:
+      idle: [5, 30]
+      raising: [10, 60]
+      holding: [60, 300]
+      lowering: [10, 60]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+      - {name: gyroscope,          unit: deg,     baseline: 0,    noise_std: 0.1}
+""")
+    monkeypatch.setattr("simulator.engine._make_publisher", lambda c: MagicMock())
+    monkeypatch.setattr("simulator.engine.time.sleep", lambda _: None)
+
+    with pytest.raises(ValueError, match="fazla.*gyroscope"):
+        run(
+            mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
+            devices_path=devices_yaml,
+            engine_config_path=FIXTURES / "simulator_minimal.yaml",
+            max_iterations=1,
+        )

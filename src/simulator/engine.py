@@ -33,16 +33,34 @@ def _make_publisher(config: MQTTConfig) -> MQTTPublisher:
     return MQTTPublisher(config)
 
 
-def _validate_iteration2a_constraints(devices: list[DeviceConfig]) -> DeviceConfig:
-    """Iterasyon 2a kısıtlamaları: tam 1 cihaz + tam 1 sensör (tip SENSOR_REGISTRY'de kontrol edilir)."""
+_REQUIRED_SENSORS = frozenset({
+    "motor_current",
+    "motor_voltage",
+    "hydraulic_pressure",
+    "motor_temperature",
+    "mast_position",
+    "vibration",
+})
+
+
+def _validate_iteration2b_constraints(devices: list[DeviceConfig]) -> DeviceConfig:
+    """Iterasyon 2b kısıtlamaları: tam 1 cihaz + tam 6 sensör seti."""
     if len(devices) != 1:
         raise ValueError(
-            f"Iterasyon 2a exactly 1 device destekliyor, alınan: {len(devices)}"
+            f"Iterasyon 2b exactly 1 device destekliyor, alınan: {len(devices)}"
         )
     device = devices[0]
-    if len(device.sensors) != 1:
+    names = {s.name for s in device.sensors}
+    if names != _REQUIRED_SENSORS:
+        parts: list[str] = []
+        missing = _REQUIRED_SENSORS - names
+        extra = names - _REQUIRED_SENSORS
+        if missing:
+            parts.append(f"eksik: {sorted(missing)}")
+        if extra:
+            parts.append(f"fazla: {sorted(extra)}")
         raise ValueError(
-            "Iterasyon 2a: cihaz tam olarak bir sensör içermeli"
+            f"Iterasyon 2b: cihaz tam olarak 6 sensör içermeli ({', '.join(parts)})"
         )
     return device
 
@@ -75,7 +93,7 @@ def run(
     engine_config = load_engine_config(engine_config_path)
     logger.level(engine_config.log_level)
 
-    device = _validate_iteration2a_constraints(devices)
+    device = _validate_iteration2b_constraints(devices)
 
     # Sensörleri config sırasıyla inşa et (Iter 2b: list-based, 1+ sensör).
     sensors: list[BaseSensor] = [
