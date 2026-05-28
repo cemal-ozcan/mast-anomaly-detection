@@ -102,17 +102,36 @@ Faz 1 bu prensibe **walking skeleton + iterasyon** modelinde uyar. Her iterasyon
 
 ### Iterasyon 4 — Üç Arıza Senaryosu
 
-**Kapsam:**
-- `FaultScenario` ABC + `ScenarioContext` (§ 8)
-- `MechanicalWear` (A), `HydraulicLeak` (B), `ElectricalFault` (C)
-- YAML'de `scenarios:` bloğu, parametre kalıbı (§ 9)
-- Engine `scenario_scheduler` ile pencere bazlı aktive/deaktive
+İterasyon 2'nin 2a/2b'ye bölünmesindeki pattern burada da uygulanır: önce altyapı + 1 senaryo (4a), sonra kalan 2 senaryo + istatistiksel test seti (4b). Plan ayrı dosyalarda yazılır, her biri kendi onay döngüsünden geçer.
 
-**Bitti kriterleri (istatistiksel imza testleri):**
-1. **A (mekanik aşınma)**: Scenario aktif + ramp_up_s sonrasında, 60+ örnek üzerinde RAISING durumundaki `motor_current` ortalaması baseline'a göre %15-30 yüksek. Tek örnek t-testi p<0.05.
-2. **B (hidrolik kaçak)**: HOLDING penceresinde 60+ örnek üzerinde `hydraulic_pressure` zaman serisine lineer regresyon: eğim negatif ve Spearman korelasyon p<0.05.
-3. **C (elektriksel)**: Scenario aktif iken `motor_voltage` standart sapması baseline'ın 3 katı (F-testi p<0.05).
-4. Her senaryo için unit test (`tests/scenarios/`): sabit girdi → beklenen modifikasyon.
+#### Iterasyon 4a — Senaryo Altyapısı + MechanicalWear
+
+**Kapsam:**
+- `config.py`: `ScenarioWindow` dataclass + `DeviceConfig.scenarios: list[ScenarioWindow]` field + YAML loader scenarios bloğunu okur
+- `src/simulator/scenarios/` package: `base.py` (`FaultScenario` ABC + `ScenarioContext`), `__init__.py` (`SCENARIO_REGISTRY` + `active_scenarios_at` helper — § 8)
+- `MechanicalWear` (A) senaryosu (§ 9 A formülü)
+- `engine.run_device` compute order'ına `fault.modify` entegrasyonu: clean → modify (per-active-scenario) → noise (§ 8 kritik fiziksel sıra)
+- Per-senaryo state filtering: senaryonun `modify` metodu başında inline `if runtime.state not in active_states: return clean_value` (kapsüllü, engine sade)
+- Params validation: `FaultScenario.__init__(self, params)` içinde required key check → eksikse boot-time `ValueError` (§ 11 early-exit)
+- Unit testler: `tests/unit/test_scenarios/test_mechanical_wear.py` (sabit girdi → modify çıktısı), `test_config.py` ScenarioWindow validation, engine integration test (`tests/unit/test_engine_*.py` — fault.modify gerçekten çağrılıyor)
+- **Bitti kriteri (4a):** MechanicalWear için 1 istatistiksel imza testi (`tests/scenarios/test_mechanical_wear_signature.py`): RAISING durumunda `motor_current` ortalaması baseline'a göre +%15..+%30, t-testi p<0.05. Spec § 12 senaryo imza testleri tablosu A.
+
+#### Iterasyon 4b — HydraulicLeak + ElectricalFault + Tam İmza Seti
+
+**Kapsam:**
+- `HydraulicLeak` (B) senaryosu (§ 9 B)
+- `ElectricalFault` (C) senaryosu (§ 9 C)
+- Unit testler her senaryo için (per-state modify behavior)
+- İstatistiksel imza testleri (`tests/scenarios/`): B (Spearman ρ<0, p<0.05) + C (F-testi p<0.05)
+- `requirements.txt`'ye `scipy==1.17.1` explicit pin (scikit-learn 1.5.0'ın transitif getirdiği versiyon ile hizalı; tests/scenarios içinde `scipy.stats.ttest_1samp`, `spearmanr`, `f.cdf` kullanılır)
+- devices.yaml.example genişlet: en az 1 cihazda `scenarios:` bloğu (manuel smoke için)
+- Milestone commit + CLAUDE.md "Mevcut Faz" güncellemesi (Faz 1 tamamlandı → Faz 2 sıradaki)
+
+**Iter 4 birleşik bitti kriterleri (istatistiksel imza testleri):**
+1. **A (mekanik aşınma)**: Scenario aktif + ramp_up_s sonrasında, 60+ örnek üzerinde RAISING durumundaki `motor_current` ortalaması baseline'a göre %15-30 yüksek. Tek örnek t-testi p<0.05. (Iter 4a)
+2. **B (hidrolik kaçak)**: HOLDING penceresinde 60+ örnek üzerinde `hydraulic_pressure` zaman serisine lineer regresyon: eğim negatif ve Spearman korelasyon p<0.05. (Iter 4b)
+3. **C (elektriksel)**: Scenario aktif iken `motor_voltage` standart sapması baseline'ın 3 katı (F-testi p<0.05). (Iter 4b)
+4. Her senaryo için unit test (`tests/unit/test_scenarios/`): sabit girdi → beklenen modifikasyon. (Iter 4a + 4b)
 
 ---
 
