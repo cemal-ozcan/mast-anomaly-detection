@@ -63,3 +63,24 @@ async def test_run_device_exits_when_shutdown_event_set(
     await asyncio.wait_for(task, timeout=1.0)
 
     assert publisher.publish_reading.call_count > 0
+
+
+async def test_run_device_max_iterations_zero_publishes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """max_iterations=0 → hiç tick yapmaz (loop body bir kez bile çalışmaz)."""
+    device = make_device("d1", seed=42)
+    sensors = [SENSOR_REGISTRY[sc.name](sc) for sc in SIX_SENSOR_CONFIGS]
+    runtime = make_runtime(device, clock=FakeClock(0.0))
+    publisher = MagicMock()
+    shutdown = asyncio.Event()
+
+    original_sleep = asyncio.sleep
+    monkeypatch.setattr("simulator.engine.asyncio.sleep", lambda _s: original_sleep(0))
+
+    await run_device(
+        device=device, runtime=runtime, sensors=sensors,
+        publisher=publisher, tick_interval=1.0,
+        shutdown_event=shutdown, max_iterations=0,
+    )
+    assert publisher.publish_reading.call_count == 0

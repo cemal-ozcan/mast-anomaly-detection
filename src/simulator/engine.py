@@ -117,8 +117,8 @@ async def run_device(
         tick_interval: Saniye cinsinden tick periyodu (engine_config.tick_hz'den).
         shutdown_event: Set edildiğinde döngü tick başında çıkar (SIGINT/SIGTERM
             veya test-side .set()).
-        max_iterations: None → shutdown_event'e kadar sonsuz. Int verilirse o kadar
-            tick sonra normal çıkış (testlerde max_iterations=N kullanılır).
+        max_iterations: None → shutdown_event'e kadar sonsuz. 0 → hiç tick yapmaz
+            (erken çıkış). N → tam N tick yayını yapar ve temiz çıkar.
 
     Note:
         Bu fonksiyon kendi engine'i başlatmaz, kendi publisher'ını connect etmez —
@@ -126,6 +126,8 @@ async def run_device(
     """
     iterations = 0
     while not shutdown_event.is_set():
+        if max_iterations is not None and iterations >= max_iterations:
+            return
         advance_state_machine(runtime, device.state_durations)
         runtime.position_mm = compute_position(runtime, device.target_height_mm)
 
@@ -140,8 +142,6 @@ async def run_device(
                 state=runtime.state,
             )
         iterations += 1
-        if max_iterations is not None and iterations >= max_iterations:
-            return
         await asyncio.sleep(tick_interval)
 
 
