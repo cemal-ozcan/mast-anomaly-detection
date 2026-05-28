@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from simulator.config import ScenarioWindow
-from simulator.scenarios.base import FaultScenario
+from simulator.scenarios.base import FaultScenario, ScenarioContext
 from simulator.scenarios.mechanical_wear import MechanicalWear
 
 # Registry: YAML'deki ad-string'i sınıfa eşler. Yeni senaryo eklemek
@@ -44,4 +44,10 @@ def active_scenarios_at(
     return active
 
 
-__all__ = ["SCENARIO_REGISTRY", "active_scenarios_at", "FaultScenario"]
+__all__ = [
+    "SCENARIO_REGISTRY",
+    "active_scenarios_at",
+    "FaultScenario",
+    "ScenarioContext",
+    "MechanicalWear",
+]
