@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 1 — Iterasyon 4b: HydraulicLeak + ElectricalFault + Tam İmza Seti** (sıradaki)
+**Faz 2 — Ingestion + SQLite Storage** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Tamamlanan iterasyonlar:**
@@ -150,6 +150,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-28-faz1-iterasyon2b-tum-sensorler.md` (8/8 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (8/8 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md` (6/6 ✅)
+  - `docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` (8/8 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit tests/integration tests/scenarios` + `ruff check src/simulator tests/unit tests/integration tests/scenarios`.
@@ -189,10 +190,26 @@ ttest_1samp ile baseline'a karşı +%25 artışı p<0.05'te doğrular. Toplam 10
 coverage. Manuel uçtan uca: device_002'de scenario aktif, motor_current ramp davranışı
 gözlemli.
 
-### Iterasyon 4b (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 4b (HydraulicLeak + ElectricalFault + Tam İmza Seti) — Tamamlandı (2026-05-29)
 
-Kapsam (spec § 3 Iter 4b): `HydraulicLeak` (B) + `ElectricalFault` (C) + Spearman ρ<0
-ve F-testi imza setleri. scipy explicit pin (`scipy==1.17.1`). Faz 1 closure.
+`HydraulicLeak` (B): sadece HOLDING aktif, `held_minutes = elapsed_in_state_s / 60`,
+hydraulic_pressure → max(5.0, clean - leak_rate * held_minutes), mast_position
+lineer sag. `ElectricalFault` (C): state filter YOK, per-sensor independent
+`runtime.rng.random()` spike check (modify pure), spike branch motor_current
++uniform(-2,4) + motor_voltage +uniform(-30,30), non-spike branch motor_voltage
+gauss jitter. SCENARIO_REGISTRY 3 entry tam set. `tests/scenarios/conftest.py`
+DRY refactor (CountingClock + patched_engine_clock fixture). 2 yeni istatistiksel
+imza: HydraulicLeak Spearman ρ=−0.30/p=3e-04, ElectricalFault Bartlett
+p=6e-158/std ratio ~22. `scipy==1.17.1` explicit pin. Toplam 128 test,
+%94 coverage. devices.yaml.example device_003'e B+C eklendi → 3 cihaz ×
+3 farklı durum manuel demo. **Faz 1 tamamlandı.**
+
+## Faz 1 Closure (2026-05-29)
+
+Faz 1 = simulator (sentetik telemetri üretici). Tek cihaz tipi (telescopic_mast_v1),
+6 sensör, 4 state machine, N cihaz paralel (asyncio), 3 fault scenario (A/B/C)
++ istatistiksel imzaları. spec § 1 kapsam içi maddeleri tamamlandı. 128 test
+yeşil, %94 coverage. Faz 2 (Ingestion + SQLite) bir sonraki büyük adım.
 
 Faz seyri: `docs/ROADMAP.md`.
 

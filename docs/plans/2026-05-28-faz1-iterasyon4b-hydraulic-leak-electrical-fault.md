@@ -78,7 +78,7 @@ Spec § 9 B formülünü implement et. State filter (sadece HOLDING aktif), para
 - Modify: `src/simulator/scenarios/__init__.py` (registry'ye 1 yeni entry)
 - Create: `tests/unit/test_scenarios/test_hydraulic_leak.py`
 
-- [ ] **Step 1.1: `tests/unit/test_scenarios/test_hydraulic_leak.py` failing testleri yaz**
+- [x] **Step 1.1: `tests/unit/test_scenarios/test_hydraulic_leak.py` failing testleri yaz**
 
 ```python
 """HydraulicLeak (spec § 9 B, DOMAIN.md sat. 90-93) modify behavior testleri."""
@@ -204,14 +204,14 @@ def test_hydraulic_leak_registered_in_global_registry() -> None:
     assert SCENARIO_REGISTRY["hydraulic_leak"] is HydraulicLeak
 ```
 
-- [ ] **Step 1.2: Testleri koş, FAIL gör**
+- [x] **Step 1.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_hydraulic_leak.py -v
 ```
 Beklenen: 9 yeni test ImportError ile FAIL.
 
-- [ ] **Step 1.3: `src/simulator/scenarios/hydraulic_leak.py` yarat**
+- [x] **Step 1.3: `src/simulator/scenarios/hydraulic_leak.py` yarat**
 
 ```python
 """HydraulicLeak arıza senaryosu (spec § 9 B, DOMAIN.md sat. 90-93)."""
@@ -267,7 +267,7 @@ class HydraulicLeak(FaultScenario):
         return clean_value
 ```
 
-- [ ] **Step 1.4: `src/simulator/scenarios/__init__.py`'de registry'ye `hydraulic_leak` ekle**
+- [x] **Step 1.4: `src/simulator/scenarios/__init__.py`'de registry'ye `hydraulic_leak` ekle**
 
 Mevcut:
 ```python
@@ -301,14 +301,14 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 1.5: Testleri koş, PASS gör**
+- [x] **Step 1.5: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_hydraulic_leak.py -v
 ```
 Beklenen: 9 passed.
 
-- [ ] **Step 1.6: Tam suite + mypy + ruff**
+- [x] **Step 1.6: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -317,7 +317,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 107 + 9 = 116 passed, mypy clean, ruff clean.
 
-- [ ] **Step 1.7: Commit**
+- [x] **Step 1.7: Commit**
 
 ```bash
 git add src/simulator/scenarios/hydraulic_leak.py \
@@ -357,7 +357,7 @@ Spec § 9 C formülünü implement et. State filter YOK (tüm state'lerde aktif)
 - Modify: `src/simulator/scenarios/__init__.py` (registry'ye 1 yeni entry)
 - Create: `tests/unit/test_scenarios/test_electrical_fault.py`
 
-- [ ] **Step 2.1: `tests/unit/test_scenarios/test_electrical_fault.py` failing testleri yaz**
+- [x] **Step 2.1: `tests/unit/test_scenarios/test_electrical_fault.py` failing testleri yaz**
 
 ```python
 """ElectricalFault (spec § 9 C, DOMAIN.md sat. 102-106) modify behavior testleri."""
@@ -500,14 +500,14 @@ def test_electrical_fault_registered_in_global_registry() -> None:
     assert SCENARIO_REGISTRY["electrical_fault"] is ElectricalFault
 ```
 
-- [ ] **Step 2.2: Testleri koş, FAIL gör**
+- [x] **Step 2.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_electrical_fault.py -v
 ```
 Beklenen: 10 yeni test ImportError ile FAIL.
 
-- [ ] **Step 2.3: `src/simulator/scenarios/electrical_fault.py` yarat**
+- [x] **Step 2.3: `src/simulator/scenarios/electrical_fault.py` yarat**
 
 ```python
 """ElectricalFault arıza senaryosu (spec § 9 C, DOMAIN.md sat. 102-106)."""
@@ -565,7 +565,7 @@ class ElectricalFault(FaultScenario):
             return clean_value
 ```
 
-- [ ] **Step 2.4: `src/simulator/scenarios/__init__.py`'de registry'ye `electrical_fault` ekle**
+- [x] **Step 2.4: `src/simulator/scenarios/__init__.py`'de registry'ye `electrical_fault` ekle**
 
 Mevcut (Task 1 sonrası):
 ```python
@@ -604,14 +604,14 @@ __all__ = [
 ]
 ```
 
-- [ ] **Step 2.5: Testleri koş, PASS gör**
+- [x] **Step 2.5: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_scenarios/test_electrical_fault.py -v
 ```
 Beklenen: 10 passed.
 
-- [ ] **Step 2.6: Tam suite + mypy + ruff**
+- [x] **Step 2.6: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -620,7 +620,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 116 + 10 = 126 passed, mypy clean, ruff clean.
 
-- [ ] **Step 2.7: Commit**
+- [x] **Step 2.7: Commit**
 
 ```bash
 git add src/simulator/scenarios/electrical_fault.py \
@@ -660,7 +660,7 @@ Iter 4a'da `tests/scenarios/test_mechanical_wear_signature.py` `CountingClock` +
 - Create: `tests/scenarios/conftest.py`
 - Modify: `tests/scenarios/test_mechanical_wear_signature.py` (helper'ları conftest'ten import)
 
-- [ ] **Step 3.1: `tests/scenarios/conftest.py` yarat**
+- [x] **Step 3.1: `tests/scenarios/conftest.py` yarat**
 
 ```python
 """Shared fixtures for statistical signature tests (Iter 4b refactor).
@@ -722,7 +722,7 @@ def patched_engine_clock(monkeypatch: pytest.MonkeyPatch) -> CountingClock:
     return clock
 ```
 
-- [ ] **Step 3.2: `tests/scenarios/test_mechanical_wear_signature.py` güncelle — helper'ları conftest'ten al**
+- [x] **Step 3.2: `tests/scenarios/test_mechanical_wear_signature.py` güncelle — helper'ları conftest'ten al**
 
 Mevcut dosyada `class CountingClock`, `_ticking_sleep` async wrapper'ı, ve `monkeypatch.setattr` bloğunu kaldır. `FIXTURES` import'u da conftest'ten gelecek. `patched_engine_clock` fixture'unu kullan.
 
@@ -792,14 +792,14 @@ def test_mechanical_wear_raising_current_mean_significantly_above_baseline(
 
 Eski inline `CountingClock` ve `_ticking_sleep` TAMAMEN SİL.
 
-- [ ] **Step 3.3: Mevcut signature test'i koş, hâlâ pass — davranış değişikliği YOK**
+- [x] **Step 3.3: Mevcut signature test'i koş, hâlâ pass — davranış değişikliği YOK**
 
 ```bash
 pytest tests/scenarios/test_mechanical_wear_signature.py -v
 ```
 Beklenen: 1 passed.
 
-- [ ] **Step 3.4: Tam suite + mypy + ruff**
+- [x] **Step 3.4: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -808,7 +808,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 126 passed (refactor — test sayısı değişmez), mypy clean, ruff clean.
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add tests/scenarios/conftest.py tests/scenarios/test_mechanical_wear_signature.py
@@ -838,7 +838,7 @@ Spec § 12 bitti kriteri B: HOLDING penceresinde 60+ örnek üzerinde `hydraulic
 - Create: `tests/fixtures/devices_with_hydraulic_leak.yaml`
 - Create: `tests/scenarios/test_hydraulic_leak_signature.py`
 
-- [ ] **Step 4.1: `tests/fixtures/devices_with_hydraulic_leak.yaml` yarat**
+- [x] **Step 4.1: `tests/fixtures/devices_with_hydraulic_leak.yaml` yarat**
 
 Sabit state_durations (HOLDING uzun → ≥60 örnek garantili) + scenarios bloğu:
 
@@ -871,7 +871,7 @@ devices:
 
 HOLDING duration 120s → 120 örnek tek HOLDING penceresinde, ≥60 kriterini fazlasıyla karşılar.
 
-- [ ] **Step 4.2: `tests/scenarios/test_hydraulic_leak_signature.py` yaz**
+- [x] **Step 4.2: `tests/scenarios/test_hydraulic_leak_signature.py` yaz**
 
 ```python
 """HydraulicLeak istatistiksel imza testi (spec § 12 bitti kriteri B).
@@ -933,7 +933,7 @@ def test_hydraulic_leak_holding_pressure_decreases_monotonically(
     )
 ```
 
-- [ ] **Step 4.3: Testi koş, PASS gör**
+- [x] **Step 4.3: Testi koş, PASS gör**
 
 ```bash
 pytest tests/scenarios/test_hydraulic_leak_signature.py -v
@@ -943,7 +943,7 @@ Beklenen: 1 passed. Eğer FAIL ederse:
 - ρ ≥ 0 → leak_rate_bar_per_min arttır (10.0 dene)
 - p ≥ 0.05 → daha uzun HOLDING penceresi veya daha güçlü leak rate
 
-- [ ] **Step 4.4: Tam suite + mypy + ruff**
+- [x] **Step 4.4: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -952,7 +952,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 126 + 1 = 127 passed, mypy/ruff clean.
 
-- [ ] **Step 4.5: Commit**
+- [x] **Step 4.5: Commit**
 
 ```bash
 git add tests/fixtures/devices_with_hydraulic_leak.yaml \
@@ -982,7 +982,7 @@ Spec § 12 bitti kriteri C: scenario aktif iken `motor_voltage` standart sapmas�
 - Create: `tests/fixtures/devices_with_electrical_fault.yaml`
 - Create: `tests/scenarios/test_electrical_fault_signature.py`
 
-- [ ] **Step 5.1: `tests/fixtures/devices_with_electrical_fault.yaml` yarat**
+- [x] **Step 5.1: `tests/fixtures/devices_with_electrical_fault.yaml` yarat**
 
 ```yaml
 devices:
@@ -1017,7 +1017,7 @@ Aynı fixture'ı baseline run için de kullanmak için baseline'da scenarios=[] 
 
 `tests/fixtures/devices_minimal.yaml` zaten 1 cihaz scenarios'suz (Iter 2b'den) — baseline run için kullanılır.
 
-- [ ] **Step 5.2: `tests/scenarios/test_electrical_fault_signature.py` yaz**
+- [x] **Step 5.2: `tests/scenarios/test_electrical_fault_signature.py` yaz**
 
 ```python
 """ElectricalFault istatistiksel imza testi (spec § 12 bitti kriteri C).
@@ -1129,7 +1129,7 @@ def test_electrical_fault_motor_voltage_variance_significantly_above_baseline(
     )
 ```
 
-- [ ] **Step 5.3: Testi koş, PASS gör**
+- [x] **Step 5.3: Testi koş, PASS gör**
 
 ```bash
 pytest tests/scenarios/test_electrical_fault_signature.py -v
@@ -1139,7 +1139,7 @@ Beklenen: 1 passed. Eğer FAIL ederse:
 - Std ratio aralık dışı → tolerans aralığını genişlet veya spike_prob/voltage_jitter_std ayarla. Plan'daki [2.0, 10.0] aralığı geniş; empirik ratio raporda paylaşılsın
 - Bartlett p ≥ 0.05 → örnek sayısı az veya scenario gücü düşük; max_iterations arttır
 
-- [ ] **Step 5.4: Tam suite + mypy + ruff**
+- [x] **Step 5.4: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -1148,7 +1148,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 127 + 1 = 128 passed, mypy/ruff clean.
 
-- [ ] **Step 5.5: Commit**
+- [x] **Step 5.5: Commit**
 
 ```bash
 git add tests/fixtures/devices_with_electrical_fault.yaml \
@@ -1179,7 +1179,7 @@ Iter 4a + 4b scipy.stats kullanıyor; şu an scikit-learn 1.5.0 transitif. Expli
 **Files:**
 - Modify: `requirements.txt`
 
-- [ ] **Step 6.1: `requirements.txt`'de scipy ekle**
+- [x] **Step 6.1: `requirements.txt`'de scipy ekle**
 
 Mevcut "# Machine Learning" bloğunu şuna güncelle:
 
@@ -1189,14 +1189,14 @@ scikit-learn==1.5.0
 scipy==1.17.1
 ```
 
-- [ ] **Step 6.2: pip install ile doğrula**
+- [x] **Step 6.2: pip install ile doğrula**
 
 ```bash
 pip install -r requirements.txt
 ```
 Beklenen: `Requirement already satisfied: scipy==1.17.1` (zaten yüklü).
 
-- [ ] **Step 6.3: Tam suite + mypy + ruff (regression yok)**
+- [x] **Step 6.3: Tam suite + mypy + ruff (regression yok)**
 
 ```bash
 pytest tests/ -q
@@ -1205,7 +1205,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 128 passed, mypy/ruff clean.
 
-- [ ] **Step 6.4: Commit**
+- [x] **Step 6.4: Commit**
 
 ```bash
 git add requirements.txt
@@ -1232,7 +1232,7 @@ Manuel uçtan uca demo için: device_001 sağlıklı (clean), device_002 mechani
 **Files:**
 - Modify: `config/devices.yaml.example`
 
-- [ ] **Step 7.1: `config/devices.yaml.example` device_003'e scenarios ekle**
+- [x] **Step 7.1: `config/devices.yaml.example` device_003'e scenarios ekle**
 
 Mevcut device_003 bloğu (sensors listesinin altı). Sensors listesinin altına ekle:
 
@@ -1254,13 +1254,13 @@ Mevcut device_003 bloğu (sensors listesinin altı). Sensors listesinin altına 
 
 device_001 ve device_002'ye DOKUNMA (device_001 clean kalır; device_002 mechanical_wear korunur).
 
-- [ ] **Step 7.2: `config/devices.yaml` lokal kopya yenile**
+- [x] **Step 7.2: `config/devices.yaml` lokal kopya yenile**
 
 ```bash
 cp config/devices.yaml.example config/devices.yaml
 ```
 
-- [ ] **Step 7.3: Manuel uçtan uca smoke (opsiyonel — mosquitto varsa)**
+- [x] **Step 7.3: Manuel uçtan uca smoke (opsiyonel — mosquitto varsa)**
 
 Terminal A: `mosquitto_sub -v -t 'telemetry/device_003/+'`
 Terminal B: `python -m simulator` (5-10 dakika çalıştır)
@@ -1273,7 +1273,7 @@ Beklenen davranış:
 
 **NOTE FOR SUBAGENT:** Mosquitto kuruluysa otomatize edebilirsin (kısa 30-60s run + grep). Değilse SKIP edip raporda belirt — kullanıcı manuel doğrulayacak.
 
-- [ ] **Step 7.4: Commit**
+- [x] **Step 7.4: Commit**
 
 ```bash
 git add config/devices.yaml.example
@@ -1302,7 +1302,7 @@ Plan checkboxları + CLAUDE.md Mevcut Faz güncellemesi (Faz 1 Tamamlandı, Faz 
 - Modify: `CLAUDE.md` (Mevcut Faz bölümü)
 - Modify: `docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` (bu dosya — checkbox [x])
 
-- [ ] **Step 8.1: `CLAUDE.md` "Mevcut Faz" güncelle**
+- [x] **Step 8.1: `CLAUDE.md` "Mevcut Faz" güncelle**
 
 Header satırını şuna güncelle:
 ```
@@ -1341,7 +1341,7 @@ yeşil, %90+ coverage. Faz 2 (Ingestion + SQLite) bir sonraki büyük adım.
 
 CLAUDE.md "Çalıştırma" satırı zaten N cihaz × 6 sensör × 1 Hz; değişmez. "Test/lint disiplini" satırı zaten tüm dirs (Iter 4a'da güncellendi); değişmez.
 
-- [ ] **Step 8.2: Plan dosyasının tüm checkbox'larını [x] yap**
+- [x] **Step 8.2: Plan dosyasının tüm checkbox'larını [x] yap**
 
 ```bash
 perl -i -pe 's/^- \[ \]/- [x]/g' docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md
@@ -1349,7 +1349,7 @@ perl -i -pe 's/^- \[ \]/- [x]/g' docs/plans/2026-05-28-faz1-iterasyon4b-hydrauli
 
 Verify: `grep -c '^- \[ \]' docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` → 0 olmalı.
 
-- [ ] **Step 8.3: Tam suite son kez**
+- [x] **Step 8.3: Tam suite son kez**
 
 ```bash
 pytest tests/ -q
@@ -1358,7 +1358,7 @@ ruff check src/simulator tests/unit tests/integration tests/scenarios
 ```
 Beklenen: 128 passed, mypy/ruff clean.
 
-- [ ] **Step 8.4: Faz 1 Closure milestone commit**
+- [x] **Step 8.4: Faz 1 Closure milestone commit**
 
 ```bash
 git add CLAUDE.md docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md
@@ -1402,15 +1402,15 @@ EOF
 
 ## Iter 4b Sonu — Bitti Kriterleri (spec § 3 ile birebir)
 
-- [ ] **Kriter 1:** `HydraulicLeak` (B) — sadece HOLDING aktif, `held_minutes` lineer formül, pressure floor 5.0 bar (Task 1).
-- [ ] **Kriter 2:** `ElectricalFault` (C) — state-agnostic, per-sensor `runtime.rng` spike/jitter (Task 2).
-- [ ] **Kriter 3:** SCENARIO_REGISTRY 3 entry tam set (Task 1 + 2).
-- [ ] **Kriter 4:** `tests/scenarios/conftest.py` DRY extraction — CountingClock + patched_engine_clock fixture (Task 3).
-- [ ] **Kriter 5:** Unit testler — HydraulicLeak 9 + ElectricalFault 10 = 19 yeni unit test (Task 1 + 2).
-- [ ] **Kriter 6:** HydraulicLeak Spearman imza — HOLDING penceresinde ρ<0 ve p<0.05 (Task 4).
-- [ ] **Kriter 7:** ElectricalFault Bartlett imza — iki run karşılaştırması, variance equality reddedilir + std ratio [2.0, 10.0] (Task 5).
-- [ ] **Kriter 8:** `scipy==1.17.1` explicit pin (Task 6).
-- [ ] **Kriter 9:** Faz 1 closure — CLAUDE.md Mevcut Faz Faz 2 sıradaki, Faz 1 tamamlandı paragraph (Task 8).
+- [x] **Kriter 1:** `HydraulicLeak` (B) — sadece HOLDING aktif, `held_minutes` lineer formül, pressure floor 5.0 bar (Task 1).
+- [x] **Kriter 2:** `ElectricalFault` (C) — state-agnostic, per-sensor `runtime.rng` spike/jitter (Task 2).
+- [x] **Kriter 3:** SCENARIO_REGISTRY 3 entry tam set (Task 1 + 2).
+- [x] **Kriter 4:** `tests/scenarios/conftest.py` DRY extraction — CountingClock + patched_engine_clock fixture (Task 3).
+- [x] **Kriter 5:** Unit testler — HydraulicLeak 9 + ElectricalFault 10 = 19 yeni unit test (Task 1 + 2).
+- [x] **Kriter 6:** HydraulicLeak Spearman imza — HOLDING penceresinde ρ<0 ve p<0.05 (Task 4).
+- [x] **Kriter 7:** ElectricalFault Bartlett imza — iki run karşılaştırması, variance equality reddedilir + std ratio [2.0, 10.0] (Task 5).
+- [x] **Kriter 8:** `scipy==1.17.1` explicit pin (Task 6).
+- [x] **Kriter 9:** Faz 1 closure — CLAUDE.md Mevcut Faz Faz 2 sıradaki, Faz 1 tamamlandı paragraph (Task 8).
 
 Her task'ın sonunda **DİSİPLİN** (CLAUDE.md): tam suite + mypy(src+tests+integration+scenarios) + ruff(src+tests+integration+scenarios) — per-file değil.
 
