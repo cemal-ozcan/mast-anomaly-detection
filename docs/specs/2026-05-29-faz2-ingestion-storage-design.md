@@ -293,6 +293,8 @@ def drain_loop(queue, repository, shutdown_event, max_size, flush_interval_s):
 
 **Performance hedefi:** 1000 msg/sec × max 1s flush latency = en kötü 1000 mesaj/batch. SQLAlchemy Core `connection.execute(insert, [...rows])` PER-batch atomic transaction. SQLite WAL mode ~5000-10000 insert/sec ev hardware'da rahatlıkla yapar.
 
+**Final flush kuyruğu da boşaltır (düzeltme):** Yukarıdaki pseudocode shutdown'da yalnız `buffer`'ı flush eder — ama kuyrukta `queue.get()` edilmemiş mesajlar kalabilir. Veri kaybını önlemek için drainer, while döngüsünden çıkınca önce kuyruğu tamamen `get_nowait()` ile `buffer`'a boşaltır, sonra flush eder. Bu bitti kriteri 3'ün (SIGTERM → kalan mesajlar yazılır) gereğidir.
+
 ---
 
 ## 9. Migration Mekanizması
@@ -368,6 +370,8 @@ CLAUDE.md kuralı: `except Exception:` yasak. Spesifik tipler.
 | Batch drainer thread crash | Loguru CRITICAL, ana servis SIGTERM tetikler (kendi kendine restart için systemd) | Kuyruktan tüketim durmamalı; yarım çalışmaktansa öl |
 | SIGINT / SIGTERM | Shutdown event set, paho `loop_stop` + `disconnect`, drainer son flush, exit 0 | Temiz kapanma; data kaybı yok |
 
+**Iter 2.3 resilience kapsamı (minimal):** Batch drainer'da `insert_batch` `OperationalError` fırlatırsa: CRITICAL log + bounded retry (varsayılan 3 deneme, aralarında `retry_backoff_s` bekleme). Tüm denemeler başarısızsa: CRITICAL log + `BatchWriter.failed = True` + `shutdown_event.set()` → ana servis graceful kapanır (kalıcı disk-full/locked durumunda buffer kaybı kaçınılmaz; loglanır). Tablodaki tam "5 sn bekle + 3x retry + sonra exit 3" ve "drainer crash → ana servise SIGTERM" process-orchestration'ı Faz 9+ production sertleştirmesine ertelendi (prototip için bounded-retry + graceful-shutdown sinyali yeterli).
+
 ---
 
 ## 12. Test Stratejisi
@@ -400,6 +404,12 @@ tests/
 - Gerçek Mosquitto broker + ayrı simulator subprocess + ingestion subprocess
 - 60 saniye boyunca 1000 msg/sec yük altında: simulator publish sayısı ≈ SQL satır sayısı (±1%)
 - `pytest tests/smoke/ -v` lokal manuel çağrı
+
+**Opt-in çift kapı:** Smoke testleri default `pytest tests/` run'ında SKIPPED'tir. Çalışması için hem `RUN_SMOKE=1` env değişkeni set olmalı HEM de broker `localhost:1883`'te erişilebilir olmalı (aksi halde skip). Süre `SMOKE_DURATION_S` env ile ayarlanır (default 5s hızlı doğrulama); spec § 13'ün tam 60s/60.000-mesaj kabul run'ı `SMOKE_DURATION_S=60 RUN_SMOKE=1 pytest tests/smoke/` ile manuel çalıştırılır. `smoke` pytest marker'ı kayıtlıdır (`--strict-markers`). Smoke testinde ingestion in-process kurulur (subscriber + batch_writer), yapay paho publisher hedef hızda yayın yapar (subprocess yerine — daha hızlı + deterministik teardown).
+
+**Kriter 1 (kayıpsız yük) yapay publisher ile:** spec § 13 Yaklaşım A — 60-cihazlı simulator yerine test fixture'ında yapay 1000 msg/sec publisher kullanılır (simulator'ı ölçeklemek YAGNI). Kriter 4 ile aynı mekanizma; ikisi tek throughput testiyle karşılanır.
+
+**Kriter 2 (broker restart → reconnect) doğrulaması:** otomatik kill/restart testi kırılgan olduğu için mekanizma (paho `reconnect_delay_set(1, 30)`) unit testle, gerçek broker-restart davranışı dokümante manuel adımla doğrulanır.
 
 ### Kapsama
 
