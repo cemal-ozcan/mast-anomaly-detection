@@ -12,6 +12,7 @@ from unittest.mock import MagicMock
 import pytest
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.pool import NullPool
 
 from ingestion.batch_writer import BatchWriter, _should_flush
 from ingestion.message_parser import IngestedReading
@@ -33,6 +34,7 @@ def thread_safe_engine() -> Iterator[Engine]:
         engine = create_engine(
             f"sqlite:///{db_path}",
             connect_args={"check_same_thread": False},
+            poolclass=NullPool,
         )
         apply_migrations(engine, MIGRATIONS_DIR)
         try:
