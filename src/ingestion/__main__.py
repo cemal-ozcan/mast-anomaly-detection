@@ -1,9 +1,11 @@
-"""Ingestion servisi entry: python -m ingestion (Iter 2.1 walking skeleton).
+"""Ingestion servisi entry: python -m ingestion (Iter 2.2: SQLite repository).
 
 Faz 1 simulator MQTT yayınlarını subscribe eder, her mesajı parse edip
-loguru INFO ile console'a basar. Henüz SQLite YOK (Iter 2.2'de eklenecek).
+SQLite telemetry tablosuna tek-tek yazar (repository.insert). Migration
+boot'ta apply edilir (idempotent). Bozuk JSON / eksik field → ERROR + skip;
+SQLite IO hatası → CRITICAL + skip (tam retry resilience Iter 2.3'te).
 
-SIGINT/SIGTERM ile graceful shutdown: subscriber loop_stop + disconnect.
+SIGINT/SIGTERM ile graceful shutdown: subscriber loop_stop + disconnect + engine dispose.
 """
 from __future__ import annotations
 
@@ -17,15 +19,21 @@ from types import FrameType
 
 import paho.mqtt.client as mqtt
 from loguru import logger
+from sqlalchemy.exc import OperationalError
 
 from ingestion.config import load_ingestion_config
 from ingestion.message_parser import parse_message
 from ingestion.subscriber import MQTTSubscriber
 from simulator.config import load_mqtt_config
+from storage.engine import create_sqlite_engine
+from storage.migrator import MIGRATIONS_DIR, apply_migrations
+from storage.repository import TelemetryRepository
 
 
-def _make_message_handler() -> Callable[[mqtt.MQTTMessage], None]:
-    """Paho mesaj callback'i: parse + log. Bozuk mesajları yutar (servis çökmemeli)."""
+def _make_message_handler(
+    repository: TelemetryRepository,
+) -> Callable[[mqtt.MQTTMessage], None]:
+    """Paho mesaj callback'i: parse + repository.insert. Hataları yutar (servis çökmemeli)."""
 
     def handle(msg: mqtt.MQTTMessage) -> None:
         try:
@@ -38,14 +46,22 @@ def _make_message_handler() -> Callable[[mqtt.MQTTMessage], None]:
                 msg.payload[:200],
             )
             return
-        logger.info(
-            "Telemetri: device={} sensor={} state={} value={} unit={} ts={}",
+        try:
+            repository.insert(reading)
+        except OperationalError as e:
+            logger.critical(
+                "SQLite insert başarısız (mesaj atlandı): device={} sensor={} hata={}",
+                reading.device_id,
+                reading.sensor,
+                e,
+            )
+            return
+        logger.debug(
+            "Yazıldı: device={} sensor={} state={} value={}",
             reading.device_id,
             reading.sensor,
             reading.state,
             reading.value,
-            reading.unit,
-            reading.timestamp,
         )
 
     return handle
@@ -74,7 +90,11 @@ def run(
     logger.remove()
     logger.add(sys.stderr, level=ingestion_config.log_level)
 
-    handler = _make_message_handler()
+    engine = create_sqlite_engine(ingestion_config.db_path)
+    apply_migrations(engine, MIGRATIONS_DIR)
+    repository = TelemetryRepository(engine)
+
+    handler = _make_message_handler(repository)
     subscriber = MQTTSubscriber(
         config=mqtt_config,
         topic_pattern=ingestion_config.subscribe_topic_pattern,
@@ -96,6 +116,7 @@ def run(
         shutdown.wait()
     finally:
         subscriber.stop()
+        engine.dispose()
         logger.info("Ingestion temiz kapandı")
 
 
