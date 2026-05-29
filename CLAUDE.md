@@ -141,9 +141,10 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 2 — Ingestion + SQLite Storage** (sıradaki)
+**Faz 2 — Iterasyon 2.2: SQLite Repository** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
+- **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
@@ -151,9 +152,13 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-28-faz1-iterasyon3-asyncio-multi-device.md` (8/8 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md` (6/6 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` (8/8 ✅)
+  - `docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` (5/5 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
-- **Çalıştırma:** `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
-- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator tests/unit tests/integration tests/scenarios` + `ruff check src/simulator tests/unit tests/integration tests/scenarios`.
+- **Çalıştırma:**
+  - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
+  - Ingestion (Iter 2.1 walking skeleton): `python -m ingestion` simulator yayınlarını subscribe edip loguru ile console'a basar. SQLite Iter 2.2'de eklenecek.
+  - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` veya `python -m ingestion` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur.
+- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenarios`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
 
@@ -210,6 +215,26 @@ Faz 1 = simulator (sentetik telemetri üretici). Tek cihaz tipi (telescopic_mast
 6 sensör, 4 state machine, N cihaz paralel (asyncio), 3 fault scenario (A/B/C)
 + istatistiksel imzaları. spec § 1 kapsam içi maddeleri tamamlandı. 128 test
 yeşil, %94 coverage. Faz 2 (Ingestion + SQLite) bir sonraki büyük adım.
+
+## Faz 2 (Ingestion + SQLite Storage)
+
+### Iterasyon 2.1 (Walking Skeleton — MQTT Subscriber + Console Log) — Tamamlandı (2026-05-29)
+
+`src/ingestion/` package'ı kuruldu: `config.py` (`IngestionConfig` dataclass + YAML loader),
+`message_parser.py` (`IngestedReading` frozen dataclass + `parse_message`), `subscriber.py`
+(`MQTTSubscriber` paho wrapper, loop_start background thread, callback delegasyonu),
+`__main__.py` (config + subscriber + signal handler + parse-log pipeline). Bozuk JSON /
+eksik field → ERROR log + skip (servis çökmez). SIGINT/SIGTERM graceful shutdown
+(loop_stop + disconnect). `config/ingestion.yaml.example` ile birlikte 13 yeni unit test
+(config 3 + parser 5 + subscriber 3 + main 2). 128 → 141 test, %92 toplam coverage,
+ingestion paketi ≥%85. Manuel uçtan uca: simulator + ingestion paralel çalışıyor,
+198 mesaj 10 saniyede parse + loglandı, SIGINT temiz exit.
+
+### Iterasyon 2.2 (sıradaki) — Plan henüz yazılmadı
+
+Kapsam (spec § 3 Iter 2.2): SQLAlchemy Core + tek wide tablo `telemetry` + composite
+index + repository pattern (tek tek insert) + yalın script-based migration (`schema_version`
+tablosu). `python -m ingestion` her mesajı SQLite'a yazacak.
 
 Faz seyri: `docs/ROADMAP.md`.
 
