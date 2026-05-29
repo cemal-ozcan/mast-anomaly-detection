@@ -66,7 +66,7 @@ Faz 2 bu prensibe **walking skeleton + iterasyon** modelinde uyar (Faz 1 pattern
 ### Iterasyon 2.2 — SQLite + Repository Pattern
 
 **Kapsam:**
-- `src/storage/` package: `engine.py` (SQLAlchemy Core engine factory), `schema.py` (Table tanımı), `repository.py` (`TelemetryRepository` — insert tek tek)
+- `src/storage/` package: `engine.py` (SQLAlchemy Core engine factory), `schema.py` (Table tanımı), `repository.py` (`TelemetryRepository` — `insert(reading)` tek tek + minimal okuma `count()` / `fetch_recent(device_id, sensor, limit)` (bitti kriteri 2 & 3 doğrulaması için); `insert_batch` + geniş query API Iter 2.3)
 - SQLite şema: tek tablo `telemetry(id INTEGER PRIMARY KEY, device_id TEXT, sensor TEXT, timestamp TEXT, state TEXT, value REAL, unit TEXT)` + composite index `(device_id, sensor, timestamp)`
 - `src/storage/migrations/001_initial.sql` — şema tanımı + index
 - `src/storage/migrator.py` — `schema_version` tablosu yönetimi + sıralı SQL dosyalarını apply
@@ -322,6 +322,8 @@ def apply_migrations(engine: Engine, migrations_dir: Path) -> None:
         logger.info("Migration applied: {}", sql_file.name)
 ```
 
+**Çok-statement SQL dosyaları:** Bir `.sql` dosyası birden fazla statement içeriyorsa (örn. `001_initial.sql` = CREATE TABLE + CREATE INDEX), `conn.execute(text(sql))` tek statement çalıştırır (pysqlite driver davranışı) — kalan statement'lar sessizce atlanır. Bu yüzden migrator dosyayı `;` ile statement'lara böler ve her birini ayrı `conn.execute(text(stmt))` ile çalıştırır (DDL için string-literal `;` riski yok).
+
 **Test:** `tests/unit/test_storage_migrator.py` — boş db → apply → tablo var, version=1; tekrar apply → no-op (version aynı, INSERT atılmaz).
 
 ---
@@ -390,8 +392,8 @@ tests/
 
 ### Integration Test
 
-- mock paho `on_message` simülasyonu + tmp_path SQLite + run main loop max_messages parametresiyle
-- 100 mesaj enqueue → final flush sonrası SQL'de 100 satır var, sıra korunmuş
+- wired message handler (`_make_message_handler(repository)`) + `tmp_path` dosya SQLite engine; N sahte `MQTTMessage` doğrudan handler'a fire edilir (paho/run() loop'u test edilmez — sinyal/thread izolasyonu unit kapsamı dışı). N mesaj sonrası SQL'de N satır, `timestamp` sırası korunmuş, restart'ta migration tekrar koşmaz
+- 100 mesaj → SQL'de 100 satır var, sıra korunmuş (Iter 2.2'de tek-tek insert; batch flush Iter 2.3)
 
 ### Smoke Test (CI dışı)
 
