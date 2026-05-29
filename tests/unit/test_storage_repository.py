@@ -70,3 +70,25 @@ def test_fetch_recent_query_uses_composite_index(migrated_engine: Engine) -> Non
         ).all()
     detail = " ".join(str(row[-1]) for row in plan)
     assert "USING INDEX idx_telemetry_device_sensor_ts" in detail, detail
+
+
+def test_insert_batch_writes_all_rows(migrated_engine: Engine) -> None:
+    """insert_batch tüm satırları tek transaction'da yazar."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    batch = [_reading(f"2026-05-29T00:00:{i:02d}.000Z", float(i)) for i in range(5)]
+    repo.insert_batch(batch)
+
+    assert repo.count() == 5
+    rows = repo.fetch_recent("device_001", "motor_current", limit=2)
+    assert [r.value for r in rows] == [4.0, 3.0]
+
+
+def test_insert_batch_empty_is_noop(migrated_engine: Engine) -> None:
+    """Boş liste → hiçbir şey yazılmaz, hata fırlamaz."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_batch([])
+    assert repo.count() == 0
