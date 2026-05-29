@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import signal
+import sys
 import threading
 from collections.abc import Callable
 from pathlib import Path
@@ -66,7 +67,12 @@ def run(
     """
     mqtt_config = load_mqtt_config(mqtt_config_path)
     ingestion_config = load_ingestion_config(ingestion_config_path)
-    logger.level(ingestion_config.log_level)
+
+    # Loguru sink-level: logger.level("INFO") sadece named level tanımını
+    # okur/yaratır, sink filter'ı değiştirmez. Sink filter için default
+    # stderr sink'ini kaldırıp config-driven level ile yeniden eklemek gerek.
+    logger.remove()
+    logger.add(sys.stderr, level=ingestion_config.log_level)
 
     handler = _make_message_handler()
     subscriber = MQTTSubscriber(
