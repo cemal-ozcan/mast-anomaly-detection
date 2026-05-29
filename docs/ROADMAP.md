@@ -53,6 +53,14 @@ Bu doküman projenin fazlarını ve her fazın kabul kriterlerini tanımlar. Bir
 - 1000 mesaj/saniye yüke dayanabiliyor
 - Servis çöktüğünde otomatik yeniden başlıyor
 
+**İlerleme:**
+- ✅ Iter 2.1 — Walking skeleton (MQTT subscriber + console log) — Tamamlandı 2026-05-29
+- ✅ Iter 2.2 — SQLite + repository pattern + script-based migration — Tamamlandı 2026-05-30
+  (`telemetry` wide tablo + composite index + `TelemetryRepository.insert`; 155 test, %86.8 ingestion+storage coverage)
+- ⏳ Iter 2.3 — Batch writer + resilience (reconnect backoff) + 1000 msg/sec smoke testi (sıradaki)
+
+Detay: `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`.
+
 ---
 
 ## Faz 3 — Basit Dashboard

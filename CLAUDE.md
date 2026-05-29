@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 2 — Iterasyon 2.2: SQLite Repository** (sıradaki)
+**Faz 2 — Iterasyon 2.3: Batch Writer + Resilience + Performance** (sıradaki)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -153,12 +153,13 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-28-faz1-iterasyon4a-senaryo-altyapisi-mechanical-wear.md` (6/6 ✅)
   - `docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` (8/8 ✅)
   - `docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` (5/5 ✅)
+  - `docs/plans/2026-05-29-faz2-iter2-2-sqlite-repository.md` (7/7 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
-  - Ingestion (Iter 2.1 walking skeleton): `python -m ingestion` simulator yayınlarını subscribe edip loguru ile console'a basar. SQLite Iter 2.2'de eklenecek.
+  - Ingestion (Iter 2.2): `python -m ingestion` simulator yayınlarını subscribe edip her mesajı SQLite `telemetry` tablosuna tek-tek yazar (`data/telemetry.db`, boot'ta idempotent migration). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Henüz batch YOK (Iter 2.3).
   - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` veya `python -m ingestion` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur.
-- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenarios`.
+- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
 
@@ -230,11 +231,25 @@ eksik field → ERROR log + skip (servis çökmez). SIGINT/SIGTERM graceful shut
 ingestion paketi ≥%85. Manuel uçtan uca: simulator + ingestion paralel çalışıyor,
 198 mesaj 10 saniyede parse + loglandı, SIGINT temiz exit.
 
-### Iterasyon 2.2 (sıradaki) — Plan henüz yazılmadı
+### Iterasyon 2.2 (SQLite + Repository Pattern) — Tamamlandı (2026-05-30)
 
-Kapsam (spec § 3 Iter 2.2): SQLAlchemy Core + tek wide tablo `telemetry` + composite
-index + repository pattern (tek tek insert) + yalın script-based migration (`schema_version`
-tablosu). `python -m ingestion` her mesajı SQLite'a yazacak.
+`src/storage/` package'ı kuruldu (SQLAlchemy 2.0 Core, ORM değil): `schema.py`
+(`telemetry` wide tablo Table + composite index `(device_id, sensor, timestamp)`;
+DDL ÇALIŞTIRMAZ, sadece expression builder), `engine.py` (`create_sqlite_engine`
+factory — parent dizin + WAL/synchronous=NORMAL/foreign_keys=ON pragma connect-event),
+`migrator.py` (`apply_migrations` saf fonksiyon + `schema_version` tablosu + çok-statement
+`;` split — pysqlite tek-statement davranışı için), `repository.py` (`TelemetryRepository`
+— `insert(reading)` tek tek + `count()`/`fetch_recent()` minimal okuma; batch Iter 2.3),
+`migrations/001_initial.sql` (runtime DDL'in TEK kaynağı). Ingestion `__main__` orchestration'da
+kaldı (engine extraction Iter 2.3'e ertelendi): boot'ta engine + idempotent migration +
+repository; handler `repository.insert` çağırır, `OperationalError` → CRITICAL + skip
+(tam retry resilience Iter 2.3); engine outer try/finally'de dispose. Test fixture'ları
+`migrated_engine`/`in_memory_engine` (StaticPool `:memory:` — connection paylaşımı için).
+141 → 155 test (schema 2 + engine 2 + migrator 3 + repository 4 + integration 2; main 2
+refactor + 1 OperationalError swallow), ingestion+storage %86.8 coverage (storage %100).
+Manuel uçtan uca (gerçek Mosquitto + simulator): 3 cihaz × 6 sensör SQLite'a yazıldı,
+EXPLAIN QUERY PLAN composite index kullandı, restart'ta migration no-op + veri append,
+SIGINT temiz exit. **Faz 2 Iter 2.2 kapandı.**
 
 Faz seyri: `docs/ROADMAP.md`.
 
