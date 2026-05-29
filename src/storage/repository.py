@@ -18,6 +18,18 @@ class TelemetryRepository:
         """Args: engine — SQLAlchemy Engine (migration zaten uygulanmış olmalı)."""
         self._engine = engine
 
+    @staticmethod
+    def _reading_to_dict(reading: IngestedReading) -> dict[str, object]:
+        """IngestedReading'i telemetry kolon dict'ine çevirir (insert + insert_batch DRY)."""
+        return {
+            "device_id": reading.device_id,
+            "sensor": reading.sensor,
+            "timestamp": reading.timestamp,
+            "state": reading.state,
+            "value": reading.value,
+            "unit": reading.unit,
+        }
+
     def insert(self, reading: IngestedReading) -> None:
         """Tek bir IngestedReading'i telemetry tablosuna yazar.
 
@@ -28,16 +40,7 @@ class TelemetryRepository:
             sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran handler yakalar).
         """
         with self._engine.begin() as conn:
-            conn.execute(
-                telemetry.insert().values(
-                    device_id=reading.device_id,
-                    sensor=reading.sensor,
-                    timestamp=reading.timestamp,
-                    state=reading.state,
-                    value=reading.value,
-                    unit=reading.unit,
-                )
-            )
+            conn.execute(telemetry.insert().values(**self._reading_to_dict(reading)))
 
     def insert_batch(self, readings: list[IngestedReading]) -> None:
         """Birden çok okumayı tek transaction'da yazar (Core executemany, spec § 8).
@@ -46,24 +49,14 @@ class TelemetryRepository:
             readings: Yazılacak okumalar. Boş liste → no-op.
 
         Raises:
-            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (drainer yakalar + bounded retry).
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar + gerekirse yeniden dener).
         """
         if not readings:
             return
         with self._engine.begin() as conn:
             conn.execute(
                 telemetry.insert(),
-                [
-                    {
-                        "device_id": r.device_id,
-                        "sensor": r.sensor,
-                        "timestamp": r.timestamp,
-                        "state": r.state,
-                        "value": r.value,
-                        "unit": r.unit,
-                    }
-                    for r in readings
-                ],
+                [self._reading_to_dict(r) for r in readings],
             )
 
     def count(self) -> int:

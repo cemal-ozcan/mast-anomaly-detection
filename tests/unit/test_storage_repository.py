@@ -73,7 +73,7 @@ def test_fetch_recent_query_uses_composite_index(migrated_engine: Engine) -> Non
 
 
 def test_insert_batch_writes_all_rows(migrated_engine: Engine) -> None:
-    """insert_batch tüm satırları tek transaction'da yazar."""
+    """insert_batch tüm satırları yazar ve fetch_recent DESC sırasını doğrular."""
     from storage.repository import TelemetryRepository
 
     repo = TelemetryRepository(migrated_engine)
