@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.pool import StaticPool
 
 from simulator.config import (
     DeviceConfig,
@@ -15,6 +17,7 @@ from simulator.config import (
     StateDurations,
 )
 from simulator.runtime import DeviceRuntimeState
+from storage.migrator import MIGRATIONS_DIR, apply_migrations
 
 # Shared fixtures path (used by test_engine_*.py and test_validation.py)
 FIXTURES = Path(__file__).parent.parent / "fixtures"
@@ -88,3 +91,32 @@ def make_runtime(
 def six_sensor_configs() -> list[SensorConfig]:
     """Pytest fixture wrapping the constant; use if you want injection rather than import."""
     return list(SIX_SENSOR_CONFIGS)
+
+
+@pytest.fixture
+def in_memory_engine() -> Iterator[Engine]:
+    """Tek-connection in-memory SQLite engine (StaticPool).
+
+    :memory: connection-başına ayrı DB'dir; StaticPool tüm begin()/connect()
+    blokları için TEK connection paylaşır ki tablo testler boyunca yaşasın.
+    """
+    engine = create_engine(
+        "sqlite://",
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.fixture
+def migrated_engine(in_memory_engine: Engine) -> Engine:
+    """in_memory_engine + apply_migrations → telemetry tablosu hazır.
+
+    Gerçek 001_initial.sql DDL'ini çalıştırır; repository testleri böylece
+    schema.py Table ile SQL DDL tutarlılığını implicit doğrular.
+    """
+    apply_migrations(in_memory_engine, MIGRATIONS_DIR)
+    return in_memory_engine
