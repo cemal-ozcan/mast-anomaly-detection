@@ -1,0 +1,7 @@
+ingestion:
+  db_path: data/telemetry.db
+  subscribe_topic_pattern: telemetry/+/+
+  batch:
+    max_size: 100
+    flush_interval_s: 1.0
+  log_level: INFO
