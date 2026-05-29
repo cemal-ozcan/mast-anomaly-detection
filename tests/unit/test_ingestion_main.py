@@ -52,3 +52,25 @@ def test_handle_message_bad_json_skips_without_insert(migrated_engine: Engine) -
     handler(fake_msg)  # raise etmemeli
 
     assert repo.count() == 0
+
+
+def test_handle_message_db_error_is_swallowed(migrated_engine: Engine) -> None:
+    """repository.insert OperationalError fırlatırsa handler yutar (paho thread'i çökmesin)."""
+    from unittest.mock import patch
+
+    from sqlalchemy.exc import OperationalError
+
+    from ingestion.__main__ import _make_message_handler
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    handler = _make_message_handler(repo)
+
+    fake_msg = MagicMock()
+    fake_msg.topic = "telemetry/device_001/motor_current"
+    fake_msg.payload = _payload()
+
+    with patch.object(repo, "insert", side_effect=OperationalError("stmt", {}, Exception("disk full"))):
+        handler(fake_msg)  # raise etmemeli
+
+    assert repo.count() == 0

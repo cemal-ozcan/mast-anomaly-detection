@@ -91,31 +91,33 @@ def run(
     logger.add(sys.stderr, level=ingestion_config.log_level)
 
     engine = create_sqlite_engine(ingestion_config.db_path)
-    apply_migrations(engine, MIGRATIONS_DIR)
-    repository = TelemetryRepository(engine)
-
-    handler = _make_message_handler(repository)
-    subscriber = MQTTSubscriber(
-        config=mqtt_config,
-        topic_pattern=ingestion_config.subscribe_topic_pattern,
-        message_handler=handler,
-    )
-
-    shutdown = threading.Event()
-
-    def _on_signal(signum: int, _frame: FrameType | None) -> None:
-        logger.info("Shutdown sinyali alındı: {}", signum)
-        shutdown.set()
-
-    signal.signal(signal.SIGINT, _on_signal)
-    signal.signal(signal.SIGTERM, _on_signal)
-
-    subscriber.connect_and_start()
     try:
-        # Background paho thread mesajları işler; ana thread shutdown bekler.
-        shutdown.wait()
+        apply_migrations(engine, MIGRATIONS_DIR)
+        repository = TelemetryRepository(engine)
+
+        handler = _make_message_handler(repository)
+        subscriber = MQTTSubscriber(
+            config=mqtt_config,
+            topic_pattern=ingestion_config.subscribe_topic_pattern,
+            message_handler=handler,
+        )
+
+        shutdown = threading.Event()
+
+        def _on_signal(signum: int, _frame: FrameType | None) -> None:
+            logger.info("Shutdown sinyali alındı: {}", signum)
+            shutdown.set()
+
+        signal.signal(signal.SIGINT, _on_signal)
+        signal.signal(signal.SIGTERM, _on_signal)
+
+        subscriber.connect_and_start()
+        try:
+            # Background paho thread mesajları işler; ana thread shutdown bekler.
+            shutdown.wait()
+        finally:
+            subscriber.stop()
     finally:
-        subscriber.stop()
         engine.dispose()
         logger.info("Ingestion temiz kapandı")
 
