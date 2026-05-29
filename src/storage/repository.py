@@ -1,6 +1,6 @@
 """TelemetryRepository: telemetry tablosuna insert + minimal okuma (spec § 3 Iter 2.2).
 
-insert_batch + geniş query API Iter 2.3'e ertelendi (YAGNI). count/fetch_recent
+insert_batch eklendi (Iter 2.3); geniş query API Faz 4+ detector ihtiyacına ertelendi. count/fetch_recent
 Iter 2.2 bitti kriteri 2 & 3 doğrulaması için minimal okuma yüzeyidir.
 """
 from __future__ import annotations
@@ -37,6 +37,33 @@ class TelemetryRepository:
                     value=reading.value,
                     unit=reading.unit,
                 )
+            )
+
+    def insert_batch(self, readings: list[IngestedReading]) -> None:
+        """Birden çok okumayı tek transaction'da yazar (Core executemany, spec § 8).
+
+        Args:
+            readings: Yazılacak okumalar. Boş liste → no-op.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (drainer yakalar + bounded retry).
+        """
+        if not readings:
+            return
+        with self._engine.begin() as conn:
+            conn.execute(
+                telemetry.insert(),
+                [
+                    {
+                        "device_id": r.device_id,
+                        "sensor": r.sensor,
+                        "timestamp": r.timestamp,
+                        "state": r.state,
+                        "value": r.value,
+                        "unit": r.unit,
+                    }
+                    for r in readings
+                ],
             )
 
     def count(self) -> int:
