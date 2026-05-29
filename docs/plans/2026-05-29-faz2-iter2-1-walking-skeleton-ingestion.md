@@ -65,7 +65,7 @@ pyproject.toml                   # MODIFY: setuptools packages.find include "ing
 - Create: `tests/unit/test_ingestion_config.py`
 - Modify: `pyproject.toml` (setuptools packages.find include "ingestion*")
 
-- [ ] **Step 1.1: `pyproject.toml`'da `packages.find` include genişlet**
+- [x] **Step 1.1: `pyproject.toml`'da `packages.find` include genişlet**
 
 Mevcut:
 ```toml
@@ -85,21 +85,21 @@ namespaces = false
 
 `storage*` Iter 2.2'de kullanılacak — şimdiden ekle ki sonradan reinstall gerekmesin.
 
-- [ ] **Step 1.2: `src/ingestion/__init__.py` boş dosya yarat**
+- [x] **Step 1.2: `src/ingestion/__init__.py` boş dosya yarat**
 
 ```bash
 mkdir -p src/ingestion
 touch src/ingestion/__init__.py
 ```
 
-- [ ] **Step 1.3: `pip install -e .` yenile (yeni paketi tanı)**
+- [x] **Step 1.3: `pip install -e .` yenile (yeni paketi tanı)**
 
 ```bash
 pip install -e .
 ```
 Beklenen: `Successfully installed mast-anomaly-detection-0.1.0` (yeni ingestion paketi tanınır).
 
-- [ ] **Step 1.4: `config/ingestion.yaml.example` yarat**
+- [x] **Step 1.4: `config/ingestion.yaml.example` yarat**
 
 ```yaml
 ingestion:
@@ -113,7 +113,7 @@ ingestion:
 
 `db_path` ve `batch` alanları Iter 2.1'de henüz kullanılmaz (Iter 2.2 + 2.3) ama config dosyası başından eksiksiz olsun ki sonraki iterasyonlarda örnek değişmesin.
 
-- [ ] **Step 1.5: `tests/unit/test_ingestion_config.py` failing testleri yaz**
+- [x] **Step 1.5: `tests/unit/test_ingestion_config.py` failing testleri yaz**
 
 ```python
 """IngestionConfig YAML loader testleri (Iter 2.1)."""
@@ -165,14 +165,14 @@ def test_load_ingestion_config_malformed_yaml_raises(tmp_path: Path) -> None:
         load_ingestion_config(yaml_path)
 ```
 
-- [ ] **Step 1.6: Testleri koş, FAIL gör**
+- [x] **Step 1.6: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_ingestion_config.py -v
 ```
 Beklenen: ImportError `ingestion.config` modülü yok.
 
-- [ ] **Step 1.7: `src/ingestion/config.py` yarat**
+- [x] **Step 1.7: `src/ingestion/config.py` yarat**
 
 ```python
 """Ingestion YAML konfigürasyon yükleyicisi (spec § 5)."""
@@ -240,14 +240,14 @@ def load_ingestion_config(path: Path) -> IngestionConfig:
         raise ValueError(f"ingestion config geçersiz ({path}): {e}") from e
 ```
 
-- [ ] **Step 1.8: Testleri koş, PASS gör**
+- [x] **Step 1.8: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_ingestion_config.py -v
 ```
 Beklenen: 3 passed.
 
-- [ ] **Step 1.9: Tam suite + mypy + ruff yeşil**
+- [x] **Step 1.9: Tam suite + mypy + ruff yeşil**
 
 ```bash
 pytest tests/ -q
@@ -256,7 +256,7 @@ ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenar
 ```
 Beklenen: 128 + 3 = 131 passed, mypy clean, ruff clean. mypy/ruff'a `src/ingestion` eklendi.
 
-- [ ] **Step 1.10: Commit**
+- [x] **Step 1.10: Commit**
 
 ```bash
 git add pyproject.toml \
@@ -293,7 +293,7 @@ EOF
 - Create: `src/ingestion/message_parser.py`
 - Create: `tests/unit/test_ingestion_message_parser.py`
 
-- [ ] **Step 2.1: `tests/unit/test_ingestion_message_parser.py` failing testleri yaz**
+- [x] **Step 2.1: `tests/unit/test_ingestion_message_parser.py` failing testleri yaz**
 
 ```python
 """IngestedReading + parse_message testleri (Iter 2.1)."""
@@ -388,14 +388,14 @@ def test_parse_message_wrong_value_type_raises_value_error_or_type_error() -> No
         parse_message(payload)
 ```
 
-- [ ] **Step 2.2: Testleri koş, FAIL gör**
+- [x] **Step 2.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_ingestion_message_parser.py -v
 ```
 Beklenen: 5 yeni test ImportError ile FAIL.
 
-- [ ] **Step 2.3: `src/ingestion/message_parser.py` yarat**
+- [x] **Step 2.3: `src/ingestion/message_parser.py` yarat**
 
 ```python
 """MQTT mesaj payload'ı → IngestedReading parse (spec § 5)."""
@@ -455,14 +455,14 @@ def parse_message(payload: bytes) -> IngestedReading:
     )
 ```
 
-- [ ] **Step 2.4: Testleri koş, PASS gör**
+- [x] **Step 2.4: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_ingestion_message_parser.py -v
 ```
 Beklenen: 5 passed.
 
-- [ ] **Step 2.5: Tam suite + mypy + ruff**
+- [x] **Step 2.5: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -471,7 +471,7 @@ ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenar
 ```
 Beklenen: 131 + 5 = 136 passed, mypy/ruff clean.
 
-- [ ] **Step 2.6: Commit**
+- [x] **Step 2.6: Commit**
 
 ```bash
 git add src/ingestion/message_parser.py tests/unit/test_ingestion_message_parser.py
@@ -502,7 +502,7 @@ Subscriber class — paho-mqtt `Client.subscribe` + `loop_start` background thre
 - Create: `src/ingestion/subscriber.py`
 - Create: `tests/unit/test_ingestion_subscriber.py`
 
-- [ ] **Step 3.1: `tests/unit/test_ingestion_subscriber.py` failing testleri yaz**
+- [x] **Step 3.1: `tests/unit/test_ingestion_subscriber.py` failing testleri yaz**
 
 ```python
 """MQTTSubscriber paho wrapper testleri (Iter 2.1)."""
@@ -593,14 +593,14 @@ def test_subscriber_stop_disconnects_and_loop_stop() -> None:
     mock_client.disconnect.assert_called_once()
 ```
 
-- [ ] **Step 3.2: Testleri koş, FAIL gör**
+- [x] **Step 3.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_ingestion_subscriber.py -v
 ```
 Beklenen: 3 yeni test ImportError ile FAIL.
 
-- [ ] **Step 3.3: `src/ingestion/subscriber.py` yarat**
+- [x] **Step 3.3: `src/ingestion/subscriber.py` yarat**
 
 ```python
 """MQTT subscriber (paho-mqtt wrapper) — spec § 6 kontratı."""
@@ -672,14 +672,14 @@ class MQTTSubscriber:
 
 `Callable` import için: `from collections.abc import Callable`. Mevcut.
 
-- [ ] **Step 3.4: Testleri koş, PASS gör**
+- [x] **Step 3.4: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_ingestion_subscriber.py -v
 ```
 Beklenen: 3 passed.
 
-- [ ] **Step 3.5: Tam suite + mypy + ruff**
+- [x] **Step 3.5: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -688,7 +688,7 @@ ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenar
 ```
 Beklenen: 136 + 3 = 139 passed, mypy/ruff clean.
 
-- [ ] **Step 3.6: Commit**
+- [x] **Step 3.6: Commit**
 
 ```bash
 git add src/ingestion/subscriber.py tests/unit/test_ingestion_subscriber.py
@@ -721,7 +721,7 @@ EOF
 - Create: `src/ingestion/__main__.py`
 - Create: `tests/unit/test_ingestion_main.py`
 
-- [ ] **Step 4.1: `tests/unit/test_ingestion_main.py` failing testleri yaz**
+- [x] **Step 4.1: `tests/unit/test_ingestion_main.py` failing testleri yaz**
 
 ```python
 """Ingestion __main__ entry testleri (Iter 2.1)."""
@@ -796,14 +796,14 @@ def test_handle_message_bad_json_logs_error_and_skips(
                for r in caplog.records)
 ```
 
-- [ ] **Step 4.2: Testleri koş, FAIL gör**
+- [x] **Step 4.2: Testleri koş, FAIL gör**
 
 ```bash
 pytest tests/unit/test_ingestion_main.py -v
 ```
 Beklenen: 2 yeni test ImportError ile FAIL.
 
-- [ ] **Step 4.3: `src/ingestion/__main__.py` yarat**
+- [x] **Step 4.3: `src/ingestion/__main__.py` yarat**
 
 ```python
 """Ingestion servisi entry: python -m ingestion (Iter 2.1 walking skeleton).
@@ -905,14 +905,14 @@ if __name__ == "__main__":  # pragma: no cover
     run()
 ```
 
-- [ ] **Step 4.4: Testleri koş, PASS gör**
+- [x] **Step 4.4: Testleri koş, PASS gör**
 
 ```bash
 pytest tests/unit/test_ingestion_main.py -v
 ```
 Beklenen: 2 passed.
 
-- [ ] **Step 4.5: Tam suite + mypy + ruff**
+- [x] **Step 4.5: Tam suite + mypy + ruff**
 
 ```bash
 pytest tests/ -q
@@ -921,7 +921,7 @@ ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenar
 ```
 Beklenen: 139 + 2 = 141 passed, mypy clean, ruff clean.
 
-- [ ] **Step 4.6: Manuel uçtan uca smoke (simulator + ingestion paralel)**
+- [x] **Step 4.6: Manuel uçtan uca smoke (simulator + ingestion paralel)**
 
 İki ayrı terminal:
 
@@ -945,7 +945,7 @@ Ctrl+C → "Shutdown sinyali alındı: 2" + "MQTT subscriber kapatılıyor" + "I
 
 **NOTE FOR SUBAGENT:** Mosquitto kuruluysa otomatize edebilirsin (kısa 5-10s background simulator + 5s ingestion + grep + kill). Değilse SKIP, kullanıcı manuel doğrulayacak.
 
-- [ ] **Step 4.7: Commit**
+- [x] **Step 4.7: Commit**
 
 ```bash
 git add src/ingestion/__main__.py tests/unit/test_ingestion_main.py
@@ -982,7 +982,7 @@ CLAUDE.md "Mevcut Faz" Iter 2.2 sıradaki olarak güncelle. Plan checkboxları [
 - Modify: `CLAUDE.md`
 - Modify: `docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` (bu dosya — checkbox [x])
 
-- [ ] **Step 5.1: `CLAUDE.md` "Mevcut Faz" güncelle**
+- [x] **Step 5.1: `CLAUDE.md` "Mevcut Faz" güncelle**
 
 Header satırını şununla değiştir:
 ```
@@ -1034,7 +1034,7 @@ index + repository pattern (tek tek insert) + yalın script-based migration (`sc
 tablosu). `python -m ingestion` her mesajı SQLite'a yazacak.
 ```
 
-- [ ] **Step 5.2: Plan dosyasının tüm checkbox'larını [x] yap**
+- [x] **Step 5.2: Plan dosyasının tüm checkbox'larını [x] yap**
 
 ```bash
 perl -i -pe 's/^- \[ \]/- [x]/g' docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md
@@ -1042,7 +1042,7 @@ perl -i -pe 's/^- \[ \]/- [x]/g' docs/plans/2026-05-29-faz2-iter2-1-walking-skel
 
 Verify: `grep -c '^- \[ \]' docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` → 0 olmalı.
 
-- [ ] **Step 5.3: Tam suite son kez**
+- [x] **Step 5.3: Tam suite son kez**
 
 ```bash
 pytest tests/ -q
@@ -1051,7 +1051,7 @@ ruff check src/simulator src/ingestion tests/unit tests/integration tests/scenar
 ```
 Beklenen: 141 passed, mypy/ruff clean.
 
-- [ ] **Step 5.4: Milestone commit**
+- [x] **Step 5.4: Milestone commit**
 
 ```bash
 git add CLAUDE.md docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md
@@ -1082,11 +1082,11 @@ EOF
 
 ## Iter 2.1 Sonu — Bitti Kriterleri (spec § 3 ile birebir)
 
-- [ ] **Kriter 1:** `python -m ingestion` çalışır, çökmez (Task 4 manuel smoke).
-- [ ] **Kriter 2:** Simulator paralel çalışırken ingestion her mesajı loguru ile basar (Task 4 manuel smoke).
-- [ ] **Kriter 3:** Bozuk JSON / eksik field → ERROR log + skip, servis devam (Task 4 unit test `test_handle_message_bad_json_logs_error_and_skips`).
-- [ ] **Kriter 4:** Ctrl+C → "shutdown" log + temiz exit 0 (Task 4 manuel smoke).
-- [ ] **Kriter 5:** Unit testler ≥%85 ingestion coverage; toplam 128 + 13 = 141 (Task 1-4).
+- [x] **Kriter 1:** `python -m ingestion` çalışır, çökmez (Task 4 manuel smoke).
+- [x] **Kriter 2:** Simulator paralel çalışırken ingestion her mesajı loguru ile basar (Task 4 manuel smoke).
+- [x] **Kriter 3:** Bozuk JSON / eksik field → ERROR log + skip, servis devam (Task 4 unit test `test_handle_message_bad_json_logs_error_and_skips`).
+- [x] **Kriter 4:** Ctrl+C → "shutdown" log + temiz exit 0 (Task 4 manuel smoke).
+- [x] **Kriter 5:** Unit testler ≥%85 ingestion coverage; toplam 128 + 13 = 141 (Task 1-4).
 
 Her task'ın sonunda **DİSİPLİN** (CLAUDE.md kuralı): tam suite + mypy(src+tests) + ruff(src+tests) yeşil — per-file değil. Iter 2.1'den itibaren `src/ingestion` da dahil.
 
