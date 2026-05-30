@@ -112,6 +112,34 @@ def test_detect_once_rearms_after_fault_clears(migrated_engine: Engine) -> None:
     assert len(repo.fetch_recent_anomalies(limit=10)) == 2  # tur 1 + tur 3
 
 
+def test_detect_once_escalation_writes_new_row(migrated_engine: Engine) -> None:
+    """Kural-seti büyürse (eskalasyon: 1 kural → 2 kural) debounce DEĞİL, YENİ fused satır yazılır."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
+    detectors: list[Detector] = [
+        MotorTemperatureHigh(critical_threshold_c=80.0),
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10),
+    ]
+    active: dict[str, frozenset[str]] = {}
+
+    # Tur 1: yalnız sıcaklık tetikler → tek kural satırı.
+    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    assert active == {"device_001": frozenset({"motor_temperature_high"})}
+
+    # Erratik voltaj eklenir → ikinci kural da tetikler (eskalasyon).
+    for i, v in enumerate([24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]):
+        repo.insert(_reading("motor_voltage", f"2026-05-30T00:01:{i:02d}.000Z", v))
+    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+
+    # İki satır: tur 1 (tek kural) + tur 2 (fused(2) eskalasyon).
+    stored = repo.fetch_recent_anomalies(limit=10)
+    assert len(stored) == 2
+    rule_names = {a.rule_name for a in stored}
+    assert "motor_temperature_high" in rule_names
+    assert "fused(2)" in rule_names
+    assert active == {"device_001": frozenset({"motor_temperature_high", "motor_voltage_erratic"})}
+
+
 def test_detect_once_below_threshold_writes_nothing(migrated_engine: Engine) -> None:
     """Eşik altı → hiçbir anomali yazılmaz, active boş kalır."""
     repo = TelemetryRepository(migrated_engine)
