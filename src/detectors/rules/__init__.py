@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from detectors.base import Detector
+from detectors.rules.hydraulic_pressure_decline import HydraulicPressureDecline
 from detectors.rules.motor_current_high import MotorCurrentHigh
 from detectors.rules.motor_temperature_high import MotorTemperatureHigh
 from detectors.rules.vibration_elevated import VibrationElevated
@@ -14,4 +15,5 @@ RULE_REGISTRY: dict[str, Callable[..., Detector]] = {
     "motor_temperature_high": MotorTemperatureHigh,
     "motor_current_high": MotorCurrentHigh,
     "vibration_elevated": VibrationElevated,
+    "hydraulic_pressure_decline": HydraulicPressureDecline,
 }
