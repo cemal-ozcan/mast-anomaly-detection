@@ -16,9 +16,11 @@ SENSOR = "motor_temperature"
 class MotorTemperatureHigh(Detector):
     """Pencere içindeki tepe motor sıcaklığı `critical_threshold_c`'yi (strict) aşarsa tetikler."""
 
-    def __init__(self, critical_threshold_c: float) -> None:
-        """Args: critical_threshold_c — kritik sıcaklık eşiği (°C). value > eşik → anomali."""
+    def __init__(self, critical_threshold_c: float, severity: str = "critical") -> None:
+        """Args: critical_threshold_c — kritik sıcaklık eşiği (°C). value > eşik → anomali.
+        severity — anomali şiddeti (config-driven, default critical)."""
         self._threshold = critical_threshold_c
+        self._severity = severity
 
     @property
     def name(self) -> str:
@@ -49,7 +51,7 @@ class MotorTemperatureHigh(Detector):
                 device_id=device_id,
                 rule_name=self.name,
                 sensor=SENSOR,
-                severity="critical",
+                severity=self._severity,
                 score=score,
                 window_start=window_start,
                 window_end=window_end,
