@@ -10,8 +10,9 @@ from typing import Any
 from sqlalchemy import Engine, func, select
 from sqlalchemy.engine import Row
 
+from detectors.base import Anomaly
 from ingestion.message_parser import IngestedReading
-from storage.schema import telemetry
+from storage.schema import anomalies, telemetry
 
 
 class TelemetryRepository:
@@ -43,6 +44,37 @@ class TelemetryRepository:
             state=row.state,
             value=row.value,
             unit=row.unit,
+        )
+
+    @staticmethod
+    def _anomaly_to_dict(anomaly: Anomaly, created_at: str) -> dict[str, object]:
+        """Anomaly + created_at'i anomalies kolon dict'ine çevirir."""
+        return {
+            "device_id": anomaly.device_id,
+            "rule_name": anomaly.rule_name,
+            "sensor": anomaly.sensor,
+            "severity": anomaly.severity,
+            "score": anomaly.score,
+            "window_start": anomaly.window_start,
+            "window_end": anomaly.window_end,
+            "value": anomaly.value,
+            "description": anomaly.description,
+            "created_at": created_at,
+        }
+
+    @staticmethod
+    def _row_to_anomaly(row: Row[Any]) -> Anomaly:
+        """SQLAlchemy Row'u Anomaly'e çevirir (id + created_at dropped)."""
+        return Anomaly(
+            device_id=row.device_id,
+            rule_name=row.rule_name,
+            sensor=row.sensor,
+            severity=row.severity,
+            score=row.score,
+            window_start=row.window_start,
+            window_end=row.window_end,
+            value=row.value,
+            description=row.description,
         )
 
     def insert(self, reading: IngestedReading) -> None:
@@ -141,3 +173,40 @@ class TelemetryRepository:
         with self._engine.connect() as conn:
             rows = conn.execute(stmt).all()
         return [self._row_to_reading(row) for row in rows]
+
+    def insert_anomaly(self, anomaly: Anomaly, created_at: str) -> None:
+        """Tek bir Anomaly'i anomalies tablosuna yazar.
+
+        Args:
+            anomaly: Bir kuralın tetiklediği anomali.
+            created_at: Kalıcılık zamanı ISO 8601 ms (çağıran kendi saatinden verir —
+                test edilebilirlik için DI; telemetry insert deseniyle tutarlı).
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        with self._engine.begin() as conn:
+            conn.execute(
+                anomalies.insert().values(**self._anomaly_to_dict(anomaly, created_at))
+            )
+
+    def fetch_recent_anomalies(self, limit: int) -> list[Anomaly]:
+        """En yeni `limit` anomaliyi created_at DESC döndürür (dashboard Iter 4.3 + doğrulama).
+
+        Args:
+            limit: Maksimum satır sayısı.
+
+        Returns:
+            created_at DESC sıralı Anomaly listesi (id + created_at alanları dropped).
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        stmt = (
+            select(anomalies)
+            .order_by(anomalies.c.created_at.desc())
+            .limit(limit)
+        )
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return [self._row_to_anomaly(row) for row in rows]
