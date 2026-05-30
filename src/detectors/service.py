@@ -21,6 +21,7 @@ from sqlalchemy.exc import OperationalError
 
 from detectors.base import Anomaly, Detector
 from detectors.config import build_detectors, load_detector_config
+from detectors.fusion import fuse_anomalies
 from ingestion.config import load_ingestion_config
 from storage.engine import create_sqlite_engine
 from storage.migrator import MIGRATIONS_DIR, apply_migrations
@@ -84,13 +85,15 @@ def _detect_once(
     repository: TelemetryRepository,
     detectors: list[Detector],
     window_s: int,
-    seen: set[tuple[str, str, str]],
+    active: dict[str, frozenset[str]],
     now: datetime,
 ) -> None:
-    """Tek poll turu: her cihaz × her dedektör → dedup → insert_anomaly.
+    """Tek poll turu: her cihaz × tüm dedektörler → fusion → epizot debounce → insert_anomaly.
 
-    `seen`: (device_id, rule_name, window_end) in-memory dedup (spec § 5 — aynı anomali
-    tekrar yazılmasın). Gelişmiş dedup Faz 5. `now` dışarıdan enjekte edilir (deterministik test).
+    Cihaz başına tüm anomaliler toplanır, `fuse_anomalies` ile tek temsilci satıra indirilir
+    (spec § 5/§ 7 write-side fusion). `active`: device_id → son yazılan katkıda-bulunan kural-seti
+    (epizot debounce): aynı kural-seti süregelirse tekrar yazılmaz; set değişirse (eskalasyon) yeni
+    satır; fault temizlenince active'ten düşer (re-arm). `now` dışarıdan enjekte edilir (deterministik test).
     """
     since = _since_cutoff(now, window_s)
     created_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -99,29 +102,39 @@ def _detect_once(
         window = build_window(repository, device_id, SENSORS, since)
         if window.empty:  # pragma: no cover - list_devices yalnız telemetri'si olan cihazları döndürür (savunmacı)
             continue
+        device_anomalies: list[Anomaly] = []
         for detector in detectors:
             try:
-                anomalies: list[Anomaly] = detector.detect(window)
+                device_anomalies.extend(detector.detect(window))
             except (KeyError, ValueError) as e:
                 logger.error("Kural '{}' hata verdi, atlandı: {}", detector.name, e)
                 continue
-            for anomaly in anomalies:
-                key = (anomaly.device_id, anomaly.rule_name, anomaly.window_end)
-                if key in seen:
-                    continue
-                try:
-                    repository.insert_anomaly(anomaly, created_at)
-                except OperationalError as e:
-                    logger.error("Anomali yazılamadı (atlandı): {}", e)
-                    continue
-                seen.add(key)
-                logger.info(
-                    "Anomali: device={} rule={} value={:.2f} sev={}",
-                    anomaly.device_id,
-                    anomaly.rule_name,
-                    anomaly.value,
-                    anomaly.severity,
-                )
+
+        rule_set = frozenset(a.rule_name for a in device_anomalies)
+        if not rule_set:
+            active.pop(device_id, None)  # fault temizlendi → re-arm
+            continue
+        # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez";
+        # her poll ziyaret edilir, bu yüzden ayrı stale-active temizliği gerekmez.
+        if active.get(device_id) == rule_set:
+            continue  # aynı kural-seti süregeliyor → debounce (yeniden yazma)
+
+        fused = fuse_anomalies(device_anomalies)
+        if fused is None:  # pragma: no cover - rule_set boş değilse fused None olamaz
+            continue
+        try:
+            repository.insert_anomaly(fused, created_at)
+        except OperationalError as e:
+            logger.error("Anomali yazılamadı (atlandı): {}", e)
+            continue
+        active[device_id] = rule_set
+        logger.info(
+            "Alert: device={} rules={} value={:.2f} sev={}",
+            fused.device_id,
+            sorted(rule_set),
+            fused.value,
+            fused.severity,
+        )
 
 
 def run(
@@ -152,7 +165,7 @@ def run(
         apply_migrations(engine, MIGRATIONS_DIR)
         repository = TelemetryRepository(engine)
         detectors: list[Detector] = build_detectors(detector_config)
-        seen: set[tuple[str, str, str]] = set()
+        active: dict[str, frozenset[str]] = {}
 
         shutdown = threading.Event()
 
@@ -172,7 +185,7 @@ def run(
         while not shutdown.is_set():
             try:
                 _detect_once(
-                    repository, detectors, detector_config.window_s, seen, datetime.now(UTC)
+                    repository, detectors, detector_config.window_s, active, datetime.now(UTC)
                 )
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
