@@ -69,3 +69,18 @@ def test_empty_window_returns_empty() -> None:
     rule = MotorTemperatureHigh(critical_threshold_c=80.0)
     empty = pd.DataFrame(columns=["device_id", "timestamp", "sensor", "state", "value"])
     assert rule.detect(empty) == []
+
+
+def test_severity_is_configurable() -> None:
+    """severity constructor ile override edilebilir (config-driven, spec § 5)."""
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, severity="warning")
+    window = pd.DataFrame(
+        {
+            "device_id": ["device_001"],
+            "timestamp": ["2026-05-30T00:00:00.000Z"],
+            "sensor": ["motor_temperature"],
+            "state": ["holding"],
+            "value": [95.0],
+        }
+    )
+    assert rule.detect(window)[0].severity == "warning"
