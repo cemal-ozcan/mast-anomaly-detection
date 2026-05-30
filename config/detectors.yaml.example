@@ -1,27 +1,51 @@
-# Anomali dedektörü yapılandırması örneği
-# Gerçek detectors.yaml dosyasını bu örnekten oluşturun
+# Kural tabanlı dedektör yapılandırması (Faz 4 Iter 4.2).
+# Gerçek config/detectors.yaml dosyasını bu örnekten oluşturun.
+# Eşikler simülatör çıktısına KALİBRE edilmiştir (per-state fiziksel ölçek).
+detectors:
+  poll_interval_s: 5.0
+  window_s: 60
+  rules:
+    - name: motor_temperature_high
+      enabled: true
+      severity: critical
+      params:
+        critical_threshold_c: 80.0
 
-rule_based:
-  - name: motor_current_overload
-    sensor: motor_current
-    condition: greater_than
-    threshold: 15.0
-    duration_seconds: 5
-    severity: high
+    - name: motor_current_high
+      enabled: true
+      severity: high
+      params:
+        state: raising
+        threshold_a: 9.0
+        min_samples: 10
 
-  - name: hydraulic_pressure_drop
-    sensor: hydraulic_pressure
-    condition: drop_rate
-    threshold: -10.0  # bar/dakika
-    severity: medium
+    - name: vibration_elevated
+      enabled: true
+      severity: warning
+      params:
+        state: raising
+        threshold_g: 0.37
+        min_samples: 10
 
-statistical:
-  rolling_window_size: 300  # saniye
-  sigma_threshold: 3.0
-  iqr_multiplier: 1.5
+    - name: hydraulic_pressure_decline
+      enabled: true
+      severity: warning
+      params:
+        state: holding
+        slope_threshold_bar_per_min: 1.5
+        min_samples: 10
 
-ml:
-  isolation_forest:
-    n_estimators: 100
-    contamination: 0.01
-    random_state: 42
+    - name: motor_voltage_erratic
+      enabled: true
+      severity: warning
+      params:
+        std_threshold_v: 1.0
+        min_samples: 10
+
+    - name: sensor_frozen
+      enabled: true
+      severity: warning
+      params:
+        sensor: motor_voltage
+        min_samples: 20
+        epsilon: 0.01
