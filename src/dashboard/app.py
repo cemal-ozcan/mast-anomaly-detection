@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import streamlit as st
+from loguru import logger
 from sqlalchemy.exc import OperationalError
 
 from dashboard.transform import WINDOW_OPTIONS, readings_to_frame, window_to_since
@@ -51,7 +52,13 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
     since = window_to_since(datetime.now(UTC), window)
     cols = st.columns(2)
     for i, sensor in enumerate(SIX_SENSORS):
-        readings = repository.fetch_window(device_id, sensor, since)
+        try:
+            readings = repository.fetch_window(device_id, sensor, since)
+        except OperationalError as e:
+            logger.error("Okuma hatası device={} sensor={}: {}", device_id, sensor, e)
+            with cols[i % 2]:
+                st.error(f"{sensor}: okuma hatası")
+            continue
         frame = readings_to_frame(readings)
         with cols[i % 2]:
             st.subheader(sensor)
@@ -63,11 +70,17 @@ def main() -> None:
     st.set_page_config(page_title="Mast Telemetri Dashboard", layout="wide")
     st.title("Teleskopik Mast — Telemetri Dashboard")
 
-    repository = _get_repository()
-    assert isinstance(repository, TelemetryRepository)
+    try:
+        repository = _get_repository()
+    except FileNotFoundError as e:
+        logger.error("Yapılandırma/DB bulunamadı: {}", e)
+        st.error(f"Yapılandırma/DB bulunamadı: {e} — config/ingestion.yaml var mı, ingestion çalıştı mı?")
+        return
+
     try:
         devices = repository.list_devices()
-    except OperationalError:
+    except OperationalError as e:
+        logger.info("telemetry tablosu henüz yok: {}", e)
         st.info(
             "Henüz veri yok — ingestion telemetry tablosunu oluşturmadı"
             " (simulator + ingestion çalışıyor mu?)"
@@ -83,4 +96,6 @@ def main() -> None:
     _render_charts(repository, device_id, window)
 
 
+# Streamlit betiği yukarıdan aşağıya çalıştırır; __main__ guard yok.
+# Bu modülü import ETME — main() import-time çalışır ve Streamlit runtime gerektirir.
 main()
