@@ -14,7 +14,7 @@ SQLite'a yazılan telemetri verisini **gerçek zamanlı görsel olarak** takip e
 - `src/dashboard/` paketi: `app.py` (Streamlit entry) + `transform.py` (saf helper'lar)
 - `TelemetryRepository`'ye iki okuma metodu: `list_devices()`, `fetch_window(device_id, sensor, since)`
 - Tek sayfa: sidebar'da cihaz selectbox + zaman-aralığı selectbox; ana alanda 6 sensör line chart'ı (2 kolon)
-- Otomatik yenilenme: `st.fragment(run_every="2s")`
+- Otomatik yenilenme: `st.experimental_fragment(run_every="2s")` (Streamlit 1.36 API; 1.37+'da `st.fragment`)
 - Boş/eksik veri durumunda dostça mesaj
 
 **Kapsam dışı (YAGNI — gerekirse önce konuşulur):**
@@ -178,7 +178,7 @@ Boş girdi boş ama doğru-şemalı DataFrame döndürür (st.line_chart boş fr
 2. **Sidebar:** başlık + cihaz selectbox (`repository.list_devices()`) + zaman-aralığı selectbox (`WINDOW_OPTIONS` anahtarları, default "Son 15 dakika").
 3. **Ana alan — auto-refresh fragment:**
    ```python
-   @st.fragment(run_every="2s")
+   @st.experimental_fragment(run_every="2s")  # Streamlit 1.36; 1.37+ → st.fragment
    def _render_charts(repository, device_id, window) -> None:
        since = window_to_since(datetime.now(UTC), window)
        cols = st.columns(2)
@@ -234,7 +234,7 @@ Dashboard **gözlem modu**dur (CLAUDE.md): hiçbir şey yazmaz, hiçbir cihazı 
 
 1. `streamlit run src/dashboard/app.py` ile başlatılır, hata vermeden açılır.
 2. Simulator + ingestion çalışırken canlı veri görselleşir (cihaz seçilir, 6 sensör grafiği görünür).
-3. Sayfa otomatik yenilenir (`st.fragment run_every`), her grafik 2 saniyenin altında yüklenir.
+3. Sayfa otomatik yenilenir (`st.experimental_fragment run_every`), her grafik 2 saniyenin altında yüklenir.
 4. Zaman-aralığı selectbox çalışır (5dk/15dk/1saat/tümü); "Tümü" mevcut tüm veriyi gösterir.
 5. Boş db / cihaz yok durumunda dostça mesaj, çökme yok.
 6. Unit testler (transform + repository read) ≥%85 coverage; tüm önceki testler yeşil; mypy + ruff temiz.
