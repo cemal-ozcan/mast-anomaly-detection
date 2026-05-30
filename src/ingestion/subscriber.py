@@ -46,6 +46,8 @@ class MQTTSubscriber:
         """Broker'a bağlan, topic'e subscribe ol, background loop'u başlat.
 
         on_message callback'i `message_handler`'a delege eder.
+        reconnect_delay_set(min_delay=1, max_delay=30) ile broker düşerse
+        exponential-backoff otomatik yeniden bağlantı sağlanır (spec § 6, kriter 2).
         """
         logger.info("MQTT subscriber bağlanılıyor: {}:{}", self.config.host, self.config.port)
 
@@ -53,6 +55,7 @@ class MQTTSubscriber:
             self.message_handler(msg)
 
         self._client.on_message = _on_message
+        self._client.reconnect_delay_set(min_delay=1, max_delay=30)
         self._client.connect(self.config.host, self.config.port, self.config.keepalive)
         self._client.subscribe(self.topic_pattern, qos=self.config.qos)
         self._client.loop_start()

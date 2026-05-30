@@ -84,3 +84,25 @@ def test_subscriber_stop_disconnects_and_loop_stop() -> None:
 
     mock_client.loop_stop.assert_called_once()
     mock_client.disconnect.assert_called_once()
+
+
+def test_connect_sets_reconnect_backoff() -> None:
+    """connect_and_start paho reconnect_delay_set(1, 30) çağırır (kriter 2)."""
+    from unittest.mock import MagicMock
+
+    from ingestion.subscriber import MQTTSubscriber
+    from simulator.config import MQTTConfig
+
+    mock_client = MagicMock()
+    config = MQTTConfig(
+        host="localhost", port=1883, client_id_prefix="test",
+        keepalive=60, telemetry_prefix="telemetry", qos=1,
+    )
+    sub = MQTTSubscriber(
+        config=config,
+        topic_pattern="telemetry/+/+",
+        message_handler=lambda _msg: None,
+        client=mock_client,
+    )
+    sub.connect_and_start()
+    mock_client.reconnect_delay_set.assert_called_once_with(min_delay=1, max_delay=30)
