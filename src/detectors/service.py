@@ -20,7 +20,7 @@ from loguru import logger
 from sqlalchemy.exc import OperationalError
 
 from detectors.base import Anomaly, Detector
-from detectors.rules.motor_temperature_high import MotorTemperatureHigh
+from detectors.config import build_detectors, load_detector_config
 from ingestion.config import load_ingestion_config
 from storage.engine import create_sqlite_engine
 from storage.migrator import MIGRATIONS_DIR, apply_migrations
@@ -126,26 +126,24 @@ def _detect_once(
 
 def run(
     ingestion_config_path: Path = Path("config/ingestion.yaml"),
-    poll_interval_s: float = 5.0,
-    window_s: int = 60,
-    motor_temp_threshold_c: float = 80.0,
+    detectors_config_path: Path = Path("config/detectors.yaml"),
 ) -> None:  # pragma: no cover
     """Detector servisini başlat. SIGINT/SIGTERM gelene kadar bloklar.
 
-    db_path ingestion.yaml'dan okunur (telemetry ile aynı DB paylaşılır). Eşik + poll
-    parametreleri Iter 4.1'de constructor default (DI); Iter 4.2'de detectors.yaml'a taşınır.
+    db_path ingestion.yaml'dan (paylaşılan telemetry.db); poll_interval_s, window_s ve
+    kural seti detectors.yaml'dan (config-driven, Iter 4.2). Gözlem modu: yalnız telemetry
+    okur, yalnız anomalies yazar.
 
     Args:
-        ingestion_config_path: db_path için ingestion.yaml yolu (paylaşılan DB).
-        poll_interval_s: Poll periyodu (saniye).
-        window_s: Her turda bakılan geri-pencere (saniye).
-        motor_temp_threshold_c: MotorTemperatureHigh kritik eşiği (°C).
+        ingestion_config_path: db_path için ingestion.yaml yolu.
+        detectors_config_path: kural seti + poll/window için detectors.yaml yolu.
 
     Raises:
         FileNotFoundError: Config dosyası yoksa.
         ValueError: Config geçersizse.
     """
     ingestion_config = load_ingestion_config(ingestion_config_path)
+    detector_config = load_detector_config(detectors_config_path)
     logger.remove()
     logger.add(sys.stderr, level=ingestion_config.log_level)
 
@@ -153,9 +151,7 @@ def run(
     try:
         apply_migrations(engine, MIGRATIONS_DIR)
         repository = TelemetryRepository(engine)
-        detectors: list[Detector] = [
-            MotorTemperatureHigh(critical_threshold_c=motor_temp_threshold_c),
-        ]
+        detectors: list[Detector] = build_detectors(detector_config)
         seen: set[tuple[str, str, str]] = set()
 
         shutdown = threading.Event()
@@ -169,16 +165,18 @@ def run(
 
         logger.info(
             "Detector servisi başladı: poll={}s window={}s kurallar={}",
-            poll_interval_s,
-            window_s,
+            detector_config.poll_interval_s,
+            detector_config.window_s,
             [d.name for d in detectors],
         )
         while not shutdown.is_set():
             try:
-                _detect_once(repository, detectors, window_s, seen, datetime.now(UTC))
+                _detect_once(
+                    repository, detectors, detector_config.window_s, seen, datetime.now(UTC)
+                )
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
-            shutdown.wait(poll_interval_s)
+            shutdown.wait(detector_config.poll_interval_s)
     finally:
         engine.dispose()
         logger.info("Detector servisi temiz kapandı")
