@@ -130,6 +130,12 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 - Sentetik arızalar yakalanabiliyor
 - Kural tabanlı dedektörle tutarlı sonuçlar (overlap analizi)
 
+**Spec (tek hakem):** `docs/specs/2026-05-31-faz5-statistical-detector-design.md` — on-the-fly rolling baseline + aynı servise entegre + tek uzun pencere (recent-vs-rest). 2 iterasyon.
+
+**İlerleme:**
+- ✅ Iter 5.1 — İstatistiksel altyapı (`statistical/base` recent-vs-rest split + (sensor,state) gruplama) + `ThreeSigma` (on-the-fly rolling μ±k·σ) + `statistical` config bloğu + poll servisinin iki-pencere'ye (kural 120s + istatistik 3600s) geçişi; istatistik anomalileri kural anomalileriyle `fused(N)`'de birleşir — 2026-05-31. 277 test, statistical %96-100. Canlı smoke: `three_sigma:motor_current` tetiklendi. "Baseline güncelleme mekanizması" on-the-fly rolling ile otomatik.
+- ⏳ Iter 5.2 — `IQR` dedektörü + A/B/C istatistiksel imza testleri + **overlap analizi** (kabul kriteri 3: kural ve istatistik aynı arızada tutarlı) — sıradaki
+
 ---
 
 ## Faz 6 — Makine Öğrenmesi Dedektörü
