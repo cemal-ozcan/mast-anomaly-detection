@@ -27,6 +27,7 @@ from sqlalchemy.exc import OperationalError  # noqa: E402
 
 from dashboard.transform import (  # noqa: E402
     WINDOW_OPTIONS,
+    anomalies_to_frame,
     readings_to_frame,
     window_to_since,
 )
@@ -57,6 +58,26 @@ def _get_repository() -> TelemetryRepository:
     """Engine + repository bir kez kurulur (her rerun'da yeniden açılmaz)."""
     engine = create_sqlite_engine(_resolve_db_path())
     return TelemetryRepository(engine)
+
+
+@st.experimental_fragment(run_every="5s")
+def _render_alerts(repository: TelemetryRepository) -> None:
+    """Filo geneli son anomalileri (fused alert'ler) tablo olarak gösterir; 5s'de bir yenilenir.
+
+    Gözlem modu: yalnız fetch_recent_anomalies okur. anomalies tablosu yoksa (detector hiç
+    çalışmadı) bilgilendirir; çökmez (spec § 7 hata yönetimi deseni).
+    """
+    st.subheader("🚨 Aktif Uyarılar")
+    try:
+        anomalies = repository.fetch_recent_anomalies(limit=20)
+    except OperationalError as e:
+        logger.info("anomalies tablosu henüz yok: {}", e)
+        st.info("Henüz anomali yok — detector servisi (`python -m detectors`) çalıştı mı?")
+        return
+    if not anomalies:
+        st.caption("Aktif uyarı yok.")
+        return
+    st.dataframe(anomalies_to_frame(anomalies), use_container_width=True, hide_index=True)
 
 
 @st.experimental_fragment(run_every="2s")
@@ -103,6 +124,9 @@ def main() -> None:
     if not devices:
         st.info("Henüz veri yok — simulator + ingestion çalışıyor mu?")
         return
+
+    _render_alerts(repository)
+    st.divider()
 
     device_id: str = st.sidebar.selectbox("Cihaz", devices) or devices[0]
     window: str = st.sidebar.selectbox("Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1) or list(WINDOW_OPTIONS.keys())[1]
