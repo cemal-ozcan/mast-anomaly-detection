@@ -1,0 +1,63 @@
+"""MotorCurrentHigh: belirli state'te motor akımı pencere-ortalaması eşiği aşarsa anomali.
+
+Spec § 6 (A, eşik+süre). Aktif state (raising) içinde motor_current'in pencere
+ortalaması `threshold_a`'yı aşar VE en az `min_samples` örnek varsa (sürekli yük —
+"süre" boyutu) tetikler. Eşik simülatör çıktısına kalibre: clean RAISING ort. ~8.0A,
+MechanicalWear ~10.0A → 9.0A ayırma noktası.
+"""
+from __future__ import annotations
+
+import pandas as pd
+
+from detectors.base import Anomaly, Detector
+
+SENSOR = "motor_current"
+
+
+class MotorCurrentHigh(Detector):
+    """RAISING (config'lenebilir state) motor_current pencere-ortalaması eşiği aşarsa tetikler."""
+
+    def __init__(
+        self,
+        state: str,
+        threshold_a: float,
+        min_samples: int,
+        severity: str = "warning",
+    ) -> None:
+        """Args: state — aktif state ("raising"); threshold_a — akım eşiği (A);
+        min_samples — minimum örnek (süre koşulu); severity — anomali şiddeti."""
+        self._state = state
+        self._threshold = threshold_a
+        self._min_samples = min_samples
+        self._severity = severity
+
+    @property
+    def name(self) -> str:
+        return "motor_current_high"
+
+    def detect(self, window: pd.DataFrame) -> list[Anomaly]:
+        if window.empty:
+            return []
+        rows = window[(window["sensor"] == SENSOR) & (window["state"] == self._state)]
+        if len(rows) < self._min_samples:
+            return []
+        mean_a = float(rows["value"].mean())
+        if mean_a <= self._threshold:
+            return []
+        score = min(1.0, (mean_a - self._threshold) / self._threshold)
+        return [
+            Anomaly(
+                device_id=str(rows["device_id"].iloc[0]),
+                rule_name=self.name,
+                sensor=SENSOR,
+                severity=self._severity,
+                score=score,
+                window_start=str(rows["timestamp"].min()),
+                window_end=str(rows["timestamp"].max()),
+                value=mean_a,
+                description=(
+                    f"motor_current {self._state} ortalaması {mean_a:.2f}A "
+                    f"eşik {self._threshold:.2f}A üstünde"
+                ),
+            )
+        ]
