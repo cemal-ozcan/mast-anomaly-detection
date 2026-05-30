@@ -141,11 +141,12 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 4 — Kural Tabanlı Dedektör** (sıradaki) — Faz 3 tamamlandı (2026-05-30)
+**Faz 4 — Kural Tabanlı Dedektör** (devam ediyor) — Iter 4.1 tamamlandı (2026-05-30); sıradaki Iter 4.2
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
 - **Spec (Faz 3):** `docs/specs/2026-05-30-faz3-dashboard-design.md`
+- **Spec (Faz 4):** `docs/specs/2026-05-30-faz4-rule-detector-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
@@ -157,14 +158,16 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-29-faz2-iter2-2-sqlite-repository.md` (7/7 ✅)
   - `docs/plans/2026-05-30-faz2-iter2-3-batch-writer-resilience.md` (7/7 ✅)
   - `docs/plans/2026-05-30-faz3-dashboard.md` (4/4 ✅)
+  - `docs/plans/2026-05-30-faz4-iter4-1-walking-skeleton-detector.md` (5/5 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
   - Ingestion (Iter 2.3): `python -m ingestion` mesajları BatchWriter kuyruğuna alır; ayrı drainer thread batch (`insert_batch`) ile SQLite'a yazar (`data/telemetry.db`, boot'ta idempotent migration, broker kopmasında paho reconnect). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Throughput smoke (opt-in): `RUN_SMOKE=1 SMOKE_DURATION_S=5 pytest tests/smoke/` (gerçek Mosquitto gerekir).
   - **Not (manuel smoke):** Aynı broker'da iki ingestion instance'ı aynı `client_id`'yi (`mast-anomaly-subscriber`) paylaşır → biri diğerini broker'dan düşürür. Manuel test tek instance ile yapılmalı; throughput smoke izole `smoke/+/+` namespace + `smoke` client_id kullanır (çakışma yok).
   - Dashboard (Faz 3): `streamlit run src/dashboard/app.py` — cihaz + zaman-aralığı seçici, 6 sensör line chart'ı, `st.experimental_fragment` 2s otomatik yenileme. `data/telemetry.db`'yi read-only sorgular (gözlem modu). `DASHBOARD_DB_PATH` env ile farklı DB'ye yönlendirilebilir. Streamlit 1.36 → `st.experimental_fragment` (1.37+'da `st.fragment`).
-  - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` veya `python -m ingestion` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur.
-- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios`.
+  - Detector (Faz 4 Iter 4.1): `python -m detectors` — `config/ingestion.yaml`'dan `db_path` okur (telemetry ile aynı DB), boot'ta idempotent migration (002_anomalies), her `poll_interval_s`'de (default 5s) her cihaz için son `window_s` (default 60s) pencereyi kurup aktif dedektörleri (şimdilik tek: `MotorTemperatureHigh`, eşik 80°C DI) çalıştırır, anomalileri `anomalies` tablosuna yazar. Gözlem modu: yalnız `telemetry` okur, yalnız `anomalies` yazar. In-memory dedup `(device,rule,window_end)`. SIGINT/SIGTERM graceful shutdown. Doğrula: `sqlite3 data/telemetry.db "SELECT * FROM anomalies"`. Eşik/poll config-driven değil (Iter 4.2 `config/detectors.yaml`). Simülatör F (overtemp) üretmediğinden gerçek anomali görmek için ya düşük eşik ver ya da SQL ile eşik-üstü satır seed et.
+  - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` / `python -m ingestion` / `python -m detectors` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur. Sistem `python`/`pytest` farklı yorumlayıcıya (anaconda 3.13, SQLAlchemy uyumsuz) düşebilir → testleri `.venv/bin/python -m pytest ...` ile çalıştır.
+- **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios`.
 
 ### Iterasyon 1 (Walking Skeleton) — Tamamlandı (2026-05-19)
 
@@ -302,6 +305,33 @@ skipped; Faz 3'te +6 repository read, +8 transform), pandas mypy override (`igno
 sadece pandas; strict korunur).
 Headless boot smoke + boş-DB/eksik-config graceful degradation doğrulandı (çökme yok).
 **Faz 2 + Faz 3 kabul kriterleri karşılandı. Sıradaki büyük adım: Faz 4 — Kural Tabanlı Dedektör.**
+
+## Faz 4 (Kural Tabanlı Dedektör)
+
+### Iterasyon 4.1 (Walking Skeleton — Detector arayüzü + Anomali persistence + 1 kural + servis) — Tamamlandı (2026-05-30)
+
+`src/detectors/` paketi kuruldu: `base.py` (`Anomaly` frozen dataclass — 9 alan spec § 5;
+`Detector` ABC `name` property + `detect(window: pd.DataFrame) -> list[Anomaly]`; SAF kontrat,
+yalnız pandas/abc/dataclasses import eder → storage'a bağımlı DEĞİL, döngü yok), `rules/`
+(`motor_temperature_high.py` — `MotorTemperatureHigh(critical_threshold_c)` strict `>` eşik,
+tek Anomaly, score `min(1,(peak-eşik)/eşik)`; `RULE_REGISTRY` tek girdi), `service.py`
+(`SENSORS` 6-sensör; saf `build_window(repo, device_id, sensors, since)` uzun-format
+`[device_id, timestamp, sensor, state, value]`; `_since_cutoff`; `_detect_once(repo, detectors,
+window_s, seen, now)` — clock DI, in-memory dedup `(device,rule,window_end)`, per-rule
+`(KeyError,ValueError)` error-swallow spec § 8, `insert_anomaly` `OperationalError` swallow;
+`run()` poll loop ingestion `run()` deseni + SIGINT/SIGTERM graceful + `# pragma: no cover`),
+`__main__.py` (`python -m detectors`). Storage: `migrations/002_anomalies.sql` (anomalies wide
+tablo + `idx_anomalies_device_created`), `schema.py` `anomalies` Table (DDL ÇALIŞTIRMAZ),
+repository `insert_anomaly(anomaly, created_at)` + `fetch_recent_anomalies(limit)` (created_at
+DESC) + `_anomaly_to_dict`/`_row_to_anomaly` DRY. **Pencere şeması spec § 5'e göre `device_id`
+kolonu eklenmiş** (Anomaly.device_id zorunlu; spec § 5 güncellendi). Eşik/poll config-driven
+DEĞİL (constructor DI; Iter 4.2 `config/detectors.yaml`). 180 → 202 test (+22: base 4, rule 6,
+build_window 3, _detect_once 4, anomaly-repository 4, integration 2; +2 collateral schema_version
+`==2` fix), detectors paketi ≥%94 (base/rule/registry %100, service %94 — yalnız savunmacı
+empty-branch + insert-OperationalError path pragma'lı). mypy strict + ruff temiz. **Manuel smoke
+(gerçek `python -m detectors`):** eşik-üstü 95°C seed → 1 poll turunda critical anomali yazıldı,
+2. turda dedup ile tekrar yazılmadı, SIGINT temiz kapanış. Iter 4.2 (≥5 kural + config + A/B/C
+imza testleri + eşik kalibrasyonu) sıradaki.
 
 Faz seyri: `docs/ROADMAP.md`.
 
