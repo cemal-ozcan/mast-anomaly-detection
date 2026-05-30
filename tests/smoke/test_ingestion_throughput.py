@@ -82,15 +82,18 @@ def test_throughput_no_loss(tmp_path: Path, smoke_duration_s: float) -> None:
 
     published: list[int] = [0]
     stop_pub = threading.Event()
-    pub_thread = threading.Thread(target=_publish_load, args=(stop_pub, published))
+    pub_thread = threading.Thread(
+        target=_publish_load, args=(stop_pub, published), daemon=True
+    )
 
     try:
         pub_thread.start()
         time.sleep(smoke_duration_s)
+    finally:
         stop_pub.set()
         pub_thread.join(timeout=10)
-        time.sleep(3.0)  # in-flight mesajların drain olması için
-    finally:
+        # 3s > flush_interval_s (1.0) + MQTT QoS1 transit payı: in-flight mesajlar drain olsun
+        time.sleep(3.0)
         subscriber.stop()
         writer.stop()
 
@@ -101,3 +104,4 @@ def test_throughput_no_loss(tmp_path: Path, smoke_duration_s: float) -> None:
     assert sent > 0, "publisher hiç mesaj yayınlamadı"
     loss_ratio = (sent - written) / sent
     assert loss_ratio <= 0.01, f"kayıp %{loss_ratio*100:.2f} (>%1): sent={sent} written={written}"
+    assert written <= sent, f"yazılan ({written}) yayınlanandan ({sent}) fazla — topic izolasyonu/çift sayım?"
