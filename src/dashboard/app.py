@@ -9,17 +9,30 @@ db_path: DASHBOARD_DB_PATH env varsa o, yoksa config/ingestion.yaml db_path.
 from __future__ import annotations
 
 import os
+import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-import streamlit as st
-from loguru import logger
-from sqlalchemy.exc import OperationalError
+# `streamlit run src/dashboard/app.py` yalnızca src/dashboard'ı sys.path'e ekler; top-level
+# paketler (dashboard, ingestion, storage) için src/ kökünü ekle. Editable install .pth'i
+# Python 3.11.15 hardening ile silent-skip edildiğinden bu bootstrap gerekir (env notu).
+# tests/conftest.py aynı deseni pytest için kullanır.
+_SRC_ROOT = Path(__file__).resolve().parent.parent
+if str(_SRC_ROOT) not in sys.path:
+    sys.path.insert(0, str(_SRC_ROOT))
 
-from dashboard.transform import WINDOW_OPTIONS, readings_to_frame, window_to_since
-from ingestion.config import load_ingestion_config
-from storage.engine import create_sqlite_engine
-from storage.repository import TelemetryRepository
+import streamlit as st  # noqa: E402
+from loguru import logger  # noqa: E402
+from sqlalchemy.exc import OperationalError  # noqa: E402
+
+from dashboard.transform import (  # noqa: E402
+    WINDOW_OPTIONS,
+    readings_to_frame,
+    window_to_since,
+)
+from ingestion.config import load_ingestion_config  # noqa: E402
+from storage.engine import create_sqlite_engine  # noqa: E402
+from storage.repository import TelemetryRepository  # noqa: E402
 
 SIX_SENSORS = [
     "motor_current",
