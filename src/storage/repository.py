@@ -5,6 +5,8 @@ Iter 2.2 bitti kriteri 2 & 3 doğrulaması için minimal okuma yüzeyidir.
 """
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import Engine, func, select
 
 from ingestion.message_parser import IngestedReading
@@ -29,6 +31,18 @@ class TelemetryRepository:
             "value": reading.value,
             "unit": reading.unit,
         }
+
+    @staticmethod
+    def _row_to_reading(row: Any) -> IngestedReading:
+        """SQLAlchemy Row'u IngestedReading'e çevirir (fetch_recent + fetch_window DRY)."""
+        return IngestedReading(
+            device_id=row.device_id,
+            sensor=row.sensor,
+            timestamp=row.timestamp,
+            state=row.state,
+            value=row.value,
+            unit=row.unit,
+        )
 
     def insert(self, reading: IngestedReading) -> None:
         """Tek bir IngestedReading'i telemetry tablosuna yazar.
@@ -85,14 +99,34 @@ class TelemetryRepository:
         )
         with self._engine.connect() as conn:
             rows = conn.execute(stmt).all()
-        return [
-            IngestedReading(
-                device_id=row.device_id,
-                sensor=row.sensor,
-                timestamp=row.timestamp,
-                state=row.state,
-                value=row.value,
-                unit=row.unit,
-            )
-            for row in rows
-        ]
+        return [self._row_to_reading(row) for row in rows]
+
+    def list_devices(self) -> list[str]:
+        """telemetry'deki distinct device_id'leri alfabetik sıralı döndürür (veri yoksa boş)."""
+        stmt = select(telemetry.c.device_id).distinct().order_by(telemetry.c.device_id)
+        with self._engine.connect() as conn:
+            return [row[0] for row in conn.execute(stmt).all()]
+
+    def fetch_window(
+        self, device_id: str, sensor: str, since: str | None
+    ) -> list[IngestedReading]:
+        """Bir cihaz+sensör için `since`'ten itibaren okumaları timestamp ASC döndürür (spec § 4).
+
+        Args:
+            device_id: Cihaz kimliği.
+            sensor: Sensör adı.
+            since: ISO 8601 ms cutoff (YYYY-MM-DDTHH:MM:SS.sssZ) veya None (tümü).
+                timestamp >= since olan satırlar döner.
+
+        Returns:
+            Eskiden yeniye (ASC) sıralı IngestedReading listesi.
+        """
+        stmt = select(telemetry).where(
+            telemetry.c.device_id == device_id, telemetry.c.sensor == sensor
+        )
+        if since is not None:
+            stmt = stmt.where(telemetry.c.timestamp >= since)
+        stmt = stmt.order_by(telemetry.c.timestamp.asc())
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return [self._row_to_reading(row) for row in rows]

@@ -92,3 +92,58 @@ def test_insert_batch_empty_is_noop(migrated_engine: Engine) -> None:
     repo = TelemetryRepository(migrated_engine)
     repo.insert_batch([])
     assert repo.count() == 0
+
+
+def test_list_devices_empty(migrated_engine: Engine) -> None:
+    """Boş tablo → boş liste."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    assert repo.list_devices() == []
+
+
+def test_list_devices_distinct_sorted(migrated_engine: Engine) -> None:
+    """Distinct device_id'ler alfabetik sıralı döner (tekrarlar tekilleşir)."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("2026-05-30T00:00:00.000Z", 1.0, device="device_002"))
+    repo.insert(_reading("2026-05-30T00:00:01.000Z", 2.0, device="device_001"))
+    repo.insert(_reading("2026-05-30T00:00:02.000Z", 3.0, device="device_002"))
+    assert repo.list_devices() == ["device_001", "device_002"]
+
+
+def test_fetch_window_since_none_returns_all_asc(migrated_engine: Engine) -> None:
+    """since=None → tüm satırlar timestamp ASC sıralı (insert sırasından bağımsız)."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("2026-05-30T00:00:02.000Z", 2.0))
+    repo.insert(_reading("2026-05-30T00:00:00.000Z", 0.0))
+    repo.insert(_reading("2026-05-30T00:00:01.000Z", 1.0))
+    rows = repo.fetch_window("device_001", "motor_current", None)
+    assert [r.value for r in rows] == [0.0, 1.0, 2.0]
+
+
+def test_fetch_window_since_filters_inclusive(migrated_engine: Engine) -> None:
+    """since cutoff'tan (dahil) itibaren satırlar döner."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    for i in range(4):
+        repo.insert(_reading(f"2026-05-30T00:00:0{i}.000Z", float(i)))
+    rows = repo.fetch_window("device_001", "motor_current", "2026-05-30T00:00:02.000Z")
+    assert [r.value for r in rows] == [2.0, 3.0]
+
+
+def test_fetch_window_filters_device_and_sensor(migrated_engine: Engine) -> None:
+    """fetch_window yalnızca eşleşen device_id + sensor satırlarını döner."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("2026-05-30T00:00:00.000Z", 1.0, sensor="motor_current"))
+    repo.insert(_reading("2026-05-30T00:00:01.000Z", 2.0, sensor="vibration"))
+    repo.insert(_reading("2026-05-30T00:00:02.000Z", 3.0, device="device_002"))
+    rows = repo.fetch_window("device_001", "motor_current", None)
+    assert len(rows) == 1
+    assert rows[0].value == 1.0
