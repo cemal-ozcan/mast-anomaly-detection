@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 4 — Kural Tabanlı Dedektör** (devam ediyor) — Iter 4.1 tamamlandı (2026-05-30); sıradaki Iter 4.2
+**Faz 4 — Kural Tabanlı Dedektör** (devam ediyor) — Iter 4.1 + 4.2 tamamlandı (2026-05-30); sıradaki Iter 4.3 (fusion + dashboard alerts paneli + FP doğrulama)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -159,13 +159,14 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-30-faz2-iter2-3-batch-writer-resilience.md` (7/7 ✅)
   - `docs/plans/2026-05-30-faz3-dashboard.md` (4/4 ✅)
   - `docs/plans/2026-05-30-faz4-iter4-1-walking-skeleton-detector.md` (5/5 ✅)
+  - `docs/plans/2026-05-30-faz4-iter4-2-rule-set-config-signatures.md` (9/9 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
   - Ingestion (Iter 2.3): `python -m ingestion` mesajları BatchWriter kuyruğuna alır; ayrı drainer thread batch (`insert_batch`) ile SQLite'a yazar (`data/telemetry.db`, boot'ta idempotent migration, broker kopmasında paho reconnect). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Throughput smoke (opt-in): `RUN_SMOKE=1 SMOKE_DURATION_S=5 pytest tests/smoke/` (gerçek Mosquitto gerekir).
   - **Not (manuel smoke):** Aynı broker'da iki ingestion instance'ı aynı `client_id`'yi (`mast-anomaly-subscriber`) paylaşır → biri diğerini broker'dan düşürür. Manuel test tek instance ile yapılmalı; throughput smoke izole `smoke/+/+` namespace + `smoke` client_id kullanır (çakışma yok).
   - Dashboard (Faz 3): `streamlit run src/dashboard/app.py` — cihaz + zaman-aralığı seçici, 6 sensör line chart'ı, `st.experimental_fragment` 2s otomatik yenileme. `data/telemetry.db`'yi read-only sorgular (gözlem modu). `DASHBOARD_DB_PATH` env ile farklı DB'ye yönlendirilebilir. Streamlit 1.36 → `st.experimental_fragment` (1.37+'da `st.fragment`).
-  - Detector (Faz 4 Iter 4.1): `python -m detectors` — `config/ingestion.yaml`'dan `db_path` okur (telemetry ile aynı DB), boot'ta idempotent migration (002_anomalies), her `poll_interval_s`'de (default 5s) her cihaz için son `window_s` (default 60s) pencereyi kurup aktif dedektörleri (şimdilik tek: `MotorTemperatureHigh`, eşik 80°C DI) çalıştırır, anomalileri `anomalies` tablosuna yazar. Gözlem modu: yalnız `telemetry` okur, yalnız `anomalies` yazar. In-memory dedup `(device,rule,window_end)`. SIGINT/SIGTERM graceful shutdown. Doğrula: `sqlite3 data/telemetry.db "SELECT * FROM anomalies"`. Eşik/poll config-driven değil (Iter 4.2 `config/detectors.yaml`). Simülatör F (overtemp) üretmediğinden gerçek anomali görmek için ya düşük eşik ver ya da SQL ile eşik-üstü satır seed et.
+  - Detector (Faz 4 Iter 4.2): **önce** `cp config/detectors.yaml.example config/detectors.yaml` (gitignored runtime config), sonra `python -m detectors`. `config/ingestion.yaml`'dan `db_path`, `config/detectors.yaml`'dan poll/window/kural seti okur. Boot'ta idempotent migration (002_anomalies), her `poll_interval_s`'de (5s) her cihaz için son `window_s` (120s) pencereyi kurup config'teki aktif dedektörleri çalıştırır, anomalileri `anomalies` tablosuna yazar. **6 kural (5 tip):** motor_temperature_high (eşik), motor_current_high (eşik+süre, RAISING mean>9A), vibration_elevated (oran, RAISING mean>0.37g), hydraulic_pressure_decline (türev, HOLDING slope<-3 bar/dk, min_samples 60), motor_voltage_erratic (varyans, std>1V), sensor_frozen (süre). Eşikler simülatör çıktısına kalibre (per-state fiziksel ölçek). Gözlem modu: yalnız `telemetry` okur, yalnız `anomalies` yazar. In-memory dedup `(device,rule,window_end)`. SIGINT/SIGTERM graceful shutdown. Doğrula: `sqlite3 data/telemetry.db "SELECT device_id,rule_name,COUNT(*) FROM anomalies GROUP BY 1,2"`.
   - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` / `python -m ingestion` / `python -m detectors` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur. Sistem `python`/`pytest` farklı yorumlayıcıya (anaconda 3.13, SQLAlchemy uyumsuz) düşebilir → testleri `.venv/bin/python -m pytest ...` ile çalıştır.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios`.
 
@@ -332,6 +333,31 @@ empty-branch + insert-OperationalError path pragma'lı). mypy strict + ruff temi
 (gerçek `python -m detectors`):** eşik-üstü 95°C seed → 1 poll turunda critical anomali yazıldı,
 2. turda dedup ile tekrar yazılmadı, SIGINT temiz kapanış. Iter 4.2 (≥5 kural + config + A/B/C
 imza testleri + eşik kalibrasyonu) sıradaki.
+
+### Iterasyon 4.2 (Kural Seti + Config + A/B/C İmza Testleri) — Tamamlandı (2026-05-30)
+
+5 yeni kural (`src/detectors/rules/`): `MotorCurrentHigh` (eşik+süre, RAISING pencere-ort.),
+`VibrationElevated` (oran), `HydraulicPressureDecline` (türev, numpy polyfit slope bar/dk),
+`MotorVoltageErratic` (varyans, std), `SensorFrozen` (süre/universal). `MotorTemperatureHigh`
+config-driven `severity` kazandı. `RULE_REGISTRY: dict[str, Callable[..., Detector]]`. **Config:**
+`src/detectors/config.py` (`DetectorConfig`/`RuleConfig` + `load_detector_config` + `build_detectors`
+— `RULE_REGISTRY[name](severity=..., **params)` generic kurulum, bilinmeyen kural/bozuk param →
+ValueError), `config/detectors.yaml.example` kalibre 6-kural. `service.run()` artık config-driven
+(hard-coded dedektör listesi YOK). **İmza testleri** (`tests/scenarios/test_rule_signatures.py` +
+`build_detector_window` harness): A/B/C senaryosu → ilgili kural tetiklenir, clean fixture → 0 FP
+(mutation-probe ile genuine doğrulandı). **Eşikler ölçümle kalibre** (seed 42, engine harness):
+motor_current RAISING 8.0→10.0A (eşik 9.0), vibration 0.30→0.45g (0.37), voltage std 0.2→4.0V (1.0),
+pressure slope -0.16→-5.16 bar/dk. **Canlı uçtan-uca smoke FP düzeltmesi:** ilk smoke clean cihazda
+hydraulic FP gösterdi (az-örnekli gürültülü slope std ~13 bar/dk @ n=10 → ~%45 FP); kalibrasyon tek
+118-örnekli epizodda yapılmıştı. Düzeltme: `window_s` 60→120, hydraulic `min_samples` 10→60 + slope
+eşiği 1.5→3.0 (clean FP ~%0.02, kaçak TP ~%99); +3 regresyon testi. Re-smoke: clean cihaz 0 anomali,
+gerçek kaçak 24× tespit; mechanical_wear (ramp_up 300s) + electrical_fault (start 300s) 240s smoke'ta
+henüz gelişmemiş → doğru şekilde sessiz. **202→247 test** (+45: 6 kural × ~5 + config 8 + integration 1
++ imza 5 + regresyon 3), detectors paketi %96.1, mypy strict + ruff temiz.
+
+**Ders (kalıcı):** istatistiksel eşik kuralları (slope/std) AZ örnekte oynaktır — kalibrasyonu
+ÜRETİM pencere boyutunda (min_samples) yap, tek uzun epizodda değil. Canlı uçtan-uca smoke, controlled
+testlerin kaçırdığı FP'yi yakaladı → closure'da canlı smoke şart.
 
 Faz seyri: `docs/ROADMAP.md`.
 

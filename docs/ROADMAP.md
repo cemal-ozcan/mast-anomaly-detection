@@ -103,6 +103,11 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 - Dashboard'da "aktif uyarılar" listesi görünüyor
 - Yanlış pozitif oranı kabul edilebilir seviyede (saatte birkaç adetten az)
 
+**İlerleme:**
+- ✅ Iter 4.1 — Walking skeleton (`Detector` ABC + `Anomaly` + `anomalies` tablosu + repository + 1 kural + `python -m detectors` poll servisi) — 2026-05-30
+- ✅ Iter 4.2 — 6 kural (5 tip: eşik/süre/türev/oran/varyans) + `config/detectors.yaml` loader + `build_detectors` + config-driven servis + A/B/C imza testleri + eşik kalibrasyonu — 2026-05-30. Kabul kriteri 1 (imza testleri: A/B/C senaryosu→kural tetiklenir + canlı smoke), 2 (anomalies tablosu), 4 (imza clean-FP + canlı smoke + hydraulic FP düzeltmesi), 5 (≥5 kural) karşılandı. 247 test, detectors %96.1.
+- ⏳ Iter 4.3 — Minimal fusion (device+pencere→tek skorlu alert) + dashboard "Aktif Uyarılar" paneli (kabul kriteri 3) + saatlik FP-oranı doğrulama — sıradaki
+
 ---
 
 ## Faz 5 — İstatistiksel Dedektör
