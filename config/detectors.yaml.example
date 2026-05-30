@@ -3,7 +3,10 @@
 # Eşikler simülatör çıktısına KALİBRE edilmiştir (per-state fiziksel ölçek).
 detectors:
   poll_interval_s: 5.0
-  window_s: 60
+  # window_s=120: türev (slope) kuralının yeterli HOLDING örneği görmesi için.
+  # Gürültülü basınçta (σ=2 bar) az örnekli eğim tahmini oynaktır (std ~13 bar/dk @ n=10);
+  # 60+ örnekte std ~0.9 bar/dk → temiz veride yanlış pozitif ~%0.02 (canlı smoke kalibrasyonu).
+  window_s: 120
   rules:
     - name: motor_temperature_high
       enabled: true
@@ -32,8 +35,10 @@ detectors:
       severity: warning
       params:
         state: holding
-        slope_threshold_bar_per_min: 1.5
-        min_samples: 10
+        # Eşik 3.0 + min_samples 60: kaçak (-5 bar/dk) ~%99 yakalanır, temiz gürültü ~%0.02 FP.
+        # min_samples=60 az-örnekli oynak eğim FP'sini yapısal olarak da engeller (n<60 → skip).
+        slope_threshold_bar_per_min: 3.0
+        min_samples: 60
 
     - name: motor_voltage_erratic
       enabled: true

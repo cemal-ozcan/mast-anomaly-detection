@@ -1,6 +1,8 @@
 """HydraulicPressureDecline birim testi (Faz 4 Iter 4.2, spec § 6 — B, türev)."""
 from __future__ import annotations
 
+import random
+
 import pandas as pd
 
 from detectors.rules.hydraulic_pressure_decline import HydraulicPressureDecline
@@ -59,3 +61,47 @@ def test_ignores_other_states() -> None:
     values = [80.0 - 5.0 * (i / 60.0) for i in range(120)]
     rule = HydraulicPressureDecline(state="holding", slope_threshold_bar_per_min=1.5, min_samples=10)
     assert rule.detect(_window(values, state="raising")) == []
+
+
+# --- Regresyon: canlı smoke'ta keşfedilen az-örnekli gürültü FP'si (üretim params 3.0/60) ---
+# Gürültülü basınçta (σ=2 bar) az örnekli en-küçük-kareler eğimi çok oynaktır
+# (slope std ~13 bar/dk @ n=10 → temiz veride ~%45 yanlış pozitif). Üretim min_samples=60
+# guard'ı bunu yapısal olarak engeller; eşik 3.0 + n=60 (slope std ~0.9) → FP ~%0.02.
+
+
+def test_regression_few_noisy_samples_skipped_by_min_samples() -> None:
+    """Az sayıda gürültülü HOLDING örneği üretim min_samples=60 ile değerlendirilmeden atlanır.
+
+    Bu, canlı smoke'taki FP'nin kök nedenini kapatır: oynak az-örnekli eğim hiç hesaplanmaz.
+    """
+    rng = random.Random(0)
+    values = [80.0 + rng.gauss(0.0, 2.0) for _ in range(30)]  # 30 < 60 → guard
+    rule = HydraulicPressureDecline(
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
+    )
+    assert rule.detect(_window(values)) == []
+
+
+def test_regression_full_clean_noisy_window_no_fire() -> None:
+    """60 örnekli temiz-gürültülü pencere (eğim ~0) üretim eşiği 3.0 bar/dk'da tetiklemez."""
+    rng = random.Random(3)
+    values = [80.0 + rng.gauss(0.0, 2.0) for _ in range(60)]
+    rule = HydraulicPressureDecline(
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
+    )
+    assert rule.detect(_window(values)) == []
+
+
+def test_regression_leak_still_detected_with_production_params() -> None:
+    """Gerçek kaçak (-5 bar/dk) 60 örnekli pencerede üretim parametreleriyle (3.0, 60) tetiklenir.
+
+    FP düzeltmesi (eşik/min_samples yükseltme) gerçek pozitifi bozmadı.
+    """
+    rng = random.Random(5)
+    values = [80.0 - 5.0 * (i / 60.0) + rng.gauss(0.0, 2.0) for i in range(60)]
+    rule = HydraulicPressureDecline(
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
+    )
+    anomalies = rule.detect(_window(values))
+    assert len(anomalies) == 1
+    assert anomalies[0].value < -3.0
