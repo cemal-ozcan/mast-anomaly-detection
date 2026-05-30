@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 import pandas as pd
 
+from detectors.base import Anomaly
 from ingestion.message_parser import IngestedReading
 
 WINDOW_OPTIONS: dict[str, timedelta | None] = {
@@ -62,3 +63,31 @@ def readings_to_frame(readings: list[IngestedReading]) -> pd.DataFrame:
         }
     )
     return frame.set_index("timestamp")
+
+
+_ALERT_COLUMNS = ["zaman", "cihaz", "severity", "sensör", "kural", "skor", "açıklama"]
+
+
+def anomalies_to_frame(anomalies: list[Anomaly]) -> pd.DataFrame:
+    """Anomaly listesini "Aktif Uyarılar" tablosu için DataFrame'e çevirir (spec § 3 Iter 4.3).
+
+    Args:
+        anomalies: fetch_recent_anomalies çıktısı (created_at DESC sıralı; boş olabilir).
+
+    Returns:
+        [zaman, cihaz, severity, sensör, kural, skor, açıklama] kolonlu DataFrame; girdi
+        sırasını korur. `zaman` = window_end (tespit anı), `skor` 2 ondalığa yuvarlanır.
+        Boş girdi → 0 satırlı ama doğru-şemalı DataFrame.
+    """
+    return pd.DataFrame(
+        {
+            "zaman": [a.window_end for a in anomalies],
+            "cihaz": [a.device_id for a in anomalies],
+            "severity": [a.severity for a in anomalies],
+            "sensör": [a.sensor for a in anomalies],
+            "kural": [a.rule_name for a in anomalies],
+            "skor": [round(a.score, 2) for a in anomalies],
+            "açıklama": [a.description for a in anomalies],
+        },
+        columns=_ALERT_COLUMNS,
+    )
