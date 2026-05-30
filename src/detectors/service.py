@@ -20,7 +20,7 @@ from loguru import logger
 from sqlalchemy.exc import OperationalError
 
 from detectors.base import Anomaly, Detector
-from detectors.config import build_detectors, load_detector_config
+from detectors.config import build_detectors, build_statistical_detectors, load_detector_config
 from detectors.fusion import fuse_anomalies
 from ingestion.config import load_ingestion_config
 from storage.engine import create_sqlite_engine
@@ -83,42 +83,45 @@ def _since_cutoff(now: datetime, window_s: int) -> str:
 
 def _detect_once(
     repository: TelemetryRepository,
-    detectors: list[Detector],
-    window_s: int,
+    detector_groups: list[tuple[list[Detector], int]],
     active: dict[str, frozenset[str]],
     now: datetime,
 ) -> None:
-    """Tek poll turu: her cihaz × tüm dedektörler → fusion → epizot debounce → insert_anomaly.
+    """Tek poll turu: her cihaz × her dedektör-grubu (kendi penceresinde) → fusion → debounce.
 
-    Cihaz başına tüm anomaliler toplanır, `fuse_anomalies` ile tek temsilci satıra indirilir
-    (spec § 5/§ 7 write-side fusion). `active`: device_id → son yazılan katkıda-bulunan kural-seti
-    (epizot debounce): aynı kural-seti süregelirse tekrar yazılmaz; set değişirse (eskalasyon) yeni
-    satır; fault temizlenince active'ten düşer (re-arm). `now` dışarıdan enjekte edilir (deterministik test).
+    `detector_groups`: (dedektörler, window_s) çiftleri — kural grubu kısa pencere (120s),
+    istatistik grubu uzun pencere (3600s). Cihaz başına her grubun penceresi kurulur
+    (aynı window_s tekrar kurulmaz — window_cache), tüm anomaliler birleştirilir → fuse_anomalies →
+    epizot debounce (`active`). Faz 6 ML grubu yeni bir çift olarak eklenebilir.
     """
-    since = _since_cutoff(now, window_s)
     created_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
     for device_id in repository.list_devices():
-        window = build_window(repository, device_id, SENSORS, since)
-        if window.empty:  # pragma: no cover - list_devices yalnız telemetri'si olan cihazları döndürür (savunmacı)
-            continue
         device_anomalies: list[Anomaly] = []
-        for detector in detectors:
-            try:
-                device_anomalies.extend(detector.detect(window))
-            except (KeyError, ValueError) as e:
-                logger.error("Kural '{}' hata verdi, atlandı: {}", detector.name, e)
+        window_cache: dict[int, pd.DataFrame] = {}
+        for detectors, window_s in detector_groups:
+            window = window_cache.get(window_s)
+            if window is None:
+                window = build_window(
+                    repository, device_id, SENSORS, _since_cutoff(now, window_s)
+                )
+                window_cache[window_s] = window
+            if window.empty:  # pragma: no cover - list_devices yalnız telemetri'si olan cihazları döndürür
                 continue
+            for detector in detectors:
+                try:
+                    device_anomalies.extend(detector.detect(window))
+                except (KeyError, ValueError) as e:
+                    logger.error("Dedektör '{}' hata verdi, atlandı: {}", detector.name, e)
+                    continue
 
         rule_set = frozenset(a.rule_name for a in device_anomalies)
         if not rule_set:
             active.pop(device_id, None)  # fault temizlendi → re-arm
             continue
-        # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez";
-        # her poll ziyaret edilir, bu yüzden ayrı stale-active temizliği gerekmez.
+        # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez".
         if active.get(device_id) == rule_set:
-            continue  # aynı kural-seti süregeliyor → debounce (yeniden yazma)
-
+            continue  # aynı kural-seti süregeliyor → debounce
         fused = fuse_anomalies(device_anomalies)
         if fused is None:  # pragma: no cover - rule_set boş değilse fused None olamaz
             continue
@@ -164,7 +167,15 @@ def run(
     try:
         apply_migrations(engine, MIGRATIONS_DIR)
         repository = TelemetryRepository(engine)
-        detectors: list[Detector] = build_detectors(detector_config)
+        rule_detectors: list[Detector] = build_detectors(detector_config)
+        statistical_detectors: list[Detector] = build_statistical_detectors(detector_config.statistical)
+        detector_groups: list[tuple[list[Detector], int]] = [
+            (rule_detectors, detector_config.window_s)
+        ]
+        if statistical_detectors and detector_config.statistical is not None:
+            detector_groups.append(
+                (statistical_detectors, detector_config.statistical.baseline_window_s)
+            )
         active: dict[str, frozenset[str]] = {}
 
         shutdown = threading.Event()
@@ -177,16 +188,14 @@ def run(
         signal.signal(signal.SIGTERM, _on_signal)
 
         logger.info(
-            "Detector servisi başladı: poll={}s window={}s kurallar={}",
+            "Detector servisi başladı: poll={}s kurallar={} istatistik={}",
             detector_config.poll_interval_s,
-            detector_config.window_s,
-            [d.name for d in detectors],
+            [d.name for d in rule_detectors],
+            [d.name for d in statistical_detectors],
         )
         while not shutdown.is_set():
             try:
-                _detect_once(
-                    repository, detectors, detector_config.window_s, active, datetime.now(UTC)
-                )
+                _detect_once(repository, detector_groups, active, datetime.now(UTC))
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
             shutdown.wait(detector_config.poll_interval_s)

@@ -44,7 +44,7 @@ def test_detect_once_persists_single_anomaly(migrated_engine: Engine) -> None:
     detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
 
     stored = repo.fetch_recent_anomalies(limit=10)
     assert len(stored) == 1
@@ -65,7 +65,7 @@ def test_detect_once_fuses_multiple_rules(migrated_engine: Engine) -> None:
     ]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
 
     stored = repo.fetch_recent_anomalies(limit=10)
     assert len(stored) == 1
@@ -85,8 +85,8 @@ def test_detect_once_debounces_persisting_fault(migrated_engine: Engine) -> None
     detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
 
     assert len(repo.fetch_recent_anomalies(limit=10)) == 1
 
@@ -98,16 +98,16 @@ def test_detect_once_rearms_after_fault_clears(migrated_engine: Engine) -> None:
     detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)  # tur 1: yazar
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # tur 1: yazar
     # Fault temizlenir (değer eşik altına): cihaz hâlâ telemetri'ye sahip ama kural tetiklemez.
     with migrated_engine.begin() as conn:
         conn.execute(text("UPDATE telemetry SET value = 25.0 WHERE sensor = 'motor_temperature'"))
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)  # tur 2: tetik yok → re-arm
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # tur 2: tetik yok → re-arm
     assert active == {}
     # Fault geri döner:
     with migrated_engine.begin() as conn:
         conn.execute(text("UPDATE telemetry SET value = 95.0 WHERE sensor = 'motor_temperature'"))
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)  # tur 3: yeniden yazar
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # tur 3: yeniden yazar
 
     assert len(repo.fetch_recent_anomalies(limit=10)) == 2  # tur 1 + tur 3
 
@@ -123,13 +123,13 @@ def test_detect_once_escalation_writes_new_row(migrated_engine: Engine) -> None:
     active: dict[str, frozenset[str]] = {}
 
     # Tur 1: yalnız sıcaklık tetikler → tek kural satırı.
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
     assert active == {"device_001": frozenset({"motor_temperature_high"})}
 
     # Erratik voltaj eklenir → ikinci kural da tetikler (eskalasyon).
     for i, v in enumerate([24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]):
         repo.insert(_reading("motor_voltage", f"2026-05-30T00:01:{i:02d}.000Z", v))
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
 
     # İki satır: tur 1 (tek kural) + tur 2 (fused(2) eskalasyon).
     stored = repo.fetch_recent_anomalies(limit=10)
@@ -147,7 +147,7 @@ def test_detect_once_below_threshold_writes_nothing(migrated_engine: Engine) -> 
     detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
 
     assert repo.fetch_recent_anomalies(limit=10) == []
     assert active == {}
@@ -163,7 +163,7 @@ def test_detect_once_failing_rule_does_not_block_others(migrated_engine: Engine)
     ]
     active: dict[str, frozenset[str]] = {}
 
-    _detect_once(repo, detectors, _BIG_WINDOW_S, active, _NOW)  # exception fırlamamalı
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # exception fırlamamalı
 
     stored = repo.fetch_recent_anomalies(limit=10)
     assert len(stored) == 1
