@@ -54,3 +54,15 @@ detectors:
         sensor: motor_voltage
         min_samples: 20
         epsilon: 0.01
+
+# İstatistiksel dedektörler (Faz 5): on-the-fly rolling baseline (1h geçmiş) → 3-sigma.
+# Kural penceresinden (window_s) ayrı, daha uzun baseline penceresi kullanır.
+statistical:
+  baseline_window_s: 3600     # ~1 saat geçmiş baseline
+  current_window_s: 60        # son 60s "güncel" pencere
+  detectors:
+    - name: three_sigma
+      enabled: true
+      severity: warning
+      params: {sigma_k: 3.0, min_baseline: 30, min_current: 5}
+    # IQR Iter 5.2'de eklenecek.
