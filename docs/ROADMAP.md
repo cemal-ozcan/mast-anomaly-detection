@@ -53,13 +53,15 @@ Bu doküman projenin fazlarını ve her fazın kabul kriterlerini tanımlar. Bir
 - 1000 mesaj/saniye yüke dayanabiliyor
 - Servis çöktüğünde otomatik yeniden başlıyor
 
-**İlerleme:**
+**İlerleme — Faz 2 TAMAMLANDI (2026-05-30):**
 - ✅ Iter 2.1 — Walking skeleton (MQTT subscriber + console log) — Tamamlandı 2026-05-29
 - ✅ Iter 2.2 — SQLite + repository pattern + script-based migration — Tamamlandı 2026-05-30
   (`telemetry` wide tablo + composite index + `TelemetryRepository.insert`; 155 test, %86.8 ingestion+storage coverage)
-- ⏳ Iter 2.3 — Batch writer + resilience (reconnect backoff) + 1000 msg/sec smoke testi (sıradaki)
+- ✅ Iter 2.3 — Batch writer (drainer thread) + resilience (reconnect backoff, bounded retry) + graceful shutdown flush + 1000 msg/sec throughput smoke — Tamamlandı 2026-05-30
+  (167 test, %89.2 ingestion+storage coverage; smoke: 1000 msg/sec %0 kayıp)
 
-Detay: `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`.
+Tüm kabul kriterleri karşılandı: kayıpsız yazım, SQL doğrulama, 1000 msg/sec yük, reconnect.
+Detay: `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`. **Sıradaki: Faz 3.**
 
 ---
 
