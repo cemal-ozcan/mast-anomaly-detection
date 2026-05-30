@@ -45,21 +45,22 @@ def test_mechanical_wear_triggers_vibration_elevated(
 def test_hydraulic_leak_triggers_pressure_decline(
     monkeypatch: pytest.MonkeyPatch, patched_engine_clock: CountingClock
 ) -> None:
-    """HydraulicLeak penceresi hydraulic_pressure_decline'ı tetikler (slope < -1.5 bar/dk).
+    """HydraulicLeak penceresi hydraulic_pressure_decline'ı ÜRETİM parametreleriyle tetikler.
 
-    max_iterations=120 → tek HOLDING epizodu (idle1 + raising1 + holding~118), epizod-içi
-    tek eğim (poll'daki window_s < holding süresi davranışını taklit eder).
+    max_iterations=120 → tek HOLDING epizodu (idle1 + raising1 + holding~118 ≥ min_samples 60),
+    epizod-içi tek eğim. Üretim eşiği 3.0 bar/dk + min_samples 60 (FP-sağlam kalibrasyon);
+    gerçek kaçak ~-5 bar/dk bunun çok altında → tetiklenir.
     """
     window = build_detector_window(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_hydraulic_leak.yaml", max_iterations=120,
     )
     rule = HydraulicPressureDecline(
-        state="holding", slope_threshold_bar_per_min=1.5, min_samples=10
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
     )
     anomalies = rule.detect(window)
     assert len(anomalies) == 1
-    assert anomalies[0].value < -1.5  # slope bar/dk
+    assert anomalies[0].value < -3.0  # slope bar/dk
 
 
 def test_electrical_fault_triggers_voltage_erratic(
