@@ -1,11 +1,13 @@
-"""Ingestion servisi entry: python -m ingestion (Iter 2.2: SQLite repository).
+"""Ingestion servisi entry: python -m ingestion (Iter 2.3: batch writer + resilience).
 
-Faz 1 simulator MQTT yayınlarını subscribe eder, her mesajı parse edip
-SQLite telemetry tablosuna tek-tek yazar (repository.insert). Migration
-boot'ta apply edilir (idempotent). Bozuk JSON / eksik field → ERROR + skip;
-SQLite IO hatası → CRITICAL + skip (tam retry resilience Iter 2.3'te).
+Faz 1 simulator MQTT yayınlarını subscribe eder, her mesajı parse edip BatchWriter
+kuyruğuna alır; ayrı drainer thread batch (insert_batch) ile SQLite'a yazar. Migration
+boot'ta apply edilir (idempotent). Bozuk JSON / eksik field → ERROR + skip. SQLite
+yazma hatası drainer'da bounded retry; kalıcı fail → CRITICAL + graceful shutdown.
+paho reconnect_delay_set ile broker kopmasında otomatik reconnect.
 
-SIGINT/SIGTERM ile graceful shutdown: subscriber loop_stop + disconnect + engine dispose.
+SIGINT/SIGTERM ile graceful shutdown: subscriber durur, batch_writer kalan mesajları
+son flush ile yazar, engine dispose.
 """
 from __future__ import annotations
 
@@ -19,8 +21,8 @@ from types import FrameType
 
 import paho.mqtt.client as mqtt
 from loguru import logger
-from sqlalchemy.exc import OperationalError
 
+from ingestion.batch_writer import BatchWriter
 from ingestion.config import load_ingestion_config
 from ingestion.message_parser import parse_message
 from ingestion.subscriber import MQTTSubscriber
@@ -31,9 +33,9 @@ from storage.repository import TelemetryRepository
 
 
 def _make_message_handler(
-    repository: TelemetryRepository,
+    batch_writer: BatchWriter,
 ) -> Callable[[mqtt.MQTTMessage], None]:
-    """Paho mesaj callback'i: parse + repository.insert. Hataları yutar (servis çökmemeli)."""
+    """Paho mesaj callback'i: parse + batch_writer.enqueue. Parse hatalarını yutar."""
 
     def handle(msg: mqtt.MQTTMessage) -> None:
         try:
@@ -46,23 +48,7 @@ def _make_message_handler(
                 msg.payload[:200],
             )
             return
-        try:
-            repository.insert(reading)
-        except OperationalError as e:
-            logger.critical(
-                "SQLite insert başarısız (mesaj atlandı): device={} sensor={} hata={}",
-                reading.device_id,
-                reading.sensor,
-                e,
-            )
-            return
-        logger.debug(
-            "Yazıldı: device={} sensor={} state={} value={}",
-            reading.device_id,
-            reading.sensor,
-            reading.state,
-            reading.value,
-        )
+        batch_writer.enqueue(reading)
 
     return handle
 
@@ -95,14 +81,21 @@ def run(
         apply_migrations(engine, MIGRATIONS_DIR)
         repository = TelemetryRepository(engine)
 
-        handler = _make_message_handler(repository)
+        shutdown = threading.Event()
+        batch_writer = BatchWriter(
+            repository=repository,
+            shutdown_event=shutdown,
+            max_size=ingestion_config.batch_max_size,
+            flush_interval_s=ingestion_config.batch_flush_interval_s,
+        )
+        batch_writer.start()
+
+        handler = _make_message_handler(batch_writer)
         subscriber = MQTTSubscriber(
             config=mqtt_config,
             topic_pattern=ingestion_config.subscribe_topic_pattern,
             message_handler=handler,
         )
-
-        shutdown = threading.Event()
 
         def _on_signal(signum: int, _frame: FrameType | None) -> None:
             logger.info("Shutdown sinyali alındı: {}", signum)
@@ -113,10 +106,10 @@ def run(
 
         subscriber.connect_and_start()
         try:
-            # Background paho thread mesajları işler; ana thread shutdown bekler.
             shutdown.wait()
         finally:
             subscriber.stop()
+            batch_writer.stop()
     finally:
         engine.dispose()
         logger.info("Ingestion temiz kapandı")

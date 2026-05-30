@@ -1,10 +1,8 @@
-"""Ingestion __main__ handler testleri (Iter 2.2: repository.insert)."""
+"""Ingestion __main__ handler testleri (Iter 2.3: batch_writer.enqueue)."""
 from __future__ import annotations
 
 import json
 from unittest.mock import MagicMock
-
-from sqlalchemy import Engine
 
 
 def _payload() -> bytes:
@@ -18,13 +16,12 @@ def _payload() -> bytes:
     }).encode("utf-8")
 
 
-def test_handle_message_inserts_into_repository(migrated_engine: Engine) -> None:
-    """Geçerli mesaj → repository.insert çağrılır, satır DB'ye yazılır."""
+def test_handle_message_enqueues_parsed_reading() -> None:
+    """Geçerli mesaj → batch_writer.enqueue parse edilmiş IngestedReading ile çağrılır."""
     from ingestion.__main__ import _make_message_handler
-    from storage.repository import TelemetryRepository
 
-    repo = TelemetryRepository(migrated_engine)
-    handler = _make_message_handler(repo)
+    batch_writer = MagicMock()
+    handler = _make_message_handler(batch_writer)
 
     fake_msg = MagicMock()
     fake_msg.topic = "telemetry/device_001/motor_current"
@@ -32,18 +29,18 @@ def test_handle_message_inserts_into_repository(migrated_engine: Engine) -> None
 
     handler(fake_msg)
 
-    assert repo.count() == 1
-    rows = repo.fetch_recent("device_001", "motor_current", limit=1)
-    assert rows[0].value == 8.7
+    batch_writer.enqueue.assert_called_once()
+    reading = batch_writer.enqueue.call_args.args[0]
+    assert reading.device_id == "device_001"
+    assert reading.value == 8.7
 
 
-def test_handle_message_bad_json_skips_without_insert(migrated_engine: Engine) -> None:
-    """Bozuk JSON → insert YOK, exception bastırılır (servis çökmez)."""
+def test_handle_message_bad_json_does_not_enqueue() -> None:
+    """Bozuk JSON → enqueue YOK, exception bastırılır (servis çökmez)."""
     from ingestion.__main__ import _make_message_handler
-    from storage.repository import TelemetryRepository
 
-    repo = TelemetryRepository(migrated_engine)
-    handler = _make_message_handler(repo)
+    batch_writer = MagicMock()
+    handler = _make_message_handler(batch_writer)
 
     fake_msg = MagicMock()
     fake_msg.topic = "telemetry/device_001/motor_current"
@@ -51,26 +48,4 @@ def test_handle_message_bad_json_skips_without_insert(migrated_engine: Engine) -
 
     handler(fake_msg)  # raise etmemeli
 
-    assert repo.count() == 0
-
-
-def test_handle_message_db_error_is_swallowed(migrated_engine: Engine) -> None:
-    """repository.insert OperationalError fırlatırsa handler yutar (paho thread'i çökmesin)."""
-    from unittest.mock import patch
-
-    from sqlalchemy.exc import OperationalError
-
-    from ingestion.__main__ import _make_message_handler
-    from storage.repository import TelemetryRepository
-
-    repo = TelemetryRepository(migrated_engine)
-    handler = _make_message_handler(repo)
-
-    fake_msg = MagicMock()
-    fake_msg.topic = "telemetry/device_001/motor_current"
-    fake_msg.payload = _payload()
-
-    with patch.object(repo, "insert", side_effect=OperationalError("stmt", {}, Exception("disk full"))):
-        handler(fake_msg)  # raise etmemeli
-
-    assert repo.count() == 0
+    batch_writer.enqueue.assert_not_called()
