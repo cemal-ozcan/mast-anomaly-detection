@@ -2,9 +2,11 @@
 
 Spec § 6 (B, türev). HOLDING içinde hydraulic_pressure'ın zaman-eğimi (en küçük kareler
 doğru uydurma, bar/dakika) `-slope_threshold_bar_per_min`'in altındaysa (daha dik düşüş)
-ve ≥ `min_samples` örnek varsa tetikler. Kalibre: clean HOLDING slope ~-0.16 bar/dk,
-HydraulicLeak ~-5.16 bar/dk → -1.5 ayırma. Pencere poll'da ≤ tek HOLDING epizodu olur
-(window_s=60 < holding süresi) → epizod-içi tek eğim.
+ve ≥ `min_samples` örnek varsa tetikler. Kalibre (üretim config'i): eşik 3.0 bar/dk +
+min_samples 60. Az-örnekli gürültülü eğim çok oynaktır (slope std ~13 bar/dk @ n=10,
+σ=2 bar) — büyük min_samples bunu hem yapısal (n<60 → skip) hem istatistiksel (n=60 →
+slope std ~0.9) olarak bastırır: clean FP ~%0.02, kaçak (-5 bar/dk) TP ~%99 (canlı smoke
+kalibrasyonu). poll'da window_s=120 ≥ 60 örnek için yeterli HOLDING penceresi sağlar.
 """
 from __future__ import annotations
 
