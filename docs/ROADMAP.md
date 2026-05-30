@@ -65,7 +65,7 @@ Detay: `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`. **Sıradaki: Fa
 
 ---
 
-## Faz 3 — Basit Dashboard
+## Faz 3 — Basit Dashboard ✅ TAMAMLANDI (2026-05-30)
 
 **Hedef:** Veriyi görsel olarak takip edebilmek.
 
@@ -82,6 +82,8 @@ Detay: `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`. **Sıradaki: Fa
 - Yöneticine sunulabilir kalitede
 
 Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bir sistem" elinde var.
+
+**Sonuç:** `src/dashboard/` (transform helper'ları + Streamlit app), `TelemetryRepository` read API (`list_devices` + `fetch_window`). `streamlit run src/dashboard/app.py` → cihaz + zaman-aralığı selectbox, 6 sensör line chart, `st.experimental_fragment` 2s otomatik yenileme. Gözlem modu (read-only). 180 test, headless boot + graceful degradation doğrulandı. **Sıradaki: Faz 4.**
 
 ---
 

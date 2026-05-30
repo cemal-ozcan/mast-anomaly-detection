@@ -141,10 +141,11 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 3 — Streamlit Dashboard** (sıradaki) — Faz 2 tamamlandı (2026-05-30)
+**Faz 4 — Kural Tabanlı Dedektör** (sıradaki) — Faz 3 tamamlandı (2026-05-30)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
+- **Spec (Faz 3):** `docs/specs/2026-05-30-faz3-dashboard-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
@@ -155,11 +156,13 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` (5/5 ✅)
   - `docs/plans/2026-05-29-faz2-iter2-2-sqlite-repository.md` (7/7 ✅)
   - `docs/plans/2026-05-30-faz2-iter2-3-batch-writer-resilience.md` (7/7 ✅)
+  - `docs/plans/2026-05-30-faz3-dashboard.md` (4/4 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
   - Ingestion (Iter 2.3): `python -m ingestion` mesajları BatchWriter kuyruğuna alır; ayrı drainer thread batch (`insert_batch`) ile SQLite'a yazar (`data/telemetry.db`, boot'ta idempotent migration, broker kopmasında paho reconnect). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Throughput smoke (opt-in): `RUN_SMOKE=1 SMOKE_DURATION_S=5 pytest tests/smoke/` (gerçek Mosquitto gerekir).
   - **Not (manuel smoke):** Aynı broker'da iki ingestion instance'ı aynı `client_id`'yi (`mast-anomaly-subscriber`) paylaşır → biri diğerini broker'dan düşürür. Manuel test tek instance ile yapılmalı; throughput smoke izole `smoke/+/+` namespace + `smoke` client_id kullanır (çakışma yok).
+  - Dashboard (Faz 3): `streamlit run src/dashboard/app.py` — cihaz + zaman-aralığı seçici, 6 sensör line chart'ı, `st.experimental_fragment` 2s otomatik yenileme. `data/telemetry.db`'yi read-only sorgular (gözlem modu). `DASHBOARD_DB_PATH` env ile farklı DB'ye yönlendirilebilir. Streamlit 1.36 → `st.experimental_fragment` (1.37+'da `st.fragment`).
   - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` veya `python -m ingestion` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios`.
 
@@ -280,7 +283,25 @@ Faz 2 = ingestion + SQLite storage. MQTT subscriber (paho) → parse → BatchWr
 drainer thread → `insert_batch` → SQLite (`telemetry` wide tablo + composite index, script-based
 idempotent migration). 1000 msg/sec kayıpsız throughput, reconnect backoff, graceful
 shutdown final-flush. 167 test, ingestion+storage %89.2 coverage. ROADMAP Faz 2 kabul
-kriterleri karşılandı. **Sıradaki büyük adım: Faz 3 — Streamlit Dashboard.**
+kriterleri karşılandı.
+
+## Faz 3 (Streamlit Dashboard) — Tamamlandı (2026-05-30)
+
+`src/dashboard/` paketi: `transform.py` (saf helper'lar — `window_to_since` cutoff'u
+publisher formatıyla (`...Z`, ms) üretir ki lexicographic `timestamp >= since` doğru çalışsın,
+tz-naive `now` → ValueError; `readings_to_frame` → pandas DataFrame; `WINDOW_OPTIONS`) +
+`app.py` (ince Streamlit wiring: cihaz + zaman-aralığı selectbox, 6 sensör line chart 2 kolon,
+`st.experimental_fragment(run_every="2s")` otomatik yenileme, `@st.cache_resource` engine,
+`DASHBOARD_DB_PATH` env override). `TelemetryRepository` read API kazandı: `list_devices()` +
+`fetch_window(device_id, sensor, since)` (composite index, ASC) + `_row_to_reading` DRY.
+Gözlem modu: dashboard hiçbir şey yazmaz, `data/telemetry.db`'yi WAL eşzamanlı read-only
+sorgular. Hata yönetimi (spec § 7): FileNotFoundError → st.error+log, no-table OperationalError
+→ st.info, read OperationalError → st.error+log. transform + repository read birim test edildi
+(`app.py` ince presentation — manuel + headless boot smoke). 180 test (179 passed + 1 smoke
+skipped; Faz 3'te +6 repository read, +8 transform), pandas mypy override (`ignore_missing_imports`,
+sadece pandas; strict korunur).
+Headless boot smoke + boş-DB/eksik-config graceful degradation doğrulandı (çökme yok).
+**Faz 2 + Faz 3 kabul kriterleri karşılandı. Sıradaki büyük adım: Faz 4 — Kural Tabanlı Dedektör.**
 
 Faz seyri: `docs/ROADMAP.md`.
 
