@@ -204,8 +204,8 @@ CLAUDE.md: `except Exception` yasak, spesifik tipler.
 
 | Durum | Davranış | Gerekçe |
 |---|---|---|
-| DB dosyası yok | Streamlit `st.error` + "DB bulunamadı: {path}; ingestion çalıştı mı?" | Boot-time net mesaj |
-| Tablo boş / cihaz yok | `st.info("Henüz veri yok ...")` | Servis çökmez, kullanıcı yönlendirilir |
+| Config dosyası yok (`config/ingestion.yaml`) | `FileNotFoundError` → `st.error` + log + return | Boot-time net mesaj. (Not: SQLite DB dosyası eksikse `create_sqlite_engine` onu lazily oluşturur; "DB dosyası yok" ayrı bir hata yolu değildir — eksik tablo aşağıdaki OperationalError yoluyla yakalanır.) |
+| Tablo yok / cihaz yok (boş DB) | `OperationalError` (no such table) → `st.info("Henüz veri yok ...")`; cihaz listesi boşsa da `st.info` | Servis çökmez; ingestion henüz tablo/veri üretmemiş olabilir |
 | Seçili pencere boş | Boş grafik + opsiyonel not | Normal durum, hata değil |
 | `sqlite3.OperationalError` (okuma) | `st.error` + log | Disk/lock; sessiz kabul edilmez |
 
