@@ -15,7 +15,7 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["simulator*", "ingestion*", "storage*", "dashboard*"]
+include = ["simulator*", "ingestion*", "storage*", "dashboard*", "detectors*"]
 namespaces = false
 
 [tool.pytest.ini_options]
