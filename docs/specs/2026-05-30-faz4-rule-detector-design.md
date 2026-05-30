@@ -119,7 +119,7 @@ class Detector(ABC):
     @abstractmethod
     def detect(self, window: pd.DataFrame) -> list[Anomaly]: ...
 ```
-`window`: tek cihazın son N saniyelik okumaları, kolonlar `[timestamp, sensor, state, value]` (long format) — runner `fetch_window` çıktısından kurar. Kurallar ilgili sensör(ler)i filtreler.
+`window`: tek cihazın son N saniyelik okumaları, kolonlar `[device_id, timestamp, sensor, state, value]` (long format) — runner `fetch_window` çıktısından kurar. Kurallar ilgili sensör(ler)i filtreler. (`device_id` kolonu Iter 4.1'de eklendi: `Anomaly.device_id` zorunlu ve `detect(window)` imzası pencere dışında parametre almaz; `fetch_window`→`IngestedReading` zaten cihaz kimliğini taşır. Pencere tek cihazlıdır, kolon sabittir.)
 
 ### anomalies tablosu (002_anomalies.sql)
 ```sql
