@@ -30,3 +30,26 @@ idx_telemetry_device_sensor_ts = Index(
     telemetry.c.sensor,
     telemetry.c.timestamp,
 )
+
+anomalies = Table(
+    "anomalies",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("device_id", Text, nullable=False),
+    Column("rule_name", Text, nullable=False),
+    Column("sensor", Text, nullable=False),
+    Column("severity", Text, nullable=False),
+    Column("score", REAL, nullable=False),
+    Column("window_start", Text, nullable=False),
+    Column("window_end", Text, nullable=False),
+    Column("value", REAL, nullable=False),
+    Column("description", Text, nullable=False),
+    Column("created_at", Text, nullable=False),
+)
+
+# Dashboard (Iter 4.3) + doğrulama "son anomaliler" sorgular (spec § 5).
+idx_anomalies_device_created = Index(
+    "idx_anomalies_device_created",
+    anomalies.c.device_id,
+    anomalies.c.created_at,
+)
