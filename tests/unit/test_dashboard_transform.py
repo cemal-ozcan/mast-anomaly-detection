@@ -47,6 +47,14 @@ def test_readings_to_frame_empty() -> None:
     assert len(frame) == 0
 
 
+def test_window_to_since_naive_now_raises() -> None:
+    """tz-naive now → ValueError (sessiz format bozulması yerine açık hata)."""
+    import pytest
+
+    with pytest.raises(ValueError, match="UTC-aware"):
+        window_to_since(datetime(2026, 5, 30, 12, 0, 0), "Son 5 dakika")  # naive
+
+
 def test_readings_to_frame_populated_preserves_order() -> None:
     readings = [
         _reading("2026-05-30T12:00:00.000Z", 1.0),
