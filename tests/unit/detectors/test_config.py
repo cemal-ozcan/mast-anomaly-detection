@@ -8,7 +8,9 @@ import pytest
 from detectors.config import (
     DetectorConfig,
     RuleConfig,
+    StatisticalConfig,
     build_detectors,
+    build_statistical_detectors,
     load_detector_config,
 )
 
@@ -109,3 +111,62 @@ def test_example_file_loads_and_builds_all_six() -> None:
         "motor_voltage_erratic",
         "sensor_frozen",
     }
+
+
+_VALID_WITH_STATISTICAL = """
+detectors:
+  poll_interval_s: 5.0
+  window_s: 120
+  rules:
+    - name: motor_temperature_high
+      enabled: true
+      severity: critical
+      params: {critical_threshold_c: 80.0}
+statistical:
+  baseline_window_s: 3600
+  current_window_s: 60
+  detectors:
+    - name: three_sigma
+      enabled: true
+      severity: warning
+      params: {sigma_k: 3.0, min_baseline: 30, min_current: 5}
+"""
+
+
+def test_load_parses_statistical_block(tmp_path: Path) -> None:
+    cfg = load_detector_config(_write(tmp_path / "d.yaml", _VALID_WITH_STATISTICAL))
+    assert isinstance(cfg.statistical, StatisticalConfig)
+    assert cfg.statistical.baseline_window_s == 3600
+    assert cfg.statistical.current_window_s == 60
+    assert len(cfg.statistical.detectors) == 1
+    assert cfg.statistical.detectors[0].name == "three_sigma"
+
+
+def test_load_no_statistical_block_is_none(tmp_path: Path) -> None:
+    """statistical bloğu yoksa cfg.statistical None (geriye uyumlu — Faz 4 config'leri)."""
+    cfg = load_detector_config(_write(tmp_path / "d.yaml", _VALID))
+    assert cfg.statistical is None
+
+
+def test_build_statistical_detectors_constructs_three_sigma(tmp_path: Path) -> None:
+    cfg = load_detector_config(_write(tmp_path / "d.yaml", _VALID_WITH_STATISTICAL))
+    detectors = build_statistical_detectors(cfg.statistical)
+    assert [d.name for d in detectors] == ["three_sigma"]
+
+
+def test_build_statistical_detectors_none_returns_empty() -> None:
+    assert build_statistical_detectors(None) == []
+
+
+def test_build_statistical_unknown_raises(tmp_path: Path) -> None:
+    bad = _VALID_WITH_STATISTICAL.replace("three_sigma", "nonexistent_stat")
+    cfg = load_detector_config(_write(tmp_path / "d.yaml", bad))
+    with pytest.raises(ValueError, match="bilinmeyen istatistiksel"):
+        build_statistical_detectors(cfg.statistical)
+
+
+def test_example_file_statistical_builds() -> None:
+    """config/detectors.yaml.example statistical bloğu geçerli + three_sigma kurar."""
+    cfg = load_detector_config(Path("config/detectors.yaml.example"))
+    assert cfg.statistical is not None
+    assert [d.name for d in build_statistical_detectors(cfg.statistical)] == ["three_sigma"]

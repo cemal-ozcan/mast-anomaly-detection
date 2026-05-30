@@ -13,6 +13,7 @@ import yaml
 
 from detectors.base import Detector
 from detectors.rules import RULE_REGISTRY
+from detectors.statistical import STATISTICAL_REGISTRY
 
 
 @dataclass(frozen=True)
@@ -26,12 +27,22 @@ class RuleConfig:
 
 
 @dataclass(frozen=True)
+class StatisticalConfig:
+    """detectors.yaml `statistical` bloğu (Faz 5)."""
+
+    baseline_window_s: int
+    current_window_s: int
+    detectors: tuple[RuleConfig, ...]
+
+
+@dataclass(frozen=True)
 class DetectorConfig:
-    """detectors.yaml `detectors` bloğu."""
+    """detectors.yaml `detectors` bloğu (+ opsiyonel `statistical`, Faz 5)."""
 
     poll_interval_s: float
     window_s: int
     rules: tuple[RuleConfig, ...]
+    statistical: StatisticalConfig | None = None
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -48,6 +59,26 @@ def _read_yaml(path: Path) -> dict[str, Any]:
             f"alınan {type(data).__name__}"
         )
     return data
+
+
+def _parse_statistical(block: Any) -> StatisticalConfig | None:
+    """`statistical` bloğunu (varsa) StatisticalConfig'e çevirir; yoksa None."""
+    if block is None:
+        return None
+    detectors = tuple(
+        RuleConfig(
+            name=str(d["name"]),
+            severity=str(d.get("severity", "warning")),
+            enabled=bool(d.get("enabled", True)),
+            params=dict(d.get("params") or {}),
+        )
+        for d in block["detectors"]
+    )
+    return StatisticalConfig(
+        baseline_window_s=int(block["baseline_window_s"]),
+        current_window_s=int(block["current_window_s"]),
+        detectors=detectors,
+    )
 
 
 def load_detector_config(path: Path) -> DetectorConfig:
@@ -75,10 +106,12 @@ def load_detector_config(path: Path) -> DetectorConfig:
             )
             for r in det["rules"]
         )
+        statistical = _parse_statistical(data.get("statistical"))
         return DetectorConfig(
             poll_interval_s=float(det["poll_interval_s"]),
             window_s=int(det["window_s"]),
             rules=rules,
+            statistical=statistical,
         )
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"detectors config geçersiz ({path}): {e}") from e
@@ -110,5 +143,42 @@ def build_detectors(config: DetectorConfig) -> list[Detector]:
         except TypeError as e:
             raise ValueError(
                 f"detectors config: kural '{rc.name}' parametre hatası: {e}"
+            ) from e
+    return detectors
+
+
+def build_statistical_detectors(config: StatisticalConfig | None) -> list[Detector]:
+    """Config'ten aktif istatistiksel dedektörleri STATISTICAL_REGISTRY üzerinden kurar.
+
+    Her dedektör `STATISTICAL_REGISTRY[name](severity=..., current_window_s=..., **params)` ile
+    inşa edilir (current_window_s blok seviyesinden geçer).
+
+    Args:
+        config: StatisticalConfig veya None (statistical bloğu yoksa).
+
+    Returns:
+        Kurulu Detector listesi (None → boş; disabled atlanır).
+
+    Raises:
+        ValueError: Bilinmeyen dedektör adı veya geçersiz params.
+    """
+    if config is None:
+        return []
+    detectors: list[Detector] = []
+    for rc in config.detectors:
+        if not rc.enabled:
+            continue
+        factory = STATISTICAL_REGISTRY.get(rc.name)
+        if factory is None:
+            raise ValueError(
+                f"detectors config: bilinmeyen istatistiksel dedektör '{rc.name}' (registry'de yok)"
+            )
+        try:
+            detectors.append(
+                factory(severity=rc.severity, current_window_s=config.current_window_s, **rc.params)
+            )
+        except TypeError as e:
+            raise ValueError(
+                f"detectors config: istatistiksel dedektör '{rc.name}' parametre hatası: {e}"
             ) from e
     return detectors
