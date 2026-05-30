@@ -22,12 +22,20 @@ def window_to_since(now: datetime, window: str) -> str | None:
     aynı format, lexicographic `timestamp >= since` karşılaştırması doğru çalışsın.
 
     Args:
-        now: Şimdiki UTC-aware datetime (test için enjekte edilir).
+        now: Şimdiki UTC-aware datetime (test için enjekte edilir). Naive datetime
+            kabul edilmez; tz-naive ise ValueError fırlatılır.
         window: WINDOW_OPTIONS anahtarlarından biri.
 
     Returns:
         ISO ms cutoff string; "Tümü" veya bilinmeyen pencere → None.
+
+    Raises:
+        ValueError: now tz-naive ise.
     """
+    if now.tzinfo is None:
+        raise ValueError("now UTC-aware datetime olmalı (naive datetime kabul edilmez)")
+    # "Tümü" → None (filtresiz); bilinmeyen anahtar da None döner — çağıranlar
+    # her zaman WINDOW_OPTIONS.keys() ile sınırlı olduğundan güvenli.
     delta = WINDOW_OPTIONS.get(window)
     if delta is None:
         return None
