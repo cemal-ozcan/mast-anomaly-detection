@@ -60,19 +60,21 @@ def test_config_driven_detectors_persist_anomalies(tmp_path: Path) -> None:
     try:
         apply_migrations(engine, MIGRATIONS_DIR)
         repo = TelemetryRepository(engine)
-        # Eşik-üstü sıcaklık (temp_high tetikler) + erratik voltaj (voltage_erratic tetikler).
+        # Eşik-üstü sıcaklık (temp_high) + erratik voltaj (voltage_erratic) — aynı cihaz, aynı tur.
         repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
         for i, v in enumerate([24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]):
             repo.insert(_reading("motor_voltage", f"2026-05-30T00:01:{i:02d}.000Z", v))
 
         config = load_detector_config(cfg_path)
         detectors = build_detectors(config)
-        seen: set[tuple[str, str, str]] = set()
-        _detect_once(repo, detectors, config.window_s, seen, datetime(2026, 5, 30, 1, 0, 0, tzinfo=UTC))
+        active: dict[str, frozenset[str]] = {}
+        _detect_once(repo, detectors, config.window_s, active, datetime(2026, 5, 30, 1, 0, 0, tzinfo=UTC))
 
         stored = repo.fetch_recent_anomalies(limit=10)
-        rules = {a.rule_name for a in stored}
-        assert "motor_temperature_high" in rules
-        assert "motor_voltage_erratic" in rules
+        # İki kural aynı cihazda → TEK fused satır (write-side fusion, Iter 4.3).
+        assert len(stored) == 1
+        assert stored[0].rule_name == "fused(2)"
+        assert "motor_temperature_high" in stored[0].description
+        assert "motor_voltage_erratic" in stored[0].description
     finally:
         engine.dispose()
