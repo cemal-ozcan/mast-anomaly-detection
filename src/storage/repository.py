@@ -1,13 +1,14 @@
-"""TelemetryRepository: telemetry tablosuna insert + minimal okuma (spec § 3 Iter 2.2).
+"""TelemetryRepository: telemetry tablosuna insert + okuma yüzeyi (spec § 3 Iter 2.2).
 
-insert_batch eklendi (Iter 2.3); geniş query API Faz 4+ detector ihtiyacına ertelendi. count/fetch_recent
-Iter 2.2 bitti kriteri 2 & 3 doğrulaması için minimal okuma yüzeyidir.
+insert_batch eklendi (Iter 2.3). Okuma yüzeyi: count, fetch_recent (Iter 2.2) + list_devices,
+fetch_window (Faz 3 dashboard). Geniş query API Faz 4+ detector ihtiyacına ertelendi.
 """
 from __future__ import annotations
 
 from typing import Any
 
 from sqlalchemy import Engine, func, select
+from sqlalchemy.engine import Row
 
 from ingestion.message_parser import IngestedReading
 from storage.schema import telemetry
@@ -33,7 +34,7 @@ class TelemetryRepository:
         }
 
     @staticmethod
-    def _row_to_reading(row: Any) -> IngestedReading:
+    def _row_to_reading(row: Row[Any]) -> IngestedReading:
         """SQLAlchemy Row'u IngestedReading'e çevirir (fetch_recent + fetch_window DRY)."""
         return IngestedReading(
             device_id=row.device_id,
@@ -102,10 +103,17 @@ class TelemetryRepository:
         return [self._row_to_reading(row) for row in rows]
 
     def list_devices(self) -> list[str]:
-        """telemetry'deki distinct device_id'leri alfabetik sıralı döndürür (veri yoksa boş)."""
+        """telemetry'deki distinct device_id'leri alfabetik sıralı döndürür.
+
+        Returns:
+            Alfabetik sıralı device_id listesi; tabloda veri yoksa boş liste.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
         stmt = select(telemetry.c.device_id).distinct().order_by(telemetry.c.device_id)
         with self._engine.connect() as conn:
-            return [row[0] for row in conn.execute(stmt).all()]
+            return [row.device_id for row in conn.execute(stmt).all()]
 
     def fetch_window(
         self, device_id: str, sensor: str, since: str | None
@@ -120,6 +128,9 @@ class TelemetryRepository:
 
         Returns:
             Eskiden yeniye (ASC) sıralı IngestedReading listesi.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
         """
         stmt = select(telemetry).where(
             telemetry.c.device_id == device_id, telemetry.c.sensor == sensor

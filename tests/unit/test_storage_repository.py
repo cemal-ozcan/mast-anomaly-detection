@@ -147,3 +147,23 @@ def test_fetch_window_filters_device_and_sensor(migrated_engine: Engine) -> None
     rows = repo.fetch_window("device_001", "motor_current", None)
     assert len(rows) == 1
     assert rows[0].value == 1.0
+
+
+def test_fetch_window_query_uses_composite_index(migrated_engine: Engine) -> None:
+    """fetch_window sorgu şekli composite index'i kullanır (dashboard ana okuma yolu)."""
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    for i in range(10):
+        repo.insert(_reading(f"2026-05-30T00:00:0{i % 10}.000Z", float(i)))
+
+    with migrated_engine.connect() as conn:
+        plan = conn.execute(
+            text(
+                "EXPLAIN QUERY PLAN SELECT * FROM telemetry "
+                "WHERE device_id='device_001' AND sensor='motor_current' "
+                "AND timestamp >= '2026-05-30T00:00:02.000Z' ORDER BY timestamp ASC"
+            )
+        ).all()
+    detail = " ".join(str(row[-1]) for row in plan)
+    assert "USING INDEX idx_telemetry_device_sensor_ts" in detail, detail
