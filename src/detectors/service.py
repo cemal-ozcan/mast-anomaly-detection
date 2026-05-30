@@ -85,19 +85,19 @@ def _detect_once(
     detectors: list[Detector],
     window_s: int,
     seen: set[tuple[str, str, str]],
-) -> None:  # pragma: no cover
+    now: datetime,
+) -> None:
     """Tek poll turu: her cihaz × her dedektör → dedup → insert_anomaly.
 
     `seen`: (device_id, rule_name, window_end) in-memory dedup (spec § 5 — aynı anomali
-    tekrar yazılmasın). Gelişmiş dedup Faz 5.
+    tekrar yazılmasın). Gelişmiş dedup Faz 5. `now` dışarıdan enjekte edilir (deterministik test).
     """
-    now = datetime.now(UTC)
     since = _since_cutoff(now, window_s)
     created_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
     for device_id in repository.list_devices():
         window = build_window(repository, device_id, SENSORS, since)
-        if window.empty:
+        if window.empty:  # pragma: no cover - list_devices yalnız telemetri'si olan cihazları döndürür (savunmacı)
             continue
         for detector in detectors:
             try:
@@ -175,7 +175,7 @@ def run(
         )
         while not shutdown.is_set():
             try:
-                _detect_once(repository, detectors, window_s, seen)
+                _detect_once(repository, detectors, window_s, seen, datetime.now(UTC))
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
             shutdown.wait(poll_interval_s)
