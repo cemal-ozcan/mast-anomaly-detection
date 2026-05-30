@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 4 — Kural Tabanlı Dedektör** (devam ediyor) — Iter 4.1 + 4.2 tamamlandı (2026-05-30); sıradaki Iter 4.3 (fusion + dashboard alerts paneli + FP doğrulama)
+**Faz 4 — Kural Tabanlı Dedektör** ✅ TAMAMLANDI (2026-05-31) — Iter 4.1 + 4.2 + 4.3 (4 iterasyon). Sıradaki büyük adım: **Faz 5 — İstatistiksel Dedektör**
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -160,13 +160,15 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-30-faz3-dashboard.md` (4/4 ✅)
   - `docs/plans/2026-05-30-faz4-iter4-1-walking-skeleton-detector.md` (5/5 ✅)
   - `docs/plans/2026-05-30-faz4-iter4-2-rule-set-config-signatures.md` (9/9 ✅)
+  - `docs/plans/2026-05-31-faz4-iter4-3-fusion-dashboard-alerts.md` (4/4 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
   - Ingestion (Iter 2.3): `python -m ingestion` mesajları BatchWriter kuyruğuna alır; ayrı drainer thread batch (`insert_batch`) ile SQLite'a yazar (`data/telemetry.db`, boot'ta idempotent migration, broker kopmasında paho reconnect). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Throughput smoke (opt-in): `RUN_SMOKE=1 SMOKE_DURATION_S=5 pytest tests/smoke/` (gerçek Mosquitto gerekir).
   - **Not (manuel smoke):** Aynı broker'da iki ingestion instance'ı aynı `client_id`'yi (`mast-anomaly-subscriber`) paylaşır → biri diğerini broker'dan düşürür. Manuel test tek instance ile yapılmalı; throughput smoke izole `smoke/+/+` namespace + `smoke` client_id kullanır (çakışma yok).
   - Dashboard (Faz 3): `streamlit run src/dashboard/app.py` — cihaz + zaman-aralığı seçici, 6 sensör line chart'ı, `st.experimental_fragment` 2s otomatik yenileme. `data/telemetry.db`'yi read-only sorgular (gözlem modu). `DASHBOARD_DB_PATH` env ile farklı DB'ye yönlendirilebilir. Streamlit 1.36 → `st.experimental_fragment` (1.37+'da `st.fragment`).
-  - Detector (Faz 4 Iter 4.2): **önce** `cp config/detectors.yaml.example config/detectors.yaml` (gitignored runtime config), sonra `python -m detectors`. `config/ingestion.yaml`'dan `db_path`, `config/detectors.yaml`'dan poll/window/kural seti okur. Boot'ta idempotent migration (002_anomalies), her `poll_interval_s`'de (5s) her cihaz için son `window_s` (120s) pencereyi kurup config'teki aktif dedektörleri çalıştırır, anomalileri `anomalies` tablosuna yazar. **6 kural (5 tip):** motor_temperature_high (eşik), motor_current_high (eşik+süre, RAISING mean>9A), vibration_elevated (oran, RAISING mean>0.37g), hydraulic_pressure_decline (türev, HOLDING slope<-3 bar/dk, min_samples 60), motor_voltage_erratic (varyans, std>1V), sensor_frozen (süre). Eşikler simülatör çıktısına kalibre (per-state fiziksel ölçek). Gözlem modu: yalnız `telemetry` okur, yalnız `anomalies` yazar. In-memory dedup `(device,rule,window_end)`. SIGINT/SIGTERM graceful shutdown. Doğrula: `sqlite3 data/telemetry.db "SELECT device_id,rule_name,COUNT(*) FROM anomalies GROUP BY 1,2"`.
+  - Detector (Faz 4): **önce** `cp config/detectors.yaml.example config/detectors.yaml` (gitignored runtime config), sonra `python -m detectors`. `config/ingestion.yaml`'dan `db_path`, `config/detectors.yaml`'dan poll/window/kural seti okur. Boot'ta idempotent migration (002_anomalies), her `poll_interval_s`'de (5s) her cihaz için son `window_s` (120s) pencereyi kurup config'teki aktif dedektörleri çalıştırır, **cihaz başına anomalileri füzyonla tek satıra indirir** (`fused(N)`), **epizot debounce** ile `anomalies` tablosuna yazar. **6 kural (5 tip):** motor_temperature_high (eşik), motor_current_high (eşik+süre, RAISING mean>9A), vibration_elevated (oran, RAISING mean>0.37g), hydraulic_pressure_decline (türev, HOLDING slope<-3 bar/dk, min_samples 60), motor_voltage_erratic (varyans, std>1V), sensor_frozen (süre). Eşikler simülatör çıktısına kalibre (per-state fiziksel ölçek). Gözlem modu: yalnız `telemetry` okur, yalnız `anomalies` yazar. **Fusion + debounce:** `active: dict[device→frozenset[rule]]` — persisting fault epizot başına 1 satır (canlı: 250s kaçak = 1 satır, Iter 4.2'de ~24'tü), kural-seti değişince (eskalasyon) yeni satır, temizlenince re-arm. SIGINT/SIGTERM graceful shutdown. Doğrula: `sqlite3 data/telemetry.db "SELECT device_id,rule_name,COUNT(*) FROM anomalies GROUP BY 1,2"`.
+  - Dashboard "Aktif Uyarılar" paneli (Faz 4 Iter 4.3): `streamlit run src/dashboard/app.py` → üstte filo-geneli fused alert tablosu (`fetch_recent_anomalies` → `anomalies_to_frame`: zaman/cihaz/severity/sensör/kural/skor/açıklama), 5s fragment yenileme. Gözlem modu (read-only).
   - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` / `python -m ingestion` / `python -m detectors` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur. Sistem `python`/`pytest` farklı yorumlayıcıya (anaconda 3.13, SQLAlchemy uyumsuz) düşebilir → testleri `.venv/bin/python -m pytest ...` ile çalıştır.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage src/detectors tests/unit tests/integration tests/scenarios`.
 
@@ -358,6 +360,32 @@ henüz gelişmemiş → doğru şekilde sessiz. **202→247 test** (+45: 6 kural
 **Ders (kalıcı):** istatistiksel eşik kuralları (slope/std) AZ örnekte oynaktır — kalibrasyonu
 ÜRETİM pencere boyutunda (min_samples) yap, tek uzun epizodda değil. Canlı uçtan-uca smoke, controlled
 testlerin kaçırdığı FP'yi yakaladı → closure'da canlı smoke şart.
+
+### Iterasyon 4.3 (Minimal Fusion + Dashboard Alerts Paneli + FP Doğrulama) — Tamamlandı (2026-05-31)
+
+**Write-side fusion** (`src/detectors/fusion.py` `fuse_anomalies(list[Anomaly]) -> Anomaly | None`): boş→None,
+tek→kendisi (değişmez), çoklu→`fused(N)` temsilci (en yüksek (severity, score) baz; score=max;
+window_start=min/window_end=max; description katkıda bulunan kuralları listeler). **Epizot debounce**
+(`_detect_once` yeniden yazıldı): `active: dict[device→frozenset[rule]]` — cihaz başına tüm dedektör
+anomalileri toplanır → fusion → aynı kural-seti süregelirse YAZMA, set değişirse (eskalasyon) yeni satır,
+fault temizlenince re-arm. `seen: set` kaldırıldı. Yeni tablo YOK (`anomalies` yeniden kullanılır, spec § 7).
+`Anomaly` şeması değişmez. **Dashboard "Aktif Uyarılar" paneli:** `src/dashboard/transform.py` `anomalies_to_frame`
+(saf, unit-test) + `app.py` `_render_alerts` fragment (`fetch_recent_anomalies` okur, 5s yenileme,
+no-devices guard'ından SONRA → boş-DB boot fragment'e ulaşmaz). 257 test (+10: fusion 4, _detect_once
+7 [persist/fused(2)/debounce/re-arm/eskalasyon/below/failing], transform 3, +integration fused(2) güncel),
+detectors %96.4 + dashboard transform %100. **Canlı uçtan-uca smoke:** 250s kaçak → debounce ile **1 satır**
+(Iter 4.2'de ~24'tü), clean device_001 **0 anomali** (kabul kriteri 4), dashboard veri yolu doğrulandı,
+graceful shutdown.
+
+## Faz 4 Closure (2026-05-31)
+
+Faz 4 = kural tabanlı dedektör (ilk anomali tespit katmanı). 4 iterasyon: 4.1 iskelet (`Detector` ABC +
+`Anomaly` + `anomalies` tablosu + 1 kural + poll servisi), 4.2 6 kural (5 tip) + `detectors.yaml` config +
+A/B/C imza testleri + eşik kalibrasyonu, 4.3 write-side fusion + epizot debounce + dashboard alerts paneli.
+**Kabul kriterleri (ROADMAP § Faz 4) karşılandı:** (1) arıza→dedektör yakalar (imza testleri + canlı smoke),
+(2) anomaliler DB'ye yazılır, (3) dashboard "Aktif Uyarılar" listesi, (4) FP kabul edilebilir (clean 0 +
+debounce), (5) ≥5 kural / 5 tip. 257 test, detectors %96.4, mypy strict + ruff temiz. **Sıradaki büyük adım:
+Faz 5 — İstatistiksel Dedektör** (3-sigma, IQR, rolling-window; baseline öğrenme).
 
 Faz seyri: `docs/ROADMAP.md`.
 
