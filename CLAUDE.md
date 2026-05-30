@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 2 — Iterasyon 2.3: Batch Writer + Resilience + Performance** (sıradaki)
+**Faz 3 — Streamlit Dashboard** (sıradaki) — Faz 2 tamamlandı (2026-05-30)
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -154,10 +154,12 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-28-faz1-iterasyon4b-hydraulic-leak-electrical-fault.md` (8/8 ✅)
   - `docs/plans/2026-05-29-faz2-iter2-1-walking-skeleton-ingestion.md` (5/5 ✅)
   - `docs/plans/2026-05-29-faz2-iter2-2-sqlite-repository.md` (7/7 ✅)
+  - `docs/plans/2026-05-30-faz2-iter2-3-batch-writer-resilience.md` (7/7 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
-  - Ingestion (Iter 2.2): `python -m ingestion` simulator yayınlarını subscribe edip her mesajı SQLite `telemetry` tablosuna tek-tek yazar (`data/telemetry.db`, boot'ta idempotent migration). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Henüz batch YOK (Iter 2.3).
+  - Ingestion (Iter 2.3): `python -m ingestion` mesajları BatchWriter kuyruğuna alır; ayrı drainer thread batch (`insert_batch`) ile SQLite'a yazar (`data/telemetry.db`, boot'ta idempotent migration, broker kopmasında paho reconnect). Doğrula: `sqlite3 data/telemetry.db "SELECT COUNT(*) FROM telemetry"`. Throughput smoke (opt-in): `RUN_SMOKE=1 SMOKE_DURATION_S=5 pytest tests/smoke/` (gerçek Mosquitto gerekir).
+  - **Not (manuel smoke):** Aynı broker'da iki ingestion instance'ı aynı `client_id`'yi (`mast-anomaly-subscriber`) paylaşır → biri diğerini broker'dan düşürür. Manuel test tek instance ile yapılmalı; throughput smoke izole `smoke/+/+` namespace + `smoke` client_id kullanır (çakışma yok).
   - **Env not:** Python 3.11.15 `.pth` dosyalarını silent skip ediyor (security hardening). Eğer `python -m simulator` veya `python -m ingestion` ImportError verirse `PYTHONPATH=src python -m ...` ile çalıştır, ya da `python3.11 -m venv .venv --clear && pip install -r requirements.txt -e .` ile venv'i yeniden oluştur.
 - **Test/lint disiplini:** Her task sonunda tam suite + `mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios` + `ruff check src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios`.
 
@@ -250,6 +252,35 @@ refactor + 1 OperationalError swallow), ingestion+storage %86.8 coverage (storag
 Manuel uçtan uca (gerçek Mosquitto + simulator): 3 cihaz × 6 sensör SQLite'a yazıldı,
 EXPLAIN QUERY PLAN composite index kullandı, restart'ta migration no-op + veri append,
 SIGINT temiz exit. **Faz 2 Iter 2.2 kapandı.**
+
+### Iterasyon 2.3 (Batch Writer + Resilience + Performance) — Tamamlandı (2026-05-30)
+
+`src/ingestion/batch_writer.py` kuruldu: `BatchWriter` sınıfı (thread-safe `queue.Queue`
+buffer + ayrı daemon drainer thread; asyncio DEĞİL — paho callback'leri thread'den gelir)
++ saf `_should_flush` helper (boyut/süre eşiği, deterministik test). Drainer flush koşulu
+`max(buffer≥max_size, süre≥flush_interval_s)`; shutdown'da **kuyruğu boşaltıp** (`_drain_queue_into`)
+son flush yapar (veri kaybı yok — spec § 8 pseudocode düzeltmesi). SQLite hatası `_flush_with_retry`
+ile bounded retry (3x, `sleep` DI); kalıcı fail → CRITICAL + `failed=True` + `shutdown_event.set()`
+(graceful kapanma; tam exit-3 orchestration Faz 9+'a ertelendi). `repository.insert_batch`
+(Core executemany, `_reading_to_dict` ile `insert` DRY). `subscriber.py` `reconnect_delay_set(1,30)`
+(broker kopmasında otomatik backoff reconnect). `__main__` handler artık `batch_writer.enqueue`
+(DB yazma drainer'a taşındı; OperationalError handler'dan kalktı); `run()` BatchWriter
+start/stop lifecycle (finally: subscriber.stop → batch_writer.stop → engine.dispose).
+`tests/smoke/` YENİ kategori: opt-in çift kapı (`RUN_SMOKE=1` env + broker erişilebilirlik),
+izole `smoke/+/+` namespace, yapay 1000 msg/sec publisher. 155 → 167 test (default'ta 166
+passed + 1 smoke skipped); ingestion+storage %89.2 coverage (storage %100, batch_writer %99).
+**Throughput smoke (gerçek Mosquitto, 1000 msg/sec):** sent==written, %0 kayıp (4000/4000,
+5003/5003 gözlemlendi). Shutdown-flush no-data-loss unit (50→50) + integration (100→100) ile
+kanıtlı. Reconnect mekanizması unit-test'li; canlı broker-restart dokümante manuel.
+**Faz 2 Iter 2.3 kapandı.**
+
+## Faz 2 Closure (2026-05-30)
+
+Faz 2 = ingestion + SQLite storage. MQTT subscriber (paho) → parse → BatchWriter kuyruk →
+drainer thread → `insert_batch` → SQLite (`telemetry` wide tablo + composite index, script-based
+idempotent migration). 1000 msg/sec kayıpsız throughput, reconnect backoff, graceful
+shutdown final-flush. 167 test, ingestion+storage %89.2 coverage. ROADMAP Faz 2 kabul
+kriterleri karşılandı. **Sıradaki büyük adım: Faz 3 — Streamlit Dashboard.**
 
 Faz seyri: `docs/ROADMAP.md`.
 
