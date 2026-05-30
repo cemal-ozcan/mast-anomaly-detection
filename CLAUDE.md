@@ -141,12 +141,13 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 4 — Kural Tabanlı Dedektör** ✅ TAMAMLANDI (2026-05-31) — Iter 4.1 + 4.2 + 4.3 (4 iterasyon). Sıradaki büyük adım: **Faz 5 — İstatistiksel Dedektör**
+**Faz 5 — İstatistiksel Dedektör** (devam ediyor) — Iter 5.1 tamamlandı (2026-05-31); sıradaki Iter 5.2 (IQR + A/B/C imza + overlap analizi). Faz 4 ✅ DONE (4 iterasyon).
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
 - **Spec (Faz 3):** `docs/specs/2026-05-30-faz3-dashboard-design.md`
 - **Spec (Faz 4):** `docs/specs/2026-05-30-faz4-rule-detector-design.md`
+- **Spec (Faz 5):** `docs/specs/2026-05-31-faz5-statistical-detector-design.md`
 - **Tamamlanan iterasyonlar:**
   - `docs/plans/2026-05-18-faz1-iterasyon1-walking-skeleton.md` (7/7 ✅)
   - `docs/plans/2026-05-19-faz1-iterasyon2a-state-machine.md` (9/9 ✅)
@@ -161,6 +162,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
   - `docs/plans/2026-05-30-faz4-iter4-1-walking-skeleton-detector.md` (5/5 ✅)
   - `docs/plans/2026-05-30-faz4-iter4-2-rule-set-config-signatures.md` (9/9 ✅)
   - `docs/plans/2026-05-31-faz4-iter4-3-fusion-dashboard-alerts.md` (4/4 ✅)
+  - `docs/plans/2026-05-31-faz5-iter5-1-statistical-infra-three-sigma.md` (5/5 ✅)
 - **Yürütme modu:** subagent-driven (her task ayrı subagent + two-stage review)
 - **Çalıştırma:**
   - Simulator: `pip install -e .` editable install gerekli; sonra `python -m simulator` MQTT'ye N cihaz × 6 sensör × 1 Hz paralel yayın yapar (devices.yaml.example varsayılan 3 cihaz).
@@ -386,6 +388,29 @@ A/B/C imza testleri + eşik kalibrasyonu, 4.3 write-side fusion + epizot debounc
 (2) anomaliler DB'ye yazılır, (3) dashboard "Aktif Uyarılar" listesi, (4) FP kabul edilebilir (clean 0 +
 debounce), (5) ≥5 kural / 5 tip. 257 test, detectors %96.4, mypy strict + ruff temiz. **Sıradaki büyük adım:
 Faz 5 — İstatistiksel Dedektör** (3-sigma, IQR, rolling-window; baseline öğrenme).
+
+## Faz 5 (İstatistiksel Dedektör)
+
+### Iterasyon 5.1 (İstatistiksel Altyapı + ThreeSigma + İki-Pencere Servis) — Tamamlandı (2026-05-31)
+
+İkinci dedektör katmanı: **on-the-fly rolling baseline** (eğitim/tablo/persist YOK — her poll kayan
+geçmişten hesap; yetersiz geçmiş → abstain = warmup). `src/detectors/statistical/`: `base.py` (saf —
+`split_recent` recent-vs-rest pencere bölme + `iter_sensor_state_groups` (sensor,state)-bazlı yeterli-örnekli
+gruplar + `EPSILON`), `three_sigma.py` (`ThreeSigma` μ±k·σ; güncel tail mean'i fence dışındaysa
+`three_sigma:{sensor}` anomalisi; σ<EPSILON skip), `STATISTICAL_REGISTRY`. **Tek uzun pencere, recent-vs-rest**
+→ `Detector` ABC + `fuse_anomalies` DEĞİŞMEZ (dedektör saf, timestamp-bazlı split). Config: `StatisticalConfig`
+(baseline_window_s, current_window_s, detectors) + `DetectorConfig.statistical` (opsiyonel, geriye-uyumlu) +
+`build_statistical_detectors`; `detectors.yaml`'a `statistical` bloğu (top-level sibling). **İki-pencere servis:**
+`_detect_once` `detector_groups: list[(detectors, window_s)]` (kural 120s + istatistik 3600s, per-device
+window_cache); anomaliler birleşir → mevcut fusion/debounce → kural+istatistik tek `fused(N)`'de (overlap).
+`detector_groups` Faz 6 ML grubunu da kaldırır. 257→277 test (+20: base 5, three_sigma 7, config +6,
+integration 2), statistical paketi %96-100. **Canlı smoke (gerçek `python -m detectors` + reduced baseline):**
+servis iki grupla başladı (`kurallar=[...] istatistik=['three_sigma']`), seeded baseline ~0.5 + güncel 5.0 →
+`three_sigma:motor_current` canlı tetiklendi, debounce 1 satır, temiz kapanış. Iter 5.2 (IQR + A/B/C imza +
+overlap) sıradaki.
+
+**Canlı smoke notu:** prod `baseline_window_s=3600` (1h) → istatistik hızlı tetiklenmez; smoke'ta düşür
+(örn. 300s) + geçmiş seed et.
 
 Faz seyri: `docs/ROADMAP.md`.
 
