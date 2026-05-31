@@ -157,19 +157,25 @@ CLAUDE.md disiplini (spesifik exception, `except Exception` yasak, loguru). Faz 
 
 Faz 4 deseni:
 - **Birim (saf):** `statistical/base.py` helper'ları (split_recent sınırları, state-partition, robust stats, σ/IQR=0 koruması) — sentetik pencereler. Her dedektör `detect`: sentetik uzun pencere (bilinen baseline + sapan/sapmayan güncel tail), beklenen Anomaly.
-- **İmza (scenarios):** A/B/C senaryosu engine harness ile → uzun pencere kur (clean baseline tarihçesi + arıza tail) → statistical dedektör tetiklenir; clean tail → tetiklenmez (FP). Faz 4 `build_detector_window` harness'ı genişletilir (uzun pencere üretimi).
-- **Overlap analizi:** aynı A/B/C arıza penceresinde kural ve istatistik dedektörlerin AYNI arızayı işaretlediğini doğrula (kabul kriteri — tutarlılık). En az bir senaryoda örtüşme gösterilir.
+- **İmza (scenarios):** A/B/C senaryosu engine harness ile → uzun pencere kur (clean baseline tarihçesi + arıza tail) → statistical dedektör tetiklenir; clean tail → tetiklenmez (FP). Faz 4 `build_detector_window` harness'ı genişletilir (çok-segmentli `build_statistical_window`: clean baseline segment + arıza tail segmenti). **Iter 5.2 uygulama gerçeği (ölçümle doğrulandı, 2026-05-31):**
+  - **A (MechanicalWear):** motor_current (z≈19) + vibration (z≈15) → 3σ + IQR POZİTİF.
+  - **B (HydraulicLeak):** mevcut 2-dk hold fixture istatistiksel olarak yetersiz (~2.5σ < fence). **Gelişmiş kaçak** (uzun-hold fixture `devices_with_hydraulic_leak_developed.yaml`, ~600s) hydraulic_pressure'ı z≈12'ye düşürür → 3σ + IQR POZİTİF (kabul kriteri 1 "N saat sonra" gelişmiş arıza durumunu temsil eder).
+  - **C (ElectricalFault):** **varyans/saçılım arızasıdır** (mean/median sabit, ölçülen z<1.4) → merkezi-eğilim dedektörleri (3σ/IQR) tasarımı gereği KÖR. **Tamamlayıcı katman** olarak ele alınır: statistical SESSİZ (negatif imza testi) + kural katmanı `motor_voltage_erratic` (std/varyans) yakalar. § 9 C ile tutarlı.
+  - **Harness artefaktı:** iki-segment stitch farklı fixture state_duration'ları kullanır → durağan-değil `mast_position`/`motor_temperature` segmentler arası kayar (arızadan değil, zamanlamadan). İmza/overlap testleri dedektörü ilgili durağan sensöre `sensors=[...]` ile daraltır (§ 5 filtresi). Üretimde baseline sürekli olduğundan bu artefakt yoktur.
+- **Overlap analizi:** aynı arıza penceresinde kural ve istatistik dedektörlerin AYNI arızayı işaretlediğini doğrula (kabul kriteri — tutarlılık). En az bir senaryoda örtüşme gösterilir → **A (MechanicalWear): `motor_current_high` (kural, kısa pencere) + `three_sigma:motor_current` (istatistik, uzun pencere) → `fuse_anomalies` ile tek `fused(N)` (§ 8 iki-pencere mimarisi).**
 - **Coverage:** `statistical` paketi ≥%85 (servis `run()` loop hariç, Faz 4 deseni). Her task sonunda tam suite + mypy + ruff (src/detectors/statistical dahil).
 
 ---
 
 ## 11. Kabul Kriterleri (ROADMAP § Faz 5)
 
-1. Sistem ~N saat (≈`baseline_window_s`) normal veri gördükten sonra baseline'ı öğreniyor (on-the-fly rolling; yeterli geçmiş yoksa abstain → yeterli olunca tetiklemeye başlar).
-2. Sentetik arızalar (A/B/C) istatistiksel dedektörle yakalanabiliyor (imza testleri + canlı smoke).
-3. Kural tabanlı dedektörle tutarlı sonuçlar (overlap analizi: aynı arızayı her iki katman da işaretler).
-4. Yanlış pozitif oranı kabul edilebilir (clean veride istatistik dedektörler tetiklenmez — imza clean tail + canlı smoke; agregat + recent-dışlama + robust stat FP'yi düşük tutar).
-5. ≥2 istatistiksel dedektör (3-sigma + IQR). Tüm önceki testler yeşil + yeni testler; mypy + ruff temiz.
+1. Sistem ~N saat (≈`baseline_window_s`) normal veri gördükten sonra baseline'ı öğreniyor (on-the-fly rolling; yeterli geçmiş yoksa abstain → yeterli olunca tetiklemeye başlar). ✅ (5.1 + 5.2)
+2. Sentetik arızalar istatistiksel dedektörle yakalanabiliyor: **A/B doğrudan (mean/median kayması) — imza testleri + canlı smoke** (IQR canlı `fused(2)` doğrulandı). **C bir varyans arızasıdır → merkezi-eğilim dedektörlerine tamamlayıcıdır: statistical sessiz (tasarım), kural katmanı (`motor_voltage_erratic`) yakalar** (§ 10). ✅
+3. Kural tabanlı dedektörle tutarlı sonuçlar (overlap analizi: A'da `motor_current_high` + `three_sigma:motor_current` aynı arızayı işaretler → `fused(N)`). ✅
+4. Yanlış pozitif oranı kabul edilebilir (clean veride istatistik dedektörler tetiklenmez — imza clean tail + canlı smoke device_clean 0 anomali; agregat + recent-dışlama + robust stat FP'yi düşük tutar). ✅
+5. ≥2 istatistiksel dedektör (3-sigma + IQR). Tüm testler yeşil (293 passed) + mypy + ruff temiz. ✅
+
+> **Skor normalizasyonu notu (Iter 5.2):** ThreeSigma skoru fence'e (`(deviation−fence)/fence`), IQR skoru IQR'a (`distance/IQR`) normalize edilir (§ 6, bağımsız tanımlı). Fusion `max(score)` aldığından iki katman skorları doğrudan karşılaştırılabilir DEĞİLDİR — gelecekte çok-katman güven-bazlı fusion (Faz 6/7) bunu standardize etmeli.
 
 ---
 

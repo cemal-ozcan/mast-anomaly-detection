@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 5 — İstatistiksel Dedektör** (devam ediyor) — Iter 5.1 tamamlandı (2026-05-31); sıradaki Iter 5.2 (IQR + A/B/C imza + overlap analizi). Faz 4 ✅ DONE (4 iterasyon).
+**Faz 5 — İstatistiksel Dedektör** ✅ DONE (2026-05-31) — Iter 5.1 (altyapı + ThreeSigma) + Iter 5.2 (IQR + A/B/C imza + overlap) tamamlandı. Faz 4 ✅ DONE (4 iterasyon). Sıradaki büyük adım: Faz 6 — ML dedektörler.
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -411,6 +411,44 @@ overlap) sıradaki.
 
 **Canlı smoke notu:** prod `baseline_window_s=3600` (1h) → istatistik hızlı tetiklenmez; smoke'ta düşür
 (örn. 300s) + geçmiş seed et.
+
+### Iterasyon 5.2 (IQR + A/B/C İmza + Overlap) — Tamamlandı (2026-05-31)
+
+İkinci istatistiksel dedektör + arıza imzaları + katman örtüşmesi. `src/detectors/statistical/iqr.py`:
+`IQR(current_window_s, iqr_multiplier=1.5, min_baseline=30, min_current=5, sensors=None, severity)` —
+ThreeSigma'nın robust kardeşi (Q1/Q3 ± m·IQR fence, güncel tail **median**'ı fence dışındaysa
+`iqr:{sensor}` anomalisi; `score=min(1, distance/IQR)` — fence dışı mesafenin **IQR'a** oranı;
+IQR<EPSILON skip). `STATISTICAL_REGISTRY`'ye `iqr` + `detectors.yaml.example` statistical bloğuna iqr.
+**İmza testleri** (`tests/scenarios/test_statistical_signatures.py` + çok-segmentli `build_statistical_window`
+harness'ı [clean baseline segment + arıza tail segmenti, tek mock_publisher, çağrı-sırası=timestamp-sırası]):
+**A** MechanicalWear motor_current (z≈19) + vibration (z≈15) → 3σ+IQR POZİTİF; **B** gelişmiş kaçak
+(yeni `devices_with_hydraulic_leak_developed.yaml`, 600s hold → hydraulic_pressure z≈12) → POZİTİF
+(2-dk hold ~2.5σ yetersizdi); **C** ElectricalFault **varyans arızası** → 3σ/IQR motor_voltage'da SESSİZ
+(tasarım, z<1.4) + kural `motor_voltage_erratic` yakalar (**tamamlayıcı katman**); **clean** → FP yok.
+**Overlap** (`test_statistical_overlap.py`): A'da `motor_current_high` (kural, kısa pencere) +
+`three_sigma:motor_current` (istatistik, uzun pencere) → `fuse_anomalies` ile `fused(N)` (servis iki-pencere
+mimarisi). **KRİTİK harness gerçeği:** iki-segment stitch farklı fixture state_duration'ları kullanır →
+durağan-değil `mast_position`/`motor_temperature` segmentler arası kayar (arızadan değil zamanlamadan) →
+imza testleri dedektörü ilgili durağan sensöre `sensors=[...]` ile daraltır (spec § 5; üretimde baseline
+sürekli olduğu için artefakt yok). **Tüm assertion'lar gerçek simülatör çıktısıyla ölçülerek kalibre edildi**
+(soyut akıl yürütme değil — Iter 4.2 dersi). 277→293 test (+16: IQR unit 9, config 1, harness smoke 1,
+imza 4, overlap 1), statistical paketi yüksek coverage, mypy strict + ruff temiz. **Canlı smoke** (gerçek
+`detectors.service.run()` + reduced `baseline_window_s=300` + seeded baseline): servis
+`istatistik=['three_sigma','iqr']` ile başladı, device_stat → `fused(2)` (`three_sigma:motor_current` +
+`iqr:motor_current`), device_clean → 0 anomali (FP yok), temiz kapanış.
+
+**Skor asimetrisi notu:** ThreeSigma fence'e, IQR IQR'a normalize → fusion `max(score)` altında doğrudan
+karşılaştırılamaz; çok-katman güven-bazlı fusion Faz 6/7'de standardize edilmeli.
+
+## Faz 5 Closure (2026-05-31)
+
+Faz 5 = istatistiksel dedektör (2. katman). Iter 5.1 (on-the-fly rolling baseline altyapısı + ThreeSigma +
+iki-pencere `_detect_once`) + Iter 5.2 (IQR + A/B/C imza + overlap). **Kabul kriterleri (ROADMAP § Faz 5)
+karşılandı:** (1) on-the-fly rolling baseline/abstain, (2) A/B doğrudan + C tamamlayıcı (varyans arızası
+mean/median-kör → kural katmanı yakalar) yakalanır + canlı smoke, (3) overlap tutarlılığı (fused), (4) clean
+FP yok, (5) ≥2 dedektör (3σ+IQR). 293 test, mypy strict + ruff temiz. `Detector` ABC + `fuse_anomalies` +
+Faz 4 değişmedi (spec § 14 girdi kontratı korundu). **Sıradaki büyük adım: Faz 6 — ML dedektörler**
+(Isolation Forest, One-Class SVM).
 
 Faz seyri: `docs/ROADMAP.md`.
 

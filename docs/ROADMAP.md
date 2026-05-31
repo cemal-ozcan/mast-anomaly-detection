@@ -132,9 +132,16 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 
 **Spec (tek hakem):** `docs/specs/2026-05-31-faz5-statistical-detector-design.md` — on-the-fly rolling baseline + aynı servise entegre + tek uzun pencere (recent-vs-rest). 2 iterasyon.
 
+**Tüm kabul kriterleri karşılandı (2026-05-31):**
+- (1) Sistem ~N saat normal veri sonrası baseline'ı öğreniyor — on-the-fly rolling + abstain (warmup). ✅
+- (2) Sentetik arızalar yakalanabiliyor — **A/B doğrudan** (mean/median kayması, imza testleri + canlı smoke); **C (ElectricalFault) bir varyans arızasıdır → merkezi-eğilim dedektörlerine tamamlayıcıdır**: statistical sessiz (tasarım), kural katmanı `motor_voltage_erratic` yakalar. ✅
+- (3) Kural tabanlı dedektörle tutarlı (overlap): A'da `motor_current_high` + `three_sigma:motor_current` → `fused(N)`. ✅
+
 **İlerleme:**
 - ✅ Iter 5.1 — İstatistiksel altyapı (`statistical/base` recent-vs-rest split + (sensor,state) gruplama) + `ThreeSigma` (on-the-fly rolling μ±k·σ) + `statistical` config bloğu + poll servisinin iki-pencere'ye (kural 120s + istatistik 3600s) geçişi; istatistik anomalileri kural anomalileriyle `fused(N)`'de birleşir — 2026-05-31. 277 test, statistical %96-100. Canlı smoke: `three_sigma:motor_current` tetiklendi. "Baseline güncelleme mekanizması" on-the-fly rolling ile otomatik.
-- ⏳ Iter 5.2 — `IQR` dedektörü + A/B/C istatistiksel imza testleri + **overlap analizi** (kabul kriteri 3: kural ve istatistik aynı arızada tutarlı) — sıradaki
+- ✅ Iter 5.2 — `IQR` dedektörü (robust Q1/Q3 ± m·IQR, median) + STATISTICAL_REGISTRY/config + çok-segmentli `build_statistical_window` harness + gelişmiş kaçak fixture + A/B/C istatistiksel imza testleri (C tamamlayıcı) + **overlap analizi** (fused) — 2026-05-31. 293 test, mypy strict + ruff temiz. Canlı smoke: `fused(2)` (`three_sigma:motor_current` + `iqr:motor_current`), clean cihaz 0 FP. İmza eşikleri gerçek simülatör çıktısıyla ölçülerek kalibre edildi; durağan-değil sensörler (mast_position/motor_temperature) `sensors=[...]` ile harness artefaktından dışlandı.
+
+**Faz 5 ✅ DONE. Sıradaki: Faz 6 — ML dedektörler.**
 
 ---
 
