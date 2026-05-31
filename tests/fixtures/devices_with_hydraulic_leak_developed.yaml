@@ -1,0 +1,27 @@
+# Gelişmiş hidrolik kaçak: uzun holding (600s) → basınç derin düşer (ölçüldü: holding μ~55, son-60s ~33).
+# Mevcut 2-dk hold fixture istatistiksel olarak yetersizdi (2.5σ); bu, "N saat sonra" gelişmiş arıza
+# kabul kriterini (statistical pozitif imza) karşılar. Iter 5.2 imza testleri kullanır.
+devices:
+  - id: device_001
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle:     [1, 1]
+      raising:  [1, 1]
+      holding:  [600, 600]
+      lowering: [1, 1]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: hydraulic_leak
+        start_after_s: 0
+        duration_s: 3600
+        params:
+          leak_rate_bar_per_min: 5.0
+          position_sag_mm: 2.0
