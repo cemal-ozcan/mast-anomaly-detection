@@ -65,4 +65,7 @@ statistical:
       enabled: true
       severity: warning
       params: {sigma_k: 3.0, min_baseline: 30, min_current: 5}
-    # IQR Iter 5.2'de eklenecek.
+    - name: iqr
+      enabled: true
+      severity: warning
+      params: {iqr_multiplier: 1.5, min_baseline: 30, min_current: 5}

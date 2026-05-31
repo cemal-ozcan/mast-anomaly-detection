@@ -166,7 +166,24 @@ def test_build_statistical_unknown_raises(tmp_path: Path) -> None:
 
 
 def test_example_file_statistical_builds() -> None:
-    """config/detectors.yaml.example statistical bloğu geçerli + three_sigma kurar."""
+    """config/detectors.yaml.example statistical bloğu geçerli + three_sigma + iqr kurar."""
     cfg = load_detector_config(Path("config/detectors.yaml.example"))
     assert cfg.statistical is not None
-    assert [d.name for d in build_statistical_detectors(cfg.statistical)] == ["three_sigma"]
+    assert [d.name for d in build_statistical_detectors(cfg.statistical)] == ["three_sigma", "iqr"]
+
+
+def test_build_statistical_detectors_includes_iqr() -> None:
+    """statistical bloğunda iqr varsa build_statistical_detectors bir IQR kurar."""
+    from detectors.config import RuleConfig, StatisticalConfig, build_statistical_detectors
+
+    config = StatisticalConfig(
+        baseline_window_s=3600,
+        current_window_s=60,
+        detectors=(
+            RuleConfig(name="three_sigma", severity="warning", enabled=True, params={"sigma_k": 3.0}),
+            RuleConfig(name="iqr", severity="warning", enabled=True,
+                       params={"iqr_multiplier": 1.5, "min_baseline": 30, "min_current": 5}),
+        ),
+    )
+    detectors = build_statistical_detectors(config)
+    assert [d.name for d in detectors] == ["three_sigma", "iqr"]
