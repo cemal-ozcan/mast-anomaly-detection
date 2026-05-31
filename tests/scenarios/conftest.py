@@ -61,37 +61,16 @@ def patched_engine_clock(monkeypatch: pytest.MonkeyPatch) -> CountingClock:
     return clock
 
 
-def build_detector_window(
+def _run_segment(
     monkeypatch: pytest.MonkeyPatch,
     clock: CountingClock,
     devices_path: Path,
     max_iterations: int,
-) -> pd.DataFrame:
-    """Engine'i fixture ile koşturup dedektör-hazır uzun-format pencere döndürür.
-
-    Publisher timestamp üretmediğinden (publish anında kendi üretir), collected
-    reading'lere PER-SENSÖR monoton 1sn timestamp atanır (slope bar/dk doğru çıksın).
-    state DeviceState StrEnum value'suna ("raising" vb.) çevrilir.
-
-    Args:
-        monkeypatch: pytest monkeypatch (publisher mock için).
-        clock: patched_engine_clock fixture'ından CountingClock.
-        devices_path: fixture device YAML yolu.
-        max_iterations: engine tick sayısı.
-
-    Returns:
-        [device_id, timestamp, sensor, state, value] kolonlu pencere.
-    """
-    from collections import defaultdict
-    from datetime import UTC, datetime, timedelta
-    from unittest.mock import MagicMock
-
-    import pandas as pd
-
-    from simulator.config import DeviceState
+    mock_publisher: object,
+) -> None:
+    """Engine'i bir fixture ile koşturur; publish_reading çağrıları paylaşılan mock_publisher'a birikir."""
     from simulator.engine import run
 
-    mock_publisher = MagicMock()
     monkeypatch.setattr("simulator.engine._make_publisher", lambda c: mock_publisher)
     run(
         mqtt_config_path=FIXTURES / "mqtt_minimal.yaml",
@@ -102,10 +81,24 @@ def build_detector_window(
         clock=clock,
     )
 
+
+def _frame_from_publisher(mock_publisher: object) -> pd.DataFrame:
+    """Birikmiş publish_reading çağrılarına PER-(device,sensor) monoton 1sn timestamp atayıp uzun-format DataFrame döndürür.
+
+    Çağrı sırası korunur → önce koşan segment(ler) daha eski timestamp alır (baseline),
+    son segment en yeni (current). state DeviceState StrEnum value'suna çevrilir.
+    """
+    from collections import defaultdict
+    from datetime import UTC, datetime, timedelta
+
+    import pandas as pd  # gövde içi import (build_detector_window deseni; TYPE_CHECKING dışı runtime kullanımı)
+
+    from simulator.config import DeviceState
+
     base = datetime(2026, 5, 30, 0, 0, 0, tzinfo=UTC)
     counters: dict[tuple[str, str], int] = defaultdict(int)
     records: list[dict[str, object]] = []
-    for c in mock_publisher.publish_reading.call_args_list:
+    for c in mock_publisher.publish_reading.call_args_list:  # type: ignore[attr-defined]
         device_id = c.kwargs["device_id"]
         sensor = c.kwargs["sensor"]
         state = c.kwargs["state"]
@@ -123,3 +116,47 @@ def build_detector_window(
             }
         )
     return pd.DataFrame(records, columns=["device_id", "timestamp", "sensor", "state", "value"])
+
+
+def build_detector_window(
+    monkeypatch: pytest.MonkeyPatch,
+    clock: CountingClock,
+    devices_path: Path,
+    max_iterations: int,
+) -> pd.DataFrame:
+    """Engine'i tek fixture ile koşturup dedektör-hazır uzun-format pencere döndürür (kural imza testleri)."""
+    from unittest.mock import MagicMock
+
+    mock_publisher = MagicMock()
+    _run_segment(monkeypatch, clock, devices_path, max_iterations, mock_publisher)
+    return _frame_from_publisher(mock_publisher)
+
+
+def build_statistical_window(
+    monkeypatch: pytest.MonkeyPatch,
+    clock: CountingClock,
+    segments: list[tuple[Path, int]],
+) -> pd.DataFrame:
+    """Birden çok (fixture, iterations) segmentini SIRAYLA koşturup tek uzun-format pencere döndürür.
+
+    İlk segment(ler) baseline (eski timestamp), son segment güncel (yeni timestamp) olur →
+    statistical dedektör split_recent ile içeride ayırır. Tüm segmentler tek mock_publisher'a
+    birikir (çağrı sırası = timestamp sırası). current_window_s'i son segmentin iterasyon
+    sayısına (~saniye) eşitleyen test, son segmenti "current" yapar.
+
+    NOT (off-by-one): current_window_s = son segment iterasyonu olduğunda split_recent cutoff'u
+    son baseline örneğine denk gelir → "current"e 1 clean satır sızar; arıza tail (60-600 örnek)
+    yanında önemsiz. Bu yüzden A/B testleri membership/scoped set assertion kullanır.
+
+    Args:
+        segments: [(devices_yaml_path, max_iterations), ...]. En az 2 önerilir (baseline + tail).
+
+    Returns:
+        [device_id, timestamp, sensor, state, value] kolonlu uzun pencere.
+    """
+    from unittest.mock import MagicMock
+
+    mock_publisher = MagicMock()
+    for devices_path, max_iterations in segments:
+        _run_segment(monkeypatch, clock, devices_path, max_iterations, mock_publisher)
+    return _frame_from_publisher(mock_publisher)
