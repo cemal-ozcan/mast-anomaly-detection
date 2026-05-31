@@ -85,3 +85,12 @@ def test_empty_window_returns_empty() -> None:
     rule = IQR(current_window_s=60, iqr_multiplier=1.5, min_baseline=30, min_current=5)
     empty = pd.DataFrame(columns=["device_id", "timestamp", "sensor", "state", "value"])
     assert rule.detect(empty) == []
+
+
+def test_score_proportional_to_distance_beyond_fence() -> None:
+    """score = distance/IQR (clamp'lanmamış orta değer) — divisor IQR, fence değil (regresyon kilidi)."""
+    rule = IQR(current_window_s=60, iqr_multiplier=1.5, min_baseline=30, min_current=5)
+    # baseline Q1=0.4 Q3=0.6 IQR=0.2 upper=0.9; cur medyan 0.95 → distance 0.05 → score 0.25
+    anomalies = rule.detect(_window(_BASELINE, [0.95] * 6))
+    assert len(anomalies) == 1
+    assert abs(anomalies[0].score - 0.25) < 0.01
