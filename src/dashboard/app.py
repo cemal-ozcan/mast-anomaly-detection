@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,9 +26,10 @@ import streamlit as st  # noqa: E402
 from loguru import logger  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
+from alerts.lifecycle import ACKNOWLEDGED, RESOLVED, can_transition  # noqa: E402
 from dashboard.transform import (  # noqa: E402
     WINDOW_OPTIONS,
-    anomalies_to_frame,
+    alerts_to_frame,
     readings_to_frame,
     window_to_since,
 )
@@ -60,24 +62,76 @@ def _get_repository() -> TelemetryRepository:
     return TelemetryRepository(engine)
 
 
+_STATUS_FILTERS: dict[str, tuple[str, ...] | None] = {
+    "Açık": ("active", "acknowledged"),
+    "Tümü": None,
+    "active": ("active",),
+    "acknowledged": ("acknowledged",),
+    "resolved": ("resolved",),
+}
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _apply_transition(fn: Callable[[int, str], bool], alert_id: int) -> None:
+    """Geçiş metodunu çağırır; sonuca göre kullanıcıyı bilgilendirir (spec § 9)."""
+    try:
+        ok = fn(alert_id, _now_iso())
+    except OperationalError as e:
+        logger.error("Uyarı durumu yazılamadı: {}", e)
+        st.error("Uyarı durumu güncellenemedi (DB hatası).")
+        return
+    if not ok:
+        st.info("Uyarı durumu değişmiş olabilir — listeyi yenileyin.")
+
+
 @st.experimental_fragment(run_every="5s")
 def _render_alerts(repository: TelemetryRepository) -> None:
-    """Filo geneli son anomalileri (fused alert'ler) tablo olarak gösterir; 5s'de bir yenilenir.
+    """Filo geneli uyarı tablosunu durum kolonu + filtre ile gösterir; 5s'de bir yenilenir (spec § 8).
 
-    Gözlem modu: yalnız fetch_recent_anomalies okur. anomalies tablosu yoksa (detector hiç
-    çalışmadı) bilgilendirir; çökmez (spec § 7 hata yönetimi deseni).
+    SALT-GÖRÜNTÜ (auto-refresh). Yönetim (ack/resolve) butonları _render_alert_management'ta
+    (main() içinde, fragment dışında — auto-rerun buton yarışını önler, S1). Gözlem modu: hiçbir
+    şey yazmaz. anomalies tablosu yoksa bilgilendirir; çökmez (spec § 7/§ 9).
     """
-    st.subheader("🚨 Aktif Uyarılar")
+    st.subheader("🚨 Uyarılar")
+    choice = st.selectbox("Durum filtresi", list(_STATUS_FILTERS.keys()), index=0, key="alert_filter")
+    statuses = _STATUS_FILTERS[choice or "Açık"]
     try:
-        anomalies = repository.fetch_recent_anomalies(limit=20)
+        alerts = repository.fetch_alerts(statuses, limit=50)
     except OperationalError as e:
         logger.info("anomalies tablosu henüz yok: {}", e)
         st.info("Henüz anomali yok — detector servisi (`python -m detectors`) çalıştı mı?")
         return
-    if not anomalies:
-        st.caption("Aktif uyarı yok.")
+    if not alerts:
+        st.caption("Bu filtrede uyarı yok.")
         return
-    st.dataframe(anomalies_to_frame(anomalies), use_container_width=True, hide_index=True)
+    st.dataframe(alerts_to_frame(alerts), use_container_width=True, hide_index=True)
+
+
+def _render_alert_management(repository: TelemetryRepository) -> None:
+    """Açık bir uyarı seçip ack/resolve eden yönetim kontrolü (main() içinde, fragment DIŞINDA, S1).
+
+    Gözlem modu: yalnız uyarı DURUMU yazılır (telemetri değil, cihaz komutu değil). Buton tıklaması
+    tam app rerun'ı tetikler → liste tazelenir.
+    """
+    try:
+        open_alerts = repository.fetch_alerts(("active", "acknowledged"), limit=50)
+    except OperationalError:
+        return  # tablo yoksa _render_alerts zaten bilgilendirdi
+    if not open_alerts:
+        return
+    options = {f"#{a.id} {a.device_id} · {a.rule_name} ({a.status})": a for a in open_alerts}
+    label = st.selectbox("Uyarı yönet", list(options.keys()), key="alert_manage")
+    selected = options.get(label) if label else None
+    if selected is None:
+        return
+    cols = st.columns(2)
+    if can_transition(selected.status, ACKNOWLEDGED) and cols[0].button("Gör (ack)", key="ack_btn"):
+        _apply_transition(repository.acknowledge_alert, selected.id)
+    if can_transition(selected.status, RESOLVED) and cols[1].button("Çöz (resolve)", key="resolve_btn"):
+        _apply_transition(repository.resolve_alert, selected.id)
 
 
 @st.experimental_fragment(run_every="2s")
@@ -126,6 +180,7 @@ def main() -> None:
         return
 
     _render_alerts(repository)
+    _render_alert_management(repository)
     st.divider()
 
     device_id: str = st.sidebar.selectbox("Cihaz", devices) or devices[0]
