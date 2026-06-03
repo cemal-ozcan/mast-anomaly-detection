@@ -168,3 +168,39 @@ def test_detect_once_failing_rule_does_not_block_others(migrated_engine: Engine)
     stored = repo.fetch_recent_anomalies(limit=10)
     assert len(stored) == 1
     assert stored[0].rule_name == "motor_temperature_high"
+
+
+def test_detect_once_auto_resolves_open_alert_on_clear(migrated_engine: Engine) -> None:
+    """Arıza temizlenince (re-arm) cihazın açık uyarısı otomatik resolved olur (Faz 7)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    active: dict[str, frozenset[str]] = {}
+
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # active uyarı yazılır
+    assert [a.status for a in repo.fetch_alerts(None, limit=10)] == ["active"]
+
+    with migrated_engine.begin() as conn:
+        conn.execute(text("UPDATE telemetry SET value = 25.0 WHERE sensor = 'motor_temperature'"))
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # arıza temizlendi → auto-resolve
+
+    resolved = repo.fetch_alerts(("resolved",), limit=10)
+    assert len(resolved) == 1
+    assert resolved[0].resolved_at is not None
+    assert active == {}
+
+
+def test_detect_once_no_resolve_when_device_never_active(migrated_engine: Engine) -> None:
+    """Hiç arıza vermemiş cihaz için re-arm dalı resolve_open_alerts çağırmaz (boşa UPDATE yok)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 25.0))  # eşik altı
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    active: dict[str, frozenset[str]] = {}
+    # Önce manuel bir resolved-olmayan satır ekle; clean cihaz turu buna DOKUNMAMALI.
+    repo.insert_anomaly(
+        Anomaly(device_id="device_001", rule_name="x", sensor="s", severity="warning",
+                score=0.1, window_start="a", window_end="b", value=1.0, description="d"),
+        "2026-05-30T00:00:00.000Z",
+    )
+    _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
+    assert [a.status for a in repo.fetch_alerts(None, limit=10)] == ["active"]  # dokunulmadı

@@ -117,7 +117,16 @@ def _detect_once(
 
         rule_set = frozenset(a.rule_name for a in device_anomalies)
         if not rule_set:
-            active.pop(device_id, None)  # fault temizlendi → re-arm
+            if device_id in active:  # izlenen arıza gerçekten temizlendi → auto-resolve (Faz 7)
+                active.pop(device_id, None)
+                try:
+                    closed = repository.resolve_open_alerts(device_id, created_at)
+                    if closed:
+                        logger.info(
+                            "Auto-resolve: device={} kapatılan uyarı={}", device_id, closed
+                        )
+                except OperationalError as e:
+                    logger.error("Auto-resolve yazılamadı (atlandı): {}", e)
             continue
         # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez".
         if active.get(device_id) == rule_set:
