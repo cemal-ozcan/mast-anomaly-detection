@@ -49,6 +49,7 @@ class TelemetryRepository:
     @staticmethod
     def _anomaly_to_dict(anomaly: Anomaly, created_at: str) -> dict[str, object]:
         """Anomaly + created_at'i anomalies kolon dict'ine çevirir."""
+        # NOT: status/acknowledged_at/resolved_at kasıtlı dışarıda — SQLite DEFAULT 'active' uygular (Faz 7 yaşam döngüsü).
         return {
             "device_id": anomaly.device_id,
             "rule_name": anomaly.rule_name,
