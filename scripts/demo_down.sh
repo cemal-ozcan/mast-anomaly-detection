@@ -28,5 +28,14 @@ for _ in 1 2 3 4 5; do
   sleep 1
 done
 
+# Grace sonrası hâlâ ayakta olan süreçleri zorla kapat (zombie → bir sonraki demo_up'ta
+# client_id collision'ı önler). M3 hardening.
+for pid in "${pids[@]:-}"; do
+  if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+    echo "demo_down: $pid hâlâ ayakta, SIGKILL gönderiliyor..."
+    kill -9 "$pid" 2>/dev/null || true
+  fi
+done
+
 rm -f "$PIDFILE"
 echo "demo_down: temiz kapandı."
