@@ -185,7 +185,7 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 
 ---
 
-## Faz 8 — Pilot ve Demo
+## Faz 8 — Pilot ve Demo (devam ediyor)
 
 **Hedef:** Gösterilebilir, biten bir prototip.
 
@@ -194,11 +194,16 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 - Dokümantasyon tamamla
 - Sunum materyali hazırla
 - Bilinen sınırlamaları belgele
+- (Iter 8.2) Dashboard görsel zenginleştirme (KPI, cihaz sağlık, anomali overlay, tema)
 
 **Kabul kriteri:**
-- Yöneticiye/firmaya 15 dakikada gösterilip anlatılabiliyor
-- En az 3 farklı arıza senaryosu canlı demo edilebiliyor
-- Kod kalitesi review için hazır
+- Yöneticiye/firmaya 15 dakikada gösterilip anlatılabiliyor — ✅ Iter 8.1 (`docs/DEMO.md` beat-script + tek-komut `demo_up.sh`)
+- En az 3 farklı arıza senaryosu canlı demo edilebiliyor — ✅ Iter 8.1 (mechanical_wear + hydraulic_leak + electrical_fault canlı tespit; device_001 temiz 0 FP; kural+istatistik `fused` overlap; auto-resolve)
+- Kod kalitesi review için hazır — ✅ (313 test, mypy strict + ruff temiz)
+
+**İlerleme:**
+- ✅ Iter 8.1 — Demo orkestrasyon (`scripts/demo_up.sh`/`demo_down.sh` + `seed_demo_baseline.py`) + `config/devices.demo.yaml` (temiz + A/B/C choreographed + kısa-arıza auto-resolve) + `config/detectors.demo.yaml` (reduced baseline + statistical `sensors` daraltma, canlı smoke kalibrasyonu) + `docs/DEMO.md` runbook + run-simulation/README düzeltme — 2026-06-03. Canlı demo smoke: 0 FP + ≥3 senaryo + overlap + auto-resolve doğrulandı. `src/` değişmedi. Spec: `docs/specs/2026-06-03-faz8-iter8-1-demo-orchestration-design.md`.
+- ⏳ Iter 8.2 — Dashboard görsel zenginleştirme (KPI metrikleri, cihaz sağlık genel-bakış, grafik üstü anomali overlay, `.streamlit` tema) — sıradaki.
 
 ---
 
