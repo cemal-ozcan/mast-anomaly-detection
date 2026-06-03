@@ -145,38 +145,43 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 
 ---
 
-## Faz 6 — Makine Öğrenmesi Dedektörü
+## Faz 6 — Makine Öğrenmesi Dedektörü ⏸️ ERTELENDİ (stretch)
 
-**Hedef:** scikit-learn ile Isolation Forest dedektörü.
+> **Karar (2026-06-03):** Faz 6 (ML) **atlandı, Faz 9+ stretch'e ertelendi.** Gerekçe (objektif değerlendirme):
+> simülatör yalnız A/B/C arızası üretiyor ve ikisi de mevcut iki katmanca (kural + istatistik) yakalanıyor →
+> Isolation Forest'ın değer önermesi (öngörülmeyen/çok-değişkenli anomali) sentetik veride karşılığı yok;
+> aynı generator'dan eğitim+test methodolojik olarak zayıf; ML kalan fazlar içinde en yüksek karmaşıklık /
+> en düşük marjinal tespit değeri. Kuzey yıldızı gereği önce yönetilebilir uyarı (Faz 7) + demo (Faz 8).
+> ML, gerçek/çeşitli veri geldiğinde ya da minimal on-the-fly versiyonla ileride değerlendirilir.
 
-**Kapsam:**
-- Veri ön işleme pipeline'ı (scaling, feature engineering)
-- Isolation Forest eğitimi (normal veri üzerinde)
-- Model kaydetme/yükleme
-- Çoklu sensörlü çok değişkenli anomali tespiti
-- Tahmin servisi (real-time)
+**Hedef (ertelendi):** scikit-learn ile Isolation Forest dedektörü.
 
-**Kabul kriteri:**
-- Model normal veriden öğreniyor
-- Test setinde anomalileri yakalıyor
-- Üretim ortamında düşük gecikmeyle çalışıyor (<100ms tahmin başına)
+**Kapsam (ertelendi):** Veri ön işleme pipeline'ı; Isolation Forest eğitimi; model kaydetme/yükleme;
+çok-değişkenli anomali; tahmin servisi.
+
+**Kabul kriteri (ertelendi):** Model normal veriden öğreniyor; test setinde anomali yakalıyor; <100ms/tahmin.
 
 ---
 
-## Faz 7 — Alert Manager
+## Faz 7 — Alert Manager ✅ DONE (2026-06-03)
 
-**Hedef:** Üç dedektörün çıktısını yönetilebilir uyarılara dönüştürmek.
+**Hedef:** Dedektörlerin çıktısını yönetilebilir uyarılara dönüştürmek.
 
 **Kapsam:**
-- Füzyon mantığı (çoklu dedektör tetikleyince tek uyarı)
-- Debouncing (tekrar eden uyarıları sustur)
-- Önceliklendirme
-- Uyarı yaşam döngüsü (yeni, görüldü, kapalı)
+- Füzyon mantığı (çoklu dedektör tetikleyince tek uyarı) — ✅ Faz 4.3'ten (`fuse_anomalies`)
+- Debouncing (tekrar eden uyarıları sustur) — ✅ Faz 4.3'ten (epizot debounce)
+- Uyarı yaşam döngüsü (yeni→görüldü→kapalı) — ✅ Iter 7.1
+- Önceliklendirme — ⏸️ ertelendi (kapsam dışı; istenirse Iter 7.2)
 
-**Kabul kriteri:**
-- Bir arıza senaryosu birden fazla dedektörü tetiklediğinde tek bir uyarı oluşuyor
-- Dashboard'da uyarı durumu yönetilebiliyor
-- Yanlış pozitif oranı önceki fazlara göre düşüyor
+**Tüm kabul kriterleri karşılandı (2026-06-03):**
+- (1) Bir arıza birden fazla dedektörü tetiklediğinde tek uyarı (`fused(N)`) — ✅ regresyon korundu.
+- (2) Dashboard'da uyarı durumu yönetilebiliyor — ✅ Iter 7.1: active→acknowledged→resolved, ack/resolve butonları + durum filtresi + detector auto-resolve + canlı smoke.
+- (3) Yanlış pozitif/gürültü oranı düşüyor — ✅ (dürüst çerçeve): auto-resolve + resolved'ı varsayılan görünümden çıkarma gürültüyü azaltır; ham FP'yi Faz 4 debounce düşürmüştü; açık önceliklendirme/suppression ertelendi.
+
+**İlerleme:**
+- ✅ Iter 7.1 — migration 003 (`anomalies` status/acknowledged_at/resolved_at) + saf `src/alerts/` paketi (lifecycle + Alert) + repository ack/resolve/resolve_open/fetch_alerts (atomik SQL WHERE) + detector `_detect_once` auto-resolve (re-arm) + dashboard durum kolonu/filtre/yönetim (fragment dışı) — 2026-06-03. 308 test, mypy strict + ruff temiz. Canlı smoke: arıza→`active`→temizlenme→`resolved` auto-resolve doğrulandı. Spec: `docs/specs/2026-06-03-faz7-alert-manager-design.md`.
+
+**Faz 7 ✅ DONE. Sıradaki: Faz 8 — Pilot/Demo** (Faz 6 ML stretch'e ertelendi).
 
 ---
 

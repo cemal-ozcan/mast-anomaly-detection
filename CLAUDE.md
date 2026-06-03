@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 5 — İstatistiksel Dedektör** ✅ DONE (2026-05-31) — Iter 5.1 (altyapı + ThreeSigma) + Iter 5.2 (IQR + A/B/C imza + overlap) tamamlandı. Faz 4 ✅ DONE (4 iterasyon). Sıradaki büyük adım: Faz 6 — ML dedektörler.
+**Faz 7 — Alert Manager (Uyarı Yaşam Döngüsü)** ✅ DONE (2026-06-03) — Iter 7.1 (active→acknowledged→resolved yaşam döngüsü + detector auto-resolve + dashboard ack/resolve yönetimi). Faz 1-5 ✅ DONE. **Faz 6 — ML dedektörler (Isolation Forest) ATLANDI / stretch'e ertelendi** (kullanıcı kararı 2026-06-03: simülatör yalnız A/B/C üretiyor, ikisi de mevcut iki katmanca yakalanıyor → ML'in sentetik veride marjinal tespit değeri düşük + en yüksek karmaşıklık; kuzey yıldızı gereği önce yönetilebilir uyarı + demo). **Sıradaki büyük adım: Faz 8 — Pilot/Demo** (Faz 9+ stretch'te ML).
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -449,6 +449,39 @@ mean/median-kör → kural katmanı yakalar) yakalanır + canlı smoke, (3) over
 FP yok, (5) ≥2 dedektör (3σ+IQR). 293 test, mypy strict + ruff temiz. `Detector` ABC + `fuse_anomalies` +
 Faz 4 değişmedi (spec § 14 girdi kontratı korundu). **Sıradaki büyük adım: Faz 6 — ML dedektörler**
 (Isolation Forest, One-Class SVM).
+
+## Faz 7 (Alert Manager — Uyarı Yaşam Döngüsü)
+
+### Iterasyon 7.1 (Yaşam Döngüsü + Dashboard Yönetimi) — Tamamlandı (2026-06-03)
+
+Ham anomaliler yönetilebilir uyarılara dönüştü. **Veri modeli:** migration 003 `anomalies` tablosuna
+`status` (active|acknowledged|resolved, DEFAULT 'active') + `acknowledged_at` + `resolved_at` + `idx_anomalies_status`
+ekledi (`insert_anomaly` DEĞİŞMEDİ — status DB default'tan dolar). **Yeni saf `src/alerts/` paketi:** `lifecycle.py`
+(durum makinesi: `ACTIVE/ACKNOWLEDGED/RESOLVED` + `ALLOWED_TRANSITIONS` + `can_transition`; geçişler active→{ack,resolved},
+acknowledged→{resolved}, resolved terminal) + `models.py` (`Alert` 14-alan okuma modeli; `Anomaly` yazma kontratı ayrı kalır).
+Saf leaf (stdlib-only) → storage/dashboard import eder, döngü yok. **Repository:** `acknowledge_alert`/`resolve_alert`
+(geçiş SQL `WHERE` ile atomik zorlanır — ack `status='active'`, resolve `status IN (active,acknowledged)`), `resolve_open_alerts(device,at)`
+(cihazın `status != 'resolved'` tümü; detector auto-resolve), `fetch_alerts(statuses|None, limit)` + `_row_to_alert`.
+**Detector auto-resolve:** `_detect_once` re-arm dalı (`if not rule_set and device_id in active`) → `resolve_open_alerts`
+(arıza temizlenince cihazın açık uyarılarını otomatik kapatır; eskalasyon davranışı DEĞİŞMEZ — eski uyarı resolved işaretlenmez).
+**Dashboard:** `alerts_to_frame` (durum kolonu) + durum filtresi (Açık/Tümü/...) salt-görüntü `run_every=5s` fragment'inde;
+ack/resolve butonları `_render_alert_management`'ta (`main()` içinde, fragment DIŞINDA — auto-rerun buton yarışını önler).
+Gözlem modu korunur: dashboard yalnız uyarı DURUMU yazar (telemetri/cihaz komutu değil). **18 yeni test** (308 passed +1 skipped),
+mypy strict + ruff temiz. **Canlı smoke:** gerçek `detectors.service.run()` 95°C arıza → `status=active` → değer 25°C'ye düşünce
+sonraki poll `Auto-resolve: kapatılan uyarı=1` → `status=resolved` + `resolved_at`, temiz kapanış.
+
+**Spec (tek hakem):** `docs/specs/2026-06-03-faz7-alert-manager-design.md`. **Bilinen sınırlar (kabul):** süregelen arızayı
+manuel resolve → detector ayrı süreç, kural-seti değişene kadar yeni uyarı açılmaz; detector restart / auto-resolve DB hatası →
+orphan açık uyarı (manuel kapatılır); eskalasyonda cihaz başına >1 açık uyarı (dürüst). **Önceliklendirme + skor standardizasyonu
+ertelendi** (kapsam dışı; istenirse Faz 7 Iter 7.2).
+
+## Faz 7 Closure (2026-06-03)
+
+Faz 7 = Alert Manager. Iter 7.1 yaşam döngüsü + dashboard yönetimi. **Kabul kriterleri (ROADMAP § Faz 7) karşılandı:**
+(1) çoklu dedektör → tek `fused(N)` (Faz 4'ten, regresyon korundu), (2) dashboard'da uyarı durumu yönetilebiliyor (ack/resolve +
+filtre + canlı smoke), (3) FP/gürültü çerçevesi (auto-resolve + resolved'ı varsayılan görünümden çıkarma; ham FP'yi Faz 4 debounce
+düşürdü; açık önceliklendirme ertelendi). 308 test, mypy strict + ruff temiz. `Detector` ABC + `Anomaly` + `fuse_anomalies` +
+`insert_anomaly` DEĞİŞMEDİ (spec § 12 girdi kontratı korundu). **Faz 6 (ML) atlandı/stretch'e ertelendi. Sıradaki: Faz 8 — Pilot/Demo.**
 
 Faz seyri: `docs/ROADMAP.md`.
 

@@ -147,7 +147,7 @@ CLAUDE.md disiplini (spesifik exception, `except Exception` yasak, loguru).
 
 **Bilinen sınırlar (belgelenir — prototip kabul):**
 1. **Manuel resolve sırasında süregelen arıza:** teknisyen *aktif* bir arızayı manuel `resolved` ederse, detector'ın in-memory `active` dict'i (ayrı süreç) bunu bilmez → kural-seti değişene veya arıza temizlenene kadar yeni uyarı açılmaz. Auto-resolve yaygın durumu kapsar; manuel resolve yanlış-alarm kapatmak içindir.
-2. **Detector restart orphan'ı:** detector yeniden başlarsa `active` dict boşalır; o an açık olan uyarılar, o cihaz tekrar arıza verip temizlenene kadar auto-resolve edilmeyebilir → teknisyen manuel kapatır.
+2. **Detector restart orphan'ı:** detector yeniden başlarsa `active` dict boşalır; o an açık olan uyarılar, o cihaz tekrar arıza verip temizlenene kadar auto-resolve edilmeyebilir → teknisyen manuel kapatır. **Aynı sınıf:** auto-resolve sırasında `resolve_open_alerts` `OperationalError` verirse cihaz `active`'ten zaten düşmüştür → o açık uyarılar bir sonraki temiz turda yeniden denenmez (orphan); teknisyen manuel kapatır (loguru ERROR loglanır).
 3. **Eskalasyonda >1 açık uyarı:** § 2.3 (kabul edilen dürüst davranış).
 
 ---
