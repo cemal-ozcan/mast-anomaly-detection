@@ -1,0 +1,69 @@
+# Demo detector config (Faz 8 Iter 8.1): detectors.yaml.example + reduced baseline_window_s (300) + min_baseline 20 — istatistik 15-dk demoda canlı tetiklensin. demo_up.sh bunu config/detectors.yaml'a kopyalar.
+detectors:
+  poll_interval_s: 5.0
+  # window_s=120: türev (slope) kuralının yeterli HOLDING örneği görmesi için.
+  # Gürültülü basınçta (σ=2 bar) az örnekli eğim tahmini oynaktır (std ~13 bar/dk @ n=10);
+  # 60+ örnekte std ~0.9 bar/dk → temiz veride yanlış pozitif ~%0.02 (canlı smoke kalibrasyonu).
+  window_s: 120
+  rules:
+    - name: motor_temperature_high
+      enabled: true
+      severity: critical
+      params:
+        critical_threshold_c: 80.0
+
+    - name: motor_current_high
+      enabled: true
+      severity: high
+      params:
+        state: raising
+        threshold_a: 9.0
+        min_samples: 10
+
+    - name: vibration_elevated
+      enabled: true
+      severity: warning
+      params:
+        state: raising
+        threshold_g: 0.37
+        min_samples: 10
+
+    - name: hydraulic_pressure_decline
+      enabled: true
+      severity: warning
+      params:
+        state: holding
+        # Eşik 3.0 + min_samples 60: kaçak (-5 bar/dk) ~%99 yakalanır, temiz gürültü ~%0.02 FP.
+        # min_samples=60 az-örnekli oynak eğim FP'sini yapısal olarak da engeller (n<60 → skip).
+        slope_threshold_bar_per_min: 3.0
+        min_samples: 60
+
+    - name: motor_voltage_erratic
+      enabled: true
+      severity: warning
+      params:
+        std_threshold_v: 1.0
+        min_samples: 10
+
+    - name: sensor_frozen
+      enabled: true
+      severity: warning
+      params:
+        sensor: motor_voltage
+        min_samples: 20
+        epsilon: 0.01
+
+# İstatistiksel dedektörler (Faz 5): on-the-fly rolling baseline → 3-sigma + IQR.
+# Demo: baseline_window_s=300 (5dk) + min_baseline=20 → 15-dk demo içinde canlı tetiklensin.
+statistical:
+  baseline_window_s: 300
+  current_window_s: 60
+  detectors:
+    - name: three_sigma
+      enabled: true
+      severity: warning
+      params: {sigma_k: 3.0, min_baseline: 20, min_current: 5}
+    - name: iqr
+      enabled: true
+      severity: warning
+      params: {iqr_multiplier: 1.5, min_baseline: 20, min_current: 5}

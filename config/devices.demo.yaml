@@ -1,0 +1,89 @@
+# Demo filosu (Faz 8 Iter 8.1): temiz kontrol + A/B/C choreographed.
+# demo_up.sh bunu config/devices.yaml'a kopyalar. Süreler Task 5 canlı smoke ile kalibre edilir.
+devices:
+  # device_001: temiz kontrol — hiç arıza, hiç uyarı (kontrast + FP yok kanıtı).
+  - id: device_001
+    type: telescopic_mast_v1
+    seed: 42
+    target_height_mm: 5000
+    state_durations:
+      idle:     [3, 3]
+      raising:  [15, 15]
+      holding:  [30, 30]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+
+  # device_002: mechanical_wear — KISA süreli (biter → auto-resolve beat'i).
+  - id: device_002
+    type: telescopic_mast_v1
+    seed: 7
+    target_height_mm: 6000
+    state_durations:
+      idle:     [3, 3]
+      raising:  [15, 15]
+      holding:  [30, 30]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: mechanical_wear
+        start_after_s: 60
+        duration_s: 150
+        params: {severity: 0.25, ramp_up_s: 30}
+
+  # device_003: hydraulic_leak — UZUN holding (slope kuralı min_samples 60 ister).
+  - id: device_003
+    type: telescopic_mast_v1
+    seed: 123
+    target_height_mm: 4500
+    state_durations:
+      idle:     [3, 3]
+      raising:  [10, 10]
+      holding:  [180, 180]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: hydraulic_leak
+        start_after_s: 60
+        duration_s: 1800
+        params: {leak_rate_bar_per_min: 5.0, position_sag_mm: 2.0}
+
+  # device_004: electrical_fault — varyans arızası (kural motor_voltage_erratic; istatistik sessiz = tamamlayıcı).
+  - id: device_004
+    type: telescopic_mast_v1
+    seed: 99
+    target_height_mm: 5500
+    state_durations:
+      idle:     [3, 3]
+      raising:  [15, 15]
+      holding:  [30, 30]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: electrical_fault
+        start_after_s: 60
+        duration_s: 1800
+        params: {spike_prob: 0.05, voltage_jitter_std: 0.6}
