@@ -75,6 +75,7 @@ models/
 Thumbs.db
 Desktop.ini
 
-# Local config (gerçek dosyalar; örnekler commitlenir)
+# Local config (gerçek dosyalar; örnekler + demo dosyaları commitlenir)
 config/*.yaml
 !config/*.yaml.example
+!config/*.demo.yaml
