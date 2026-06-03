@@ -41,7 +41,7 @@ Kullanıcı sistemin tamamını çalıştırıp simülasyon yapmak istiyor.
 
 Tüm servisleri durdururken sırayı tersten izle:
 1. Simulator'ı durdur (veri akışı kessin)
-2. Dashboard, Alert, Detector, Ingestion'ı durdur
+2. Dashboard, Detector, Ingestion'ı durdur (veya tek komut: ./scripts/demo_down.sh)
 3. Mosquitto'yu durdur
 
 ## Sorun Giderme
