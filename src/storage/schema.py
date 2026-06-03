@@ -45,11 +45,21 @@ anomalies = Table(
     Column("value", REAL, nullable=False),
     Column("description", Text, nullable=False),
     Column("created_at", Text, nullable=False),
+    Column("status", Text, nullable=False),  # active | acknowledged | resolved (migration 003)
+    Column("acknowledged_at", Text),  # nullable
+    Column("resolved_at", Text),  # nullable
 )
 
 # Dashboard (Iter 4.3) + doğrulama "son anomaliler" sorgular (spec § 5).
 idx_anomalies_device_created = Index(
     "idx_anomalies_device_created",
     anomalies.c.device_id,
+    anomalies.c.created_at,
+)
+
+# Dashboard durum filtresi (Faz 7 Iter 7.1, spec § 5).
+idx_anomalies_status = Index(
+    "idx_anomalies_status",
+    anomalies.c.status,
     anomalies.c.created_at,
 )
