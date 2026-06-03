@@ -25,17 +25,19 @@ from storage.repository import TelemetryRepository
 
 # Ölçülen temiz per-(sensor, state) ortalamalar (Faz 5) + makul std (σ>0 → fence degenere değil).
 # Yalnız arızaların tezahür ettiği RAISING + HOLDING durumları (istatistik bu state'lerde tetiklenir).
+# NOT (Task 5 kalibrasyon): yalnız DURAĞAN, statistical-izlenen sensörler seed'lenir
+# (detectors.demo `sensors: [motor_current, vibration, hydraulic_pressure]`). motor_temperature
+# (stateful, soğuk-başlangıç rampası) + mast_position (rampalı) seed-baseline ile eşleşmez → FP'ye
+# yol açar; motor_voltage statistical-kapsam dışı (varyans arızası kural katmanı işi). Bu yüzden
+# burada YOK — canlı smoke device_001'de FP'yi bu daraltmayla giderdi.
 _CLEAN: dict[str, dict[str, tuple[float, float]]] = {
     "motor_current":      {"raising": (8.0, 0.1),  "holding": (0.5, 0.1)},
     "vibration":          {"raising": (0.30, 0.01), "holding": (0.05, 0.01)},
     "hydraulic_pressure": {"raising": (150.0, 2.0), "holding": (80.0, 2.0)},
-    "motor_voltage":      {"raising": (24.0, 0.2),  "holding": (24.0, 0.2)},
-    "motor_temperature":  {"raising": (31.0, 1.5),  "holding": (34.0, 1.5)},
 }
 
 _UNITS = {
     "motor_current": "A", "vibration": "g", "hydraulic_pressure": "bar",
-    "motor_voltage": "V", "motor_temperature": "celsius",
 }
 
 

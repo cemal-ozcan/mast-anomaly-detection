@@ -59,11 +59,14 @@ statistical:
   baseline_window_s: 300
   current_window_s: 60
   detectors:
+    # DEMO kalibrasyon (Task 5 canlı smoke): sensors=[...] ile yalnız durağan, arıza-ilgili
+    # sensörlere daralt. motor_temperature (stateful, soğuk-başlangıç rampası) + mast_position
+    # (rampalı) seed-baseline ile eşleşmez → FP; motor_voltage varyans arızası (statistical-kör).
     - name: three_sigma
       enabled: true
       severity: warning
-      params: {sigma_k: 3.0, min_baseline: 20, min_current: 5}
+      params: {sigma_k: 3.0, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
     - name: iqr
       enabled: true
       severity: warning
-      params: {iqr_multiplier: 1.5, min_baseline: 20, min_current: 5}
+      params: {iqr_multiplier: 1.5, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
