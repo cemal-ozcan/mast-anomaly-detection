@@ -1,46 +1,29 @@
-"""dashboard.transform.anomalies_to_frame birim testi (Faz 4 Iter 4.3)."""
+"""dashboard.transform.alerts_to_frame birim testi (Faz 7 Iter 7.1)."""
 from __future__ import annotations
 
-from dashboard.transform import anomalies_to_frame
-from detectors.base import Anomaly
+
+def test_alerts_to_frame_columns_and_status() -> None:
+    """alerts_to_frame durum kolonu içerir; girdi sırasını korur; skor yuvarlanır."""
+    from alerts.models import Alert
+    from dashboard.transform import alerts_to_frame
+
+    alerts = [
+        Alert(id=1, device_id="device_001", rule_name="motor_current_high", sensor="motor_current",
+              severity="high", score=0.912, window_start="s", window_end="2026-06-03T10:00:00.000Z",
+              value=10.0, description="d", created_at="c", status="active",
+              acknowledged_at=None, resolved_at=None),
+    ]
+    frame = alerts_to_frame(alerts)
+    assert list(frame.columns) == ["zaman", "cihaz", "severity", "sensör", "kural", "skor", "durum", "açıklama"]
+    assert frame.iloc[0]["durum"] == "active"
+    assert frame.iloc[0]["skor"] == 0.91
+    assert frame.iloc[0]["zaman"] == "2026-06-03T10:00:00.000Z"
 
 
-def _anom(rule_name: str = "motor_current_high", device: str = "device_001") -> Anomaly:
-    return Anomaly(
-        device_id=device,
-        rule_name=rule_name,
-        sensor="motor_current",
-        severity="high",
-        score=0.87,
-        window_start="2026-05-30T00:00:00.000Z",
-        window_end="2026-05-30T00:01:00.000Z",
-        value=10.5,
-        description=f"{rule_name} açıklaması",
-    )
+def test_alerts_to_frame_empty_correct_schema() -> None:
+    """Boş girdi → 0 satırlı, doğru kolonlu DataFrame."""
+    from dashboard.transform import alerts_to_frame
 
-
-def test_empty_returns_correct_schema() -> None:
-    """Boş liste → 0 satırlı ama doğru kolonlu DataFrame."""
-    frame = anomalies_to_frame([])
-    assert list(frame.columns) == ["zaman", "cihaz", "severity", "sensör", "kural", "skor", "açıklama"]
+    frame = alerts_to_frame([])
+    assert list(frame.columns) == ["zaman", "cihaz", "severity", "sensör", "kural", "skor", "durum", "açıklama"]
     assert len(frame) == 0
-
-
-def test_maps_fields_to_columns() -> None:
-    """Her Anomaly alanı doğru kolona eşlenir; skor 2 ondalığa yuvarlanır."""
-    frame = anomalies_to_frame([_anom()])
-    assert len(frame) == 1
-    row = frame.iloc[0]
-    assert row["zaman"] == "2026-05-30T00:01:00.000Z"  # window_end
-    assert row["cihaz"] == "device_001"
-    assert row["severity"] == "high"
-    assert row["sensör"] == "motor_current"
-    assert row["kural"] == "motor_current_high"
-    assert row["skor"] == 0.87
-    assert row["açıklama"] == "motor_current_high açıklaması"
-
-
-def test_preserves_order() -> None:
-    """Girdi sırası (repository created_at DESC) korunur."""
-    frame = anomalies_to_frame([_anom(rule_name="a"), _anom(rule_name="b")])
-    assert list(frame["kural"]) == ["a", "b"]
