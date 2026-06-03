@@ -22,7 +22,7 @@ Tek hakem: `docs/specs/2026-06-03-faz7-alert-manager-design.md`. Kabul kriterler
 - `src/alerts/models.py` — `Alert` frozen dataclass (okuma/yönetim görünümü).
 - `src/storage/migrations/003_alert_lifecycle.sql` — ALTER TABLE + index (version-gated).
 - `tests/unit/alerts/__init__.py`, `tests/unit/alerts/test_lifecycle.py` — lifecycle birim testleri.
-- `tests/integration/test_alert_repository.py` — migration default + repository alert metotları.
+- `tests/unit/test_storage_alert_repository.py` — migration default + repository alert metotları.
 
 **Değişen:**
 - `src/storage/schema.py` — `anomalies` Table'a 3 kolon + `idx_anomalies_status` (DDL ÇALIŞTIRMAZ).
@@ -30,7 +30,7 @@ Tek hakem: `docs/specs/2026-06-03-faz7-alert-manager-design.md`. Kabul kriterler
 - `src/detectors/service.py` — `_detect_once` re-arm dalı → `resolve_open_alerts`.
 - `src/dashboard/transform.py` — `anomalies_to_frame` → `alerts_to_frame` (Alert + `durum` kolonu).
 - `src/dashboard/app.py` — `_render_alerts` filtre + yönetim kontrolü (`fetch_alerts`).
-- `tests/unit/dashboard/test_transform.py` — `anomalies_to_frame` testi → `alerts_to_frame`.
+- `tests/unit/test_dashboard_alerts_transform.py` — `anomalies_to_frame` testi → `alerts_to_frame`.
 
 **Değişmez:** `src/detectors/base.py`, `src/detectors/fusion.py`, `repository.insert_anomaly`, `repository.fetch_recent_anomalies` (Faz 5 integration testleri kullanıyor — kalır).
 
@@ -41,9 +41,9 @@ Tek hakem: `docs/specs/2026-06-03-faz7-alert-manager-design.md`. Kabul kriterler
 **Files:**
 - Create: `src/storage/migrations/003_alert_lifecycle.sql`
 - Modify: `src/storage/schema.py`
-- Test: `tests/integration/test_alert_repository.py`
+- Test: `tests/unit/test_storage_alert_repository.py`
 
-- [ ] **Step 1: Failing test yaz** (`tests/integration/test_alert_repository.py`)
+- [ ] **Step 1: Failing test yaz** (`tests/unit/test_storage_alert_repository.py`)
 
 ```python
 """Alert yaşam döngüsü: migration 003 + repository metotları (Faz 7 Iter 7.1, spec § 5/§ 7)."""
@@ -78,7 +78,7 @@ def test_insert_anomaly_defaults_status_active(migrated_engine: Engine) -> None:
 
 - [ ] **Step 2: Testi koştur, fail doğrula**
 
-Run: `.venv/bin/python -m pytest tests/integration/test_alert_repository.py::test_insert_anomaly_defaults_status_active -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_storage_alert_repository.py::test_insert_anomaly_defaults_status_active -v`
 Expected: FAIL — `OperationalError: no such column: status`.
 
 - [ ] **Step 3: Migration 003 yaz** (`src/storage/migrations/003_alert_lifecycle.sql`)
@@ -112,15 +112,15 @@ idx_anomalies_status = Index(
 
 - [ ] **Step 5: Testi koştur, geç doğrula**
 
-Run: `.venv/bin/python -m pytest tests/integration/test_alert_repository.py -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_storage_alert_repository.py -v`
 Expected: PASS (1 test). Ayrıca mevcut storage testleri kırılmamalı: `.venv/bin/python -m pytest tests/integration tests/unit/storage -q` → tümü PASS (migrated_engine fixture 003'ü de uygular; schema.py Table ↔ migration tutarlı).
 
 - [ ] **Step 6: mypy + ruff + commit**
 
 ```bash
-.venv/bin/python -m mypy src/storage tests/integration
-ruff check src/storage tests/integration
-git add src/storage/migrations/003_alert_lifecycle.sql src/storage/schema.py tests/integration/test_alert_repository.py
+.venv/bin/python -m mypy src/storage tests/unit/test_storage_alert_repository.py
+ruff check src/storage tests/unit/test_storage_alert_repository.py
+git add src/storage/migrations/003_alert_lifecycle.sql src/storage/schema.py tests/unit/test_storage_alert_repository.py
 git commit -m "feat(storage): migration 003 anomalies yaşam döngüsü kolonları + schema (Faz 7 Iter 7.1)"
 ```
 Expected: mypy `Success`, ruff `All checks passed!`.
@@ -270,9 +270,9 @@ git commit -m "feat(alerts): saf lifecycle durum makinesi + Alert modeli (Faz 7 
 
 **Files:**
 - Modify: `src/storage/repository.py`
-- Test: `tests/integration/test_alert_repository.py` (Task 1 dosyasına ekle)
+- Test: `tests/unit/test_storage_alert_repository.py` (Task 1 dosyasına ekle)
 
-- [ ] **Step 1: Failing testleri ekle** (`tests/integration/test_alert_repository.py` dosyasının SONUNA)
+- [ ] **Step 1: Failing testleri ekle** (`tests/unit/test_storage_alert_repository.py` dosyasının SONUNA)
 
 ```python
 def test_acknowledge_then_resolve_alert(migrated_engine: Engine) -> None:
@@ -329,7 +329,7 @@ def test_fetch_alerts_status_filter_and_all(migrated_engine: Engine) -> None:
 
 - [ ] **Step 2: Testi koştur, fail doğrula**
 
-Run: `.venv/bin/python -m pytest tests/integration/test_alert_repository.py -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_storage_alert_repository.py -v`
 Expected: FAIL — `AttributeError: 'TelemetryRepository' object has no attribute 'fetch_alerts'`.
 
 - [ ] **Step 3: Repository'ye import + `_row_to_alert` + 4 metot ekle**
@@ -434,15 +434,15 @@ from alerts.models import Alert
 
 - [ ] **Step 4: Testi koştur, geç doğrula**
 
-Run: `.venv/bin/python -m pytest tests/integration/test_alert_repository.py -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_storage_alert_repository.py -v`
 Expected: PASS (5 test: Task 1'in 1 + bu 4).
 
 - [ ] **Step 5: mypy + ruff + commit**
 
 ```bash
-.venv/bin/python -m mypy src/storage src/alerts tests/integration
-ruff check src/storage tests/integration
-git add src/storage/repository.py tests/integration/test_alert_repository.py
+.venv/bin/python -m mypy src/storage src/alerts tests/unit/test_storage_alert_repository.py
+ruff check src/storage tests/unit/test_storage_alert_repository.py
+git add src/storage/repository.py tests/unit/test_storage_alert_repository.py
 git commit -m "feat(storage): alert ack/resolve/resolve_open/fetch_alerts repository metotları (Faz 7 Iter 7.1)"
 ```
 
@@ -548,11 +548,11 @@ git commit -m "feat(detectors): _detect_once re-arm'da uyarı auto-resolve (Faz 
 **Files:**
 - Modify: `src/dashboard/transform.py`
 - Modify: `src/dashboard/app.py`
-- Test: `tests/unit/dashboard/test_transform.py`
+- Test: `tests/unit/test_dashboard_alerts_transform.py`
 
 - [ ] **Step 1: transform testini `alerts_to_frame`'e güncelle (failing)**
 
-`tests/unit/dashboard/test_transform.py` — mevcut `anomalies_to_frame` testini bul. Onu şununla DEĞİŞTİR (Anomaly yerine Alert kurar, `durum` kolonunu doğrular):
+`tests/unit/test_dashboard_alerts_transform.py` — mevcut `anomalies_to_frame` testini bul. Onu şununla DEĞİŞTİR (Anomaly yerine Alert kurar, `durum` kolonunu doğrular):
 ```python
 def test_alerts_to_frame_columns_and_status() -> None:
     """alerts_to_frame durum kolonu içerir; girdi sırasını korur; skor yuvarlanır."""
@@ -584,7 +584,7 @@ def test_alerts_to_frame_empty_correct_schema() -> None:
 
 - [ ] **Step 2: Testi koştur, fail doğrula**
 
-Run: `.venv/bin/python -m pytest tests/unit/dashboard/test_transform.py -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_dashboard_alerts_transform.py -v`
 Expected: FAIL — `ImportError: cannot import name 'alerts_to_frame'`.
 
 - [ ] **Step 3: `transform.py` — `anomalies_to_frame`'i `alerts_to_frame` ile değiştir**
@@ -626,23 +626,22 @@ def alerts_to_frame(alerts: list[Alert]) -> pd.DataFrame:
 
 - [ ] **Step 4: Testi koştur, geç doğrula**
 
-Run: `.venv/bin/python -m pytest tests/unit/dashboard/test_transform.py -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_dashboard_alerts_transform.py -v`
 Expected: PASS.
 
 - [ ] **Step 5: `app.py` — `_render_alerts`'i filtre + yönetim ile güncelle**
 
 `src/dashboard/app.py` — import güncellemeleri:
 - `from dashboard.transform import (...)` listesinde `anomalies_to_frame` → `alerts_to_frame`.
-- Yeni importlar ekle (dosya başındaki uygun gruplara):
+- `Callable` (stdlib) dosya başındaki **bootstrap'tan ÖNCEKİ** stdlib import grubuna eklenir (örn. `from collections.abc import Callable`). **Yerel** importlar (`from alerts.lifecycle import ...`) `sys.path` bootstrap'ından SONRAKİ bloğa, mevcut yerel importlarla aynı `# noqa: E402` ile eklenir:
 ```python
-from collections.abc import Callable
-
-from alerts.lifecycle import ACKNOWLEDGED, RESOLVED, can_transition
-from storage.repository import TelemetryRepository
+from alerts.lifecycle import ACKNOWLEDGED, RESOLVED, can_transition  # noqa: E402
 ```
-(`TelemetryRepository`, `datetime`, `UTC`, `OperationalError`, `logger`, `st` zaten import edili — yoksa ekle.)
+(`TelemetryRepository`, `datetime`, `UTC`, `OperationalError`, `logger`, `st` zaten import edili — yoksa aynı E402 deseniyle ekle.)
 
-Mevcut `_render_alerts` fonksiyonunu (tamamı) şununla DEĞİŞTİR:
+> **S1 (plan-review düzeltmesi):** İnteraktif buton + selectbox `run_every="5s"` fragment'ı İÇİNDE bırakılMAZ (otomatik rerun buton tıklamasını yarışa sokar). **Tablo + filtre** auto-refresh fragment'ında kalır (salt-görüntü); **ack/resolve yönetim kontrolü** `main()` içine, fragment DIŞINA taşınır (kararlı; buton tıklaması tam app rerun'ı tetikler → open_alerts yeniden okunur). İki ayrı fonksiyon:
+
+Mevcut `_render_alerts` fonksiyonunu (tamamı) şu İKİ fonksiyon + sabitlerle DEĞİŞTİR:
 ```python
 _STATUS_FILTERS: dict[str, tuple[str, ...] | None] = {
     "Açık": ("active", "acknowledged"),
@@ -671,10 +670,11 @@ def _apply_transition(fn: Callable[[int, str], bool], alert_id: int) -> None:
 
 @st.experimental_fragment(run_every="5s")
 def _render_alerts(repository: TelemetryRepository) -> None:
-    """Filo geneli uyarıları durum kolonu + filtre + ack/resolve yönetimiyle gösterir (spec § 8).
+    """Filo geneli uyarı tablosunu durum kolonu + filtre ile gösterir; 5s'de bir yenilenir (spec § 8).
 
-    Gözlem modu: yalnız uyarı DURUMU yazılır (telemetri değil, cihaz komutu değil). anomalies
-    tablosu yoksa bilgilendirir; çökmez (spec § 7/§ 9).
+    SALT-GÖRÜNTÜ (auto-refresh). Yönetim (ack/resolve) butonları _render_alert_management'ta
+    (main() içinde, fragment dışında — auto-rerun buton yarışını önler, S1). Gözlem modu: hiçbir
+    şey yazmaz. anomalies tablosu yoksa bilgilendirir; çökmez (spec § 7/§ 9).
     """
     st.subheader("🚨 Uyarılar")
     choice = st.selectbox("Durum filtresi", list(_STATUS_FILTERS.keys()), index=0, key="alert_filter")
@@ -690,7 +690,17 @@ def _render_alerts(repository: TelemetryRepository) -> None:
         return
     st.dataframe(alerts_to_frame(alerts), use_container_width=True, hide_index=True)
 
-    open_alerts = [a for a in alerts if a.status != RESOLVED]
+
+def _render_alert_management(repository: TelemetryRepository) -> None:
+    """Açık bir uyarı seçip ack/resolve eden yönetim kontrolü (main() içinde, fragment DIŞINDA, S1).
+
+    Gözlem modu: yalnız uyarı DURUMU yazılır (telemetri değil, cihaz komutu değil). Buton tıklaması
+    tam app rerun'ı tetikler → liste tazelenir.
+    """
+    try:
+        open_alerts = repository.fetch_alerts(("active", "acknowledged"), limit=50)
+    except OperationalError:
+        return  # tablo yoksa _render_alerts zaten bilgilendirdi
     if not open_alerts:
         return
     options = {f"#{a.id} {a.device_id} · {a.rule_name} ({a.status})": a for a in open_alerts}
@@ -705,9 +715,17 @@ def _render_alerts(repository: TelemetryRepository) -> None:
         _apply_transition(repository.resolve_alert, selected.id)
 ```
 
+Ayrıca `main()` içinde mevcut `_render_alerts(repository)` çağrısından SONRA (divider'dan önce) ekle:
+```python
+    _render_alerts(repository)
+    _render_alert_management(repository)
+    st.divider()
+```
+(Mevcut `main()`'de `_render_alerts(repository)` + `st.divider()` zaten var — araya `_render_alert_management(repository)` eklenir.)
+
 - [ ] **Step 6: Tüm dashboard + transform testleri + headless boot smoke**
 
-Run: `.venv/bin/python -m pytest tests/unit/dashboard -v`
+Run: `.venv/bin/python -m pytest tests/unit/test_dashboard_alerts_transform.py -v`
 Expected: PASS.
 Headless import/boot smoke (app.py import hatası vermesin):
 Run: `PYTHONPATH=src .venv/bin/python -c "import dashboard.app; print('import OK')"`
@@ -716,9 +734,9 @@ Expected: `import OK` (Streamlit context uyarıları olabilir; ImportError OLMAM
 - [ ] **Step 7: mypy + ruff + commit**
 
 ```bash
-.venv/bin/python -m mypy src/dashboard src/alerts tests/unit/dashboard
-ruff check src/dashboard tests/unit/dashboard
-git add src/dashboard/transform.py src/dashboard/app.py tests/unit/dashboard/test_transform.py
+.venv/bin/python -m mypy src/dashboard src/alerts tests/unit/test_dashboard_alerts_transform.py
+ruff check src/dashboard tests/unit/test_dashboard_alerts_transform.py
+git add src/dashboard/transform.py src/dashboard/app.py tests/unit/test_dashboard_alerts_transform.py
 git commit -m "feat(dashboard): uyarı durum kolonu + filtre + ack/resolve yönetimi (Faz 7 Iter 7.1)"
 ```
 
