@@ -141,7 +141,7 @@ Eğer bu listede olan bir şey ileride gerekirse, **önce konuşulur, kuzey yıl
 
 ## Mevcut Faz
 
-**Faz 7 — Alert Manager (Uyarı Yaşam Döngüsü)** ✅ DONE (2026-06-03) — Iter 7.1 (active→acknowledged→resolved yaşam döngüsü + detector auto-resolve + dashboard ack/resolve yönetimi). Faz 1-5 ✅ DONE. **Faz 6 — ML dedektörler (Isolation Forest) ATLANDI / stretch'e ertelendi** (kullanıcı kararı 2026-06-03: simülatör yalnız A/B/C üretiyor, ikisi de mevcut iki katmanca yakalanıyor → ML'in sentetik veride marjinal tespit değeri düşük + en yüksek karmaşıklık; kuzey yıldızı gereği önce yönetilebilir uyarı + demo). **Sıradaki büyük adım: Faz 8 — Pilot/Demo** (Faz 9+ stretch'te ML).
+**Faz 8 — Pilot/Demo** (devam ediyor) — Iter 8.1 (demo orkestrasyon: launcher + senaryolar + runbook) ✅ DONE (2026-06-03); sıradaki Iter 8.2 (dashboard görsel zenginleştirme). Faz 1-5 + Faz 7 ✅ DONE. **Faz 6 — ML dedektörler (Isolation Forest) ATLANDI / Faz 9+ stretch'e ertelendi** (kullanıcı kararı 2026-06-03: simülatör yalnız A/B/C üretiyor, ikisi de mevcut iki katmanca yakalanıyor → ML'in sentetik veride marjinal tespit değeri düşük + en yüksek karmaşıklık).
 
 - **Spec (tek hakem):** `docs/specs/2026-05-18-faz1-simulator-design.md`
 - **Spec (Faz 2):** `docs/specs/2026-05-29-faz2-ingestion-storage-design.md`
@@ -482,6 +482,16 @@ Faz 7 = Alert Manager. Iter 7.1 yaşam döngüsü + dashboard yönetimi. **Kabul
 filtre + canlı smoke), (3) FP/gürültü çerçevesi (auto-resolve + resolved'ı varsayılan görünümden çıkarma; ham FP'yi Faz 4 debounce
 düşürdü; açık önceliklendirme ertelendi). 308 test, mypy strict + ruff temiz. `Detector` ABC + `Anomaly` + `fuse_anomalies` +
 `insert_anomaly` DEĞİŞMEDİ (spec § 12 girdi kontratı korundu). **Faz 6 (ML) atlandı/stretch'e ertelendi. Sıradaki: Faz 8 — Pilot/Demo.**
+
+## Faz 8 (Pilot/Demo)
+
+### Iterasyon 8.1 (Demo Orkestrasyon + Senaryolar + Runbook) — Tamamlandı (2026-06-03)
+
+Tek komutla güvenilir 15-dk demo. **`scripts/demo_up.sh`** (cleanup-first → mosquitto → demo config'leri runtime'a kopya [.bak yedek] → telemetry.db arşivle → temiz baseline seed → 5 süreç [ingestion/detectors/simulator/dashboard, PYTHONPATH=src + .venv] + her başlatmada `kill -0` liveness check + PID/log) + **`demo_down.sh`** (pidfile'dan SIGTERM + graceful wait + SIGKILL fallback; idempotent; mosquitto'ya dokunmaz). **`scripts/seed_demo_baseline.py`** (Faz 5/7 smoke deseni): servisler başlamadan demo cihazlarına yakın-geçmiş TEMİZ telemetri yazar → istatistik baseline hazır (rolling pencerede GEÇİCİ; istatistik-overlap arıza onset'inden kısa süre sonra fırsat penceresinde). **`config/devices.demo.yaml`** (commit'li, gitignore `!config/*.demo.yaml`): device_001 temiz + device_002 mechanical_wear (kısa 150s → auto-resolve beat) + device_003 hydraulic_leak (uzun holding 180s, slope kuralı için) + device_004 electrical_fault; hepsi onset 60s. **`config/detectors.demo.yaml`**: example + `baseline_window_s` 3600→300 + `min_baseline` 20 + **`sensors: [motor_current, vibration, hydraulic_pressure]`** (canlı smoke kalibrasyonu: motor_temperature stateful-rampa + mast_position rampalı seed-baseline ile eşleşmez → FP; daralt). **`docs/DEMO.md`** 15-dk beat-script + bilinen sınırlar + sorun giderme; `.claude/commands/run-simulation.md` gerçeğe göre düzeltildi (`python -m src.alerts` KALDIRILDI — alerts çalıştırılabilir servis değil); README çalıştırma bölümü. 2 yeni config-load/seed testi (313 passed), mypy + ruff temiz, `src/` üretim kodu DEĞİŞMEDİ.
+
+**Canlı demo smoke (gerçek `demo_up.sh`, kalibrasyonla):** device_001 temiz → **0 FP**; device_002 → `fused(N)` (`motor_current_high + iqr:motor_current + vibration_elevated` = kural+istatistik overlap); device_003 → `hydraulic_pressure_decline`; device_004 → `motor_voltage_erratic` (istatistik scoped-out = tamamlayıcı); device_002 mechanical_wear ~210s'te bitince **auto-resolve** (7/7 resolved); temiz teardown. **Kozmetik flicker:** ramp sırasında kural-seti dalgalanması debounce'ta birkaç resolve/re-arm satırı üretir (tespit doğru; gürültü Iter 8.2'de yumuşatılabilir).
+
+**KRİTİK ders (kalıcı):** demo seed-baseline durağan-DEĞİL sensörlerde (motor_temperature/mast_position) FP üretti → controlled config-test yakalamadı, **canlı demo smoke yakaladı** (Faz 4.2/5.2 dersinin tekrarı). Çözüm: statistical `sensors=[...]` durağan sensöre daralt + seed'den durağan-değil sensörleri çıkar. Demo timing/seed/scope **ölçülerek** kalibre edildi.
 
 Faz seyri: `docs/ROADMAP.md`.
 
