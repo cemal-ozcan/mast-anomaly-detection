@@ -50,15 +50,23 @@ Her dedektör aynı arayüzü uygular: `detect(window: pd.DataFrame) -> List[Ano
 
 ### 5. Alert Katmanı (`src/alerts/`)
 
-Dedektörlerden gelen ham anomalileri **yönetilebilir uyarılara** dönüştürür. Sorumlulukları:
+Dedektörlerden gelen ham anomalileri **yönetilebilir uyarılara** dönüştürür. **Uygulama notu (Faz 7 Iter 7.1):**
+ayrı bir süreç/servis DEĞİL — `src/alerts/` saf bir leaf paket (durum makinesi `lifecycle.py` + okuma modeli
+`models.py` `Alert`); uyarı kalıcılığı ve yaşam döngüsü mevcut `anomalies` tablosunda yaşar (migration 003:
+`status`/`acknowledged_at`/`resolved_at`). Yazma tarafı dedektör servisinde, yönetim tarafı dashboard'da. Sorumluluklar:
 
-**Füzyon:** Aynı zaman penceresinde birden fazla dedektör tetiklediyse tek bir uyarıya birleştir. Skoru artır.
+**Füzyon:** (✅ Faz 4.3) Aynı turda birden fazla dedektör tetiklediyse tek `fused(N)` uyarıya birleştir (`detectors/fusion.py`).
 
-**Debouncing:** Aynı anomali her saniye tekrarlıyorsa her seferinde uyarı üretme. Akıllı zaman pencereleri.
+**Debouncing:** (✅ Faz 4.3) Süregelen arıza epizot başına tek satır; kural-seti değişince yeni satır (`_detect_once` epizot debounce).
 
-**Önceliklendirme:** Şiddete göre kritik/yüksek/orta/düşük sınıflandırma.
+**Yaşam döngüsü:** (✅ Faz 7.1) `active → acknowledged → resolved`. Detector arıza temizlenince **auto-resolve** eder
+(re-arm); teknisyen dashboard'dan manuel **ack/resolve** yapar. Geçişler repository'de SQL `WHERE` ile atomik zorlanır.
 
-**Kalıcılık:** Uyarılar veritabanına yazılır, dashboard'da görünür hale gelir.
+**Kalıcılık:** Uyarılar `anomalies` tablosuna (durum kolonlarıyla) yazılır, dashboard'da durum kolonu + filtre +
+ack/resolve yönetimiyle görünür. Gözlem modu: dashboard yalnız uyarı **durumu** yazar (telemetri/cihaz komutu değil).
+
+**Önceliklendirme:** Şiddete göre severity (critical/high/warning/info) anomali alanında var; açık öncelik sınıflandırma
++ skor normalizasyon standardizasyonu ⏸️ ertelendi (Faz 7 Iter 7.2 / Faz 7+).
 
 ### 6. Dashboard Katmanı (`src/dashboard/`)
 
