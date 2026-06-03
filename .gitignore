@@ -79,3 +79,5 @@ Desktop.ini
 config/*.yaml
 !config/*.yaml.example
 !config/*.demo.yaml
+# demo_up.sh runtime config yedekleri (lokal demo artefaktı)
+config/*.bak
