@@ -14,25 +14,22 @@ Kullanıcı sistemin tamamını çalıştırıp simülasyon yapmak istiyor.
 
 ## Önkoşullar Kontrolü
 
-1. Mosquitto broker çalışıyor mu? Çalışmıyorsa başlat.
-2. Veritabanı şeması güncel mi? Migration gerekiyorsa çalıştır.
-3. Yapılandırma dosyaları mevcut mu? (`config/devices.yaml`, `config/detectors.yaml`, `config/mqtt.yaml`)
+1. Mosquitto broker çalışıyor mu? Çalışmıyorsa: `brew services start mosquitto`.
+2. Veritabanı şeması güncel mi? Migration gerekiyorsa çalıştır (detector ilk açılışta idempotent migration uygular).
+3. Yapılandırma dosyaları mevcut mu? (`config/devices.yaml`, `config/detectors.yaml`) — yoksa `cp config/*.yaml.example config/*.yaml`.
 
 ## Çalıştırma Sırası
 
-Servisleri aşağıdaki sırayla başlat (her birini ayrı bir terminal/process'te):
+**En kolay yol — tek komut:** `./scripts/demo_up.sh` (bkz. `docs/DEMO.md`). Tüm servisleri + temiz baseline seed'i başlatır. Kapatma: `./scripts/demo_down.sh`.
 
-1. **Mosquitto** (henüz çalışmıyorsa): `mosquitto -c config/mosquitto.conf`
+**Manuel (ayrı terminaller, `PYTHONPATH=src` + `.venv`):**
+1. **Mosquitto** (çalışmıyorsa): `brew services start mosquitto`
+2. **Ingestion**: `PYTHONPATH=src .venv/bin/python -m ingestion`
+3. **Detector**: `PYTHONPATH=src .venv/bin/python -m detectors`  (kural + istatistik katmanları; `alerts` ayrı servis DEĞİL — uyarı yaşam döngüsü detector içinde)
+4. **Simulator** (en son): `PYTHONPATH=src .venv/bin/python -m simulator`  (senaryolar `config/devices.yaml`'da tanımlı; `--scenario` argümanı YOK)
+5. **Dashboard**: `.venv/bin/python -m streamlit run src/dashboard/app.py`
 
-2. **Ingestion**: `python -m src.ingestion`
-
-3. **Detector**: `python -m src.detectors`
-
-4. **Alert Manager**: `python -m src.alerts`
-
-5. **Dashboard**: `streamlit run src/dashboard/app.py`
-
-6. **Simulator** (en son başlat, böylece diğerleri hazır olsun): `python -m src.simulator --scenario <senaryo>`
+> Not: önce `cp config/*.yaml.example config/*.yaml` (gitignored runtime config'ler). Demo için `demo_up.sh` bunu + demo config'lerini otomatik yapar.
 
 ## İzleme
 

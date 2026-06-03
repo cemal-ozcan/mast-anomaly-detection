@@ -54,11 +54,19 @@ cp .env.example .env
 
 ## Çalıştırma
 
-Henüz Faz 0 (kurulum) aşamasındadır. Faz 1 (simulator) tamamlandığında çalıştırma talimatları eklenecektir.
+**Demo (tek komut):**
+```bash
+./scripts/demo_up.sh      # tüm servisler + temiz baseline; http://localhost:8501
+./scripts/demo_down.sh    # temiz kapat
+```
+15 dakikalık demo akışı ve sorun giderme: **`docs/DEMO.md`**.
+
+**Manuel servisler** (ayrı terminaller, `PYTHONPATH=src` + `.venv`): `python -m ingestion`, `python -m detectors`, `python -m simulator`, `streamlit run src/dashboard/app.py`. (`alerts` ayrı servis değildir — uyarı yaşam döngüsü detector içinde.)
 
 ## Dokümantasyon
 
 - `CLAUDE.md` — Claude Code için proje brifingi
+- `docs/DEMO.md` — 15 dakikalık demo runbook (çalıştırma + sorun giderme)
 - `docs/ARCHITECTURE.md` — Sistem mimarisi detayı
 - `docs/ROADMAP.md` — Faz planı ve milestone'lar
 - `docs/DOMAIN.md` — Domain bilgisi (sensörler, arıza senaryoları)
