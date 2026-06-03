@@ -10,6 +10,8 @@ from typing import Any
 from sqlalchemy import Engine, func, select
 from sqlalchemy.engine import Row
 
+from alerts.lifecycle import ACKNOWLEDGED, ACTIVE, RESOLVED
+from alerts.models import Alert
 from detectors.base import Anomaly
 from ingestion.message_parser import IngestedReading
 from storage.schema import anomalies, telemetry
@@ -76,6 +78,26 @@ class TelemetryRepository:
             window_end=row.window_end,
             value=row.value,
             description=row.description,
+        )
+
+    @staticmethod
+    def _row_to_alert(row: Row[Any]) -> Alert:
+        """SQLAlchemy Row'u Alert'e çevirir (id + status + lifecycle zaman damgaları dahil)."""
+        return Alert(
+            id=row.id,
+            device_id=row.device_id,
+            rule_name=row.rule_name,
+            sensor=row.sensor,
+            severity=row.severity,
+            score=row.score,
+            window_start=row.window_start,
+            window_end=row.window_end,
+            value=row.value,
+            description=row.description,
+            created_at=row.created_at,
+            status=row.status,
+            acknowledged_at=row.acknowledged_at,
+            resolved_at=row.resolved_at,
         )
 
     def insert(self, reading: IngestedReading) -> None:
@@ -211,3 +233,81 @@ class TelemetryRepository:
         with self._engine.connect() as conn:
             rows = conn.execute(stmt).all()
         return [self._row_to_anomaly(row) for row in rows]
+
+    def acknowledge_alert(self, alert_id: int, acknowledged_at: str) -> bool:
+        """active bir uyarıyı acknowledged yapar (spec § 7). Geçiş SQL WHERE ile atomik zorlanır.
+
+        Args:
+            alert_id: Güncellenecek anomalies satırının id'si.
+            acknowledged_at: ISO 8601 ms zaman damgası.
+
+        Returns:
+            Satır güncellendiyse True (geçiş geçerliydi); 0 satır → False (zaten ack/resolved).
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id, anomalies.c.status == ACTIVE)
+                .values(status=ACKNOWLEDGED, acknowledged_at=acknowledged_at)
+            )
+        return result.rowcount > 0
+
+    def resolve_alert(self, alert_id: int, resolved_at: str) -> bool:
+        """active|acknowledged bir uyarıyı resolved yapar (spec § 7).
+
+        Args:
+            alert_id: Güncellenecek anomalies satırının id'si.
+            resolved_at: ISO 8601 ms zaman damgası.
+
+        Returns:
+            Satır güncellendiyse True; 0 satır → False (zaten resolved).
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(
+                    anomalies.c.id == alert_id,
+                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED)),
+                )
+                .values(status=RESOLVED, resolved_at=resolved_at)
+            )
+        return result.rowcount > 0
+
+    def resolve_open_alerts(self, device_id: str, resolved_at: str) -> int:
+        """Bir cihazın TÜM açık (resolved olmayan) uyarılarını resolved yapar (detector auto-resolve, spec § 6).
+
+        Args:
+            device_id: Cihaz kimliği.
+            resolved_at: ISO 8601 ms zaman damgası.
+
+        Returns:
+            Kapatılan satır sayısı.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.device_id == device_id, anomalies.c.status != RESOLVED)
+                .values(status=RESOLVED, resolved_at=resolved_at)
+            )
+        return int(result.rowcount)
+
+    def fetch_alerts(self, statuses: tuple[str, ...] | None, limit: int) -> list[Alert]:
+        """Uyarıları (opsiyonel status filtresiyle) created_at DESC döndürür (dashboard, spec § 7/§ 8).
+
+        Args:
+            statuses: Filtre durum tuple'ı (status IN ...); None → tümü.
+            limit: Maksimum satır sayısı.
+
+        Returns:
+            created_at DESC sıralı Alert listesi.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        stmt = select(anomalies)
+        if statuses is not None:
+            stmt = stmt.where(anomalies.c.status.in_(statuses))
+        stmt = stmt.order_by(anomalies.c.created_at.desc()).limit(limit)
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return [self._row_to_alert(row) for row in rows]
