@@ -192,13 +192,15 @@ statistical:
     - name: three_sigma
       enabled: true
       severity: warning
-      params: {sigma_k: 3.0, min_baseline: 30, min_current: 5}
+      params: {sigma_k: 3.0, min_baseline: 20, min_current: 5}   # DEMO: 30→20 (kayan pencerede seed erimesine pay)
     - name: iqr
       enabled: true
       severity: warning
-      params: {iqr_multiplier: 1.5, min_baseline: 30, min_current: 5}
+      params: {iqr_multiplier: 1.5, min_baseline: 20, min_current: 5}
 ```
-(detectors bloğu = example'daki 6 kural aynen. `min_baseline`/`baseline_window_s` Task 5 kalibrasyonunda gerekirse ayarlanır.)
+(detectors bloğu = example'daki 6 kural aynen. `min_baseline` demo'da 20'ye düşürüldü çünkü seed kayan pencereden erir, B1; `baseline_window_s`/`min_baseline`/seed yoğunluğu Task 5 kalibrasyonunda ÖLÇÜLEREK ayarlanır.)
+
+> **B1 — KRİTİK gerçek (plan-review):** İstatistik dedektör penceresi son `baseline_window_s` saniyedir ve `now` ile KAYAR. Seed bloğu zamanla pencereden ERİR; ayrıca arıza ilerledikçe baseline'a faulty veri sızıp **kontamine** olur (on-the-fly rolling'in doğası, Faz 5 § 12). Sonuç: **istatistik-overlap GEÇİCİdir** — arıza onset'inden kısa süre sonra (current fault-dominant + baseline hâlâ temiz) bir "fırsat penceresi"nde tetiklenir, alert bir kez kalkınca debounce ile kalır. **Demo'nun GARANTİ omurgası = kural-katmanı tespiti + lifecycle + auto-resolve (sağlam).** İstatistik-overlap = kalibre edilen, geçici bir beat; Task 5 onu ölçer + ayarlar; gösterilemezse DEMO.md fallback (reduced-baseline config'i + geçici doğası sözlü anlatılır). Bu dürüst çerçeve plana + DEMO.md'ye yazılır.
 
 - [ ] **Step 5: Testi koştur, geç doğrula**
 Run: `.venv/bin/python -m pytest tests/unit/test_demo_configs.py -v`
@@ -274,6 +276,12 @@ Expected: FAIL — `FileNotFoundError`/`spec is None` (script yok).
 Servisler başlamadan önce demo cihazları için yakın-geçmiş TEMİZ telemetri yazar →
 istatistik dedektör (ThreeSigma/IQR) baseline'ı hazır olur, arıza ~60s'de başlayınca
 canlı tetiklenir (uzun gerçek-zamanlı warmup gerekmez). Gözlem modu: yalnız telemetry yazar.
+
+NOT (B1, kayan pencere): seed bloğu zamanla `baseline_window_s`'lik kayan pencereden ERİR →
+istatistik-overlap GEÇİCİ bir fırsat penceresinde gösterilir (yoğunluk `samples_per_state` +
+`min_baseline` Task 5'te ölçülerek ayarlanır). NOT (S3): `__main__` `config/ingestion.yaml`
+ister — demo_up.sh seed'den ÖNCE config'leri kopyalar; standalone çalıştırırken önce
+`cp config/ingestion.yaml.example config/ingestion.yaml`.
 
 Per-(sensor,state) temiz magnitüdler Faz 5 ölçümlerinden (seed 42, üretim çıktısı).
 """
@@ -355,7 +363,7 @@ if __name__ == "__main__":  # pragma: no cover
         db_path=Path(cfg.db_path),
         device_ids=["device_001", "device_002", "device_003", "device_004"],
         window_s=300,
-        samples_per_state=40,
+        samples_per_state=80,  # yoğun: kayan pencerede erime + min_baseline=20 için pay (B1; Task 5 kalibre)
     )
     print(f"seed_demo_baseline: {written} temiz baseline satırı yazıldı", file=sys.stderr)
 ```
@@ -396,12 +404,22 @@ if [[ ! -f "$PIDFILE" ]]; then
   exit 0
 fi
 
+pids=()
 while read -r pid name; do
   if [[ -n "${pid:-}" ]] && kill -0 "$pid" 2>/dev/null; then
     echo "demo_down: $name (pid $pid) kapatılıyor..."
     kill -TERM "$pid" 2>/dev/null || true
+    pids+=("$pid")
   fi
 done < "$PIDFILE"
+
+# Graceful shutdown'a kısa süre tanı (BatchWriter final flush + engine dispose) — S4.
+for _ in 1 2 3 4 5; do
+  alive=0
+  for pid in "${pids[@]:-}"; do [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && alive=1; done
+  [[ "$alive" -eq 0 ]] && break
+  sleep 1
+done
 
 rm -f "$PIDFILE"
 echo "demo_down: temiz kapandı."
@@ -460,8 +478,16 @@ start() {  # start <isim> <komut...>
   local name="$1"; shift
   echo "demo_up: $name başlatılıyor..."
   PYTHONPATH=src "$@" >"$LOGDIR/$name.log" 2>&1 &
-  echo "$! $name" >> "$PIDFILE"
-  sleep 1
+  local pid=$!
+  echo "$pid $name" >> "$PIDFILE"
+  sleep 2
+  # Liveness check: arka plan süreci hemen çökerse banner yalan söylemesin (B2).
+  if ! kill -0 "$pid" 2>/dev/null; then
+    echo "HATA: $name başlatılamadı/çöktü. Son loglar:"
+    tail -n 20 "$LOGDIR/$name.log" || true
+    bash "$ROOT/scripts/demo_down.sh" || true
+    exit 1
+  fi
 }
 start ingestion "$PY" -m ingestion
 start detectors "$PY" -m detectors
@@ -523,7 +549,7 @@ git commit -m "feat(demo): demo_up/demo_down launcher (cleanup-first + seed + 5 
 ## 15 Dakikalık Akış (beat-by-beat)
 1. **t≈0-60s — Temiz izleme:** Dashboard'da 6 sensör akar, "Uyarılar" boş. Mimariyi anlat: simulator → ingestion → SQLite → kural+istatistik dedektör → fusion → alert lifecycle → dashboard. (İstatistik baseline seed'den hazır.)
 2. **t≈60-120s — Kural tespiti:** device_002 (mechanical_wear) → `motor_current_high` `active` uyarı. device_003 (hydraulic_leak) → `hydraulic_pressure_decline`. device_004 (electrical_fault) → `motor_voltage_erratic`. device_001 temiz kalır (FP yok).
-3. **t≈120-180s — İki-katman overlap:** device_002'de istatistik `three_sigma:motor_current` (+`iqr`) katılır → `fused(N)` (kural+istatistik aynı arızayı corroborate eder). electrical_fault'ta istatistik SESSİZ — varyans arızası kural-katmanı işi (tamamlayıcılık).
+3. **t≈120-180s — İki-katman overlap (GEÇİCİ fırsat penceresi):** device_002'de istatistik `three_sigma:motor_current` (+`iqr`) katılır → `fused(N)` (kural+istatistik aynı arızayı corroborate eder). **Not:** istatistik on-the-fly rolling baseline kullanır; arıza onset'inden kısa süre sonra (current fault-dominant, baseline hâlâ temiz) tetiklenir ve alert kalkınca debounce ile kalır — bu yüzden overlap'i arıza belirir belirmez gösterin. electrical_fault'ta istatistik SESSİZ — varyans arızası kural-katmanı işi (tamamlayıcılık). Overlap görünmezse: kural-katmanı tespiti zaten sağlam; istatistik üretimde ~1 saat baseline ile çalışır (bkz. Bilinen Sınırlar).
 4. **Manuel yaşam döngüsü:** Dashboard'da bir uyarıyı **Gör (ack)**, başkasını **Çöz (resolve)** yap; durum filtresiyle açık/kapalı gez.
 5. **t≈3-4dk — Auto-resolve:** device_002 mechanical_wear biter → detector arızanın temizlendiğini görür → uyarı **otomatik `resolved`** (durum filtresinde görünür).
 
@@ -587,7 +613,7 @@ git commit -m "docs(demo): DEMO.md runbook + run-simulation skill düzeltme + RE
 Bu task subagent'a verilmez — controller (ana oturum) yürütür. **Asıl kabul gate'i: gerçek demo çalışıyor mu.** Faz 5 dersi: canlı smoke + ölçümle kalibrasyon şart.
 
 - [ ] **Step 1: Tam suite + mypy + ruff**
-Run: `.venv/bin/python -m pytest -q` (308 + Task1 4 + Task2 1 = ~313 passed, 1 skipped).
+Run: `.venv/bin/python -m pytest -q` (mevcut 309 + Task1 4 + Task2 1 = ~314 passed, 1 skipped; kesin sayı yürütmede doğrulanır).
 Run: `.venv/bin/python -m mypy src/simulator src/ingestion src/storage src/detectors src/alerts src/dashboard scripts/seed_demo_baseline.py tests/unit tests/integration tests/scenarios`
 Run: `ruff check src/... scripts/seed_demo_baseline.py tests/...` → temiz.
 
@@ -596,10 +622,13 @@ Run: `ruff check src/... scripts/seed_demo_baseline.py tests/...` → temiz.
 2. Doğrula: 5 süreç up (`cat data/demo.pids`, `logs/demo/*.log` hatasız); dashboard erişilebilir (`curl -s localhost:8501 | head`).
 3. `sqlite3 data/telemetry.db "SELECT device_id, rule_name, status FROM anomalies ORDER BY created_at"`:
    - device_002/003/004 → uyarı (kural); device_001 → uyarı YOK (FP yok).
-   - device_002'de **`fused(...)`** içinde hem `motor_current_high` hem `three_sigma:motor_current` (overlap) — **istatistik canlı tetiklendi mi?**
-   - device_002 mechanical_wear bitince → device_002 uyarısı `resolved` (auto-resolve).
+   - **GARANTİ omurga (kabul kriteri 1-2):** device_002/003/004 kural uyarısı + device_001 FP yok + device_002 mechanical_wear bitince `resolved` (auto-resolve). Bunlar sağlam olmalı.
+   - **İstatistik-overlap (geçici, B1):** device_002'de **`fused(...)`** içinde `three_sigma:motor_current` (+`iqr`) — onset'ten kısa süre sonra fırsat penceresinde. Ölçmek için arıza onset'i civarında birkaç poll'da `anomalies`'i izle. Bir kez `fused` kalktıysa debounce ile kalır (kanıt: description'da iki katman).
 4. `./scripts/demo_down.sh` → temiz kapanış (`data/demo.pids` silinir, süreçler iner).
-5. **Kalibrasyon:** istatistik tetiklenmiyorsa → `detectors.demo.yaml` `baseline_window_s`/`min_baseline` düşür veya seed `samples_per_state`/`window_s` ayarla; hydraulic rule tetiklenmiyorsa → device_003 holding süresini artır; auto-resolve görünmüyorsa → device_002 `duration_s` kısalt. **Ölçerek ayarla, tahmin etme** ([[feedback_domain_md_truth_source]]). Değişiklikleri ilgili config commit'ine ekle.
+5. **Kalibrasyon (ölç, tahmin etme — [[feedback_domain_md_truth_source]]):**
+   - **İstatistik-overlap tetiklenmiyorsa:** trigger anında baseline alt-penceresinde `(motor_current, raising)` temiz örnek sayısını ölç (`sqlite3 ... "SELECT COUNT(*) ... state='raising' AND created_at içinde [now-300,now-60]"` mantığı / logdan); `min_baseline`'ı (demo 20) ya da seed `samples_per_state`'i (80) ayarla; `current_window_s`'i küçült (baseline kontaminasyonunu geciktirir); onset'i `baseline_window_s` ile uyumla. **Yine de güvenilir gösterilemezse:** istatistik-overlap'i geçici/best-effort kabul et → DEMO.md fallback (reduced-baseline config + geçici doğa sözlü); GARANTİ omurga (kural+lifecycle+auto-resolve) demoyu taşır.
+   - hydraulic rule tetiklenmiyorsa → device_003 holding süresini artır (slope min_samples 60). auto-resolve görünmüyorsa → device_002 `duration_s` kısalt. clean device FP veriyorsa → seed σ'sını gerçekçileştir / `min_baseline` artır.
+   - Değişiklikleri ilgili config commit'ine ekle.
 
 - [ ] **Step 3: Dokümanları güncelle (controller)**
 - `CLAUDE.md` → "Mevcut Faz" + Faz 8 Iter 8.1 closure özeti (launcher + demo config + seed + kalibre değerler).
