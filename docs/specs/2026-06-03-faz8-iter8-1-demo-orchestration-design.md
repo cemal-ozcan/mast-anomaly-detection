@@ -155,7 +155,7 @@ Sürelerin tümü **kalibrasyonla kesinleşir** (§ 2.5); aşağıdaki değerler
 
 ## 11. Bilinen Sınırlar / Riskler (dokümante)
 
-- **İstatistik-canlı kırılganlığı → pre-seed ile çözüldü** (§ 5); yine de seed hacmi/timing kalibrasyon ister (canlı smoke doğrular).
+- **İstatistik-canlı GEÇİCİ + kalibrasyon-bağımlı (plan-review B1):** pre-seed (§ 5) baseline'ı bootstrap'lar ama istatistik penceresi kayar → seed zamanla erir + arıza ilerledikçe baseline kontamine olur (on-the-fly rolling doğası). Sonuç: kural+istatistik `fused` overlap, arıza onset'inden kısa süre sonra bir **fırsat penceresinde** tetiklenir (alert kalkınca debounce ile kalır). **Demo'nun GARANTİ omurgası = kural-katmanı tespiti + lifecycle + auto-resolve** (sağlam); istatistik-overlap = kalibre edilen best-effort beat (Task 5 ölçer; gösterilemezse DEMO.md fallback: reduced-baseline + geçici doğa sözlü). Seed yoğunluğu (`samples_per_state`) + demo `min_baseline` (20) + onset/window kalibrasyonla ayarlanır.
 - **Bash launcher taşınabilirliği:** macOS (geliştirme ortamı) hedeflenir; Linux'ta `brew services` farkı olabilir → mosquitto adımı toleranslı (pgrep + fallback), DEMO.md not düşer.
 - **Runtime config overwrite:** demo_up `devices.yaml`/`detectors.yaml`'ı değiştirir (.bak yedek + DEMO.md notu).
 - **Demo determinizmi:** simülatör seed'li (devices.demo.yaml `seed:`), ama wall-clock onset timing makine hızına çok az duyarlı; canlı smoke'ta doğrulanır.
