@@ -12,7 +12,7 @@ detectors:
       enabled: true
       severity: critical
       params:
-        critical_threshold_c: 80.0
+        critical_threshold_c: 95.0
 
     - name: motor_current_high
       enabled: true
@@ -54,6 +54,18 @@ detectors:
         sensor: motor_voltage
         min_samples: 20
         epsilon: 0.01
+
+    - name: sensor_out_of_range
+      enabled: true
+      severity: high
+      params:
+        bounds:
+          motor_current:       [-5, 30]
+          motor_voltage:       [-100, 100]
+          hydraulic_pressure:  [-10, 400]
+          motor_temperature:   [-20, 160]
+          mast_position:       [-50, 12000]
+          vibration:           [-1, 10]
 
 # İstatistiksel dedektörler (Faz 5): on-the-fly rolling baseline (1h geçmiş) → 3-sigma.
 # Kural penceresinden (window_s) ayrı, daha uzun baseline penceresi kullanır.

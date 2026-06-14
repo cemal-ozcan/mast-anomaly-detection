@@ -11,13 +11,13 @@ _DETECTORS_DEMO = Path("config/detectors.demo.yaml")
 
 
 def test_devices_demo_has_clean_and_three_faults() -> None:
-    """4 cihaz: device_001 temiz (senaryosuz) + mechanical_wear + hydraulic_leak + electrical_fault."""
+    """6 cihaz: device_001 temiz (senaryosuz) + mechanical_wear + hydraulic_leak + electrical_fault + temperature_overshoot + sensor_fault."""
     devices = load_devices(_DEVICES_DEMO)
-    assert len(devices) == 4
+    assert len(devices) == 6
     by_id = {d.id: d for d in devices}
     assert by_id["device_001"].scenarios == []  # temiz kontrol
     scenario_names = {s.name for d in devices for s in d.scenarios}
-    assert {"mechanical_wear", "hydraulic_leak", "electrical_fault"} <= scenario_names
+    assert {"mechanical_wear", "hydraulic_leak", "electrical_fault", "temperature_overshoot", "sensor_fault"} <= scenario_names
 
 
 def test_devices_demo_has_short_clearing_fault() -> None:

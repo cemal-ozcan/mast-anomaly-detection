@@ -100,7 +100,7 @@ def test_build_detectors_bad_params_raises(tmp_path: Path) -> None:
 
 
 def test_example_file_loads_and_builds_all_six() -> None:
-    """config/detectors.yaml.example geçerli ve 6 kuralı kurar (kalibrasyon dosyası canlı)."""
+    """config/detectors.yaml.example geçerli ve 7 kuralı kurar (kalibrasyon dosyası canlı)."""
     cfg = load_detector_config(Path("config/detectors.yaml.example"))
     detectors = build_detectors(cfg)
     assert {d.name for d in detectors} == {
@@ -110,6 +110,7 @@ def test_example_file_loads_and_builds_all_six() -> None:
         "hydraulic_pressure_decline",
         "motor_voltage_erratic",
         "sensor_frozen",
+        "sensor_out_of_range",
     }
 
 

@@ -87,3 +87,53 @@ devices:
         start_after_s: 60
         duration_s: 1800
         params: {spike_prob: 0.05, voltage_jitter_std: 0.6}
+
+  # device_005: temperature_overshoot (F) — sıcaklık kritik eşiğe tırmanır.
+  - id: device_005
+    type: telescopic_mast_v1
+    seed: 11
+    target_height_mm: 5500
+    state_durations:
+      idle:     [3, 3]
+      raising:  [15, 15]
+      holding:  [30, 30]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: temperature_overshoot
+        start_after_s: 60
+        duration_s: 600
+        params:
+          overshoot_rate_c_per_s: 0.8
+          max_overshoot_c: 60
+
+  # device_006: sensor_fault (E) — mast_position imkânsız değer (sağlamlık göstergesi).
+  - id: device_006
+    type: telescopic_mast_v1
+    seed: 13
+    target_height_mm: 5000
+    state_durations:
+      idle:     [3, 3]
+      raising:  [15, 15]
+      holding:  [30, 30]
+      lowering: [3, 3]
+    sensors:
+      - {name: motor_current,      unit: A,       baseline: 0.5,  noise_std: 0.1}
+      - {name: motor_voltage,      unit: V,       baseline: 24.0, noise_std: 0.2}
+      - {name: hydraulic_pressure, unit: bar,     baseline: 10,   noise_std: 2}
+      - {name: motor_temperature,  unit: celsius, baseline: 25,   noise_std: 0.5}
+      - {name: mast_position,      unit: mm,      baseline: 0,    noise_std: 1}
+      - {name: vibration,          unit: g,       baseline: 0.05, noise_std: 0.01}
+    scenarios:
+      - name: sensor_fault
+        start_after_s: 60
+        duration_s: 600
+        params:
+          spike_prob: 0.3
+          impossible_value: -500.0
