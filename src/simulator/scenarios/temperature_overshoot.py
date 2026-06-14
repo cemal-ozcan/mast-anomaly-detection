@@ -1,6 +1,7 @@
 """TemperatureOvershoot arıza senaryosu (Faz 8 Iter 8.3 F, DOMAIN.md § F)."""
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import ClassVar
 
 from simulator.config import DeviceState
@@ -26,6 +27,15 @@ class TemperatureOvershoot(FaultScenario):
     _ACTIVE_STATES: ClassVar[frozenset[DeviceState]] = frozenset(
         {DeviceState.RAISING, DeviceState.HOLDING}
     )
+
+    def __init__(self, params: Mapping[str, float]) -> None:
+        super().__init__(params)  # presence kontrolü (base)
+        if self.params["overshoot_rate_c_per_s"] <= 0 or self.params["max_overshoot_c"] <= 0:
+            raise ValueError(
+                "TemperatureOvershoot: overshoot_rate_c_per_s ve max_overshoot_c > 0 olmalı "
+                f"(alınan: rate={self.params['overshoot_rate_c_per_s']}, "
+                f"max={self.params['max_overshoot_c']})"
+            )
 
     def modify(self, sensor_name: str, clean_value: float, ctx: ScenarioContext) -> float:
         if ctx.runtime.state not in self._ACTIVE_STATES:
