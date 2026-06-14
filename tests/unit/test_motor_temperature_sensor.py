@@ -33,58 +33,52 @@ def test_motor_temperature_sensor_is_base_sensor() -> None:
 
 
 def test_initial_temperature_is_ambient() -> None:
-    """Yeni instance çevre sıcaklığında (25°C) başlar."""
+    """Yeni instance çevre sıcaklığında (40°C) başlar."""
     sensor = MotorTemperatureSensor(_config())
     runtime = _make_runtime(DeviceState.IDLE)
-    # IDLE'da hemen soğutmaya başlar ama zaten 25'te → alt sınır 25, aynı kalır.
-    assert sensor.compute(runtime, position_mm=0.0) == pytest.approx(25.0)
+    assert sensor.compute(runtime, position_mm=0.0) == pytest.approx(40.0)
 
 
 def test_heating_in_raising_lineer_per_tick() -> None:
-    """RAISING'de her tick 0.08°C artar (1 Hz varsayımı, spec § 5 tick interval notu)."""
+    """RAISING'de her tick 0.08°C artar."""
     sensor = MotorTemperatureSensor(_config())
     runtime = _make_runtime(DeviceState.RAISING)
-    # 5 ardışık tick: 25 → 25.08 → 25.16 → 25.24 → 25.32 → 25.40
     values = [sensor.compute(runtime, position_mm=1000.0) for _ in range(5)]
-    expected = [25.08, 25.16, 25.24, 25.32, 25.40]
+    expected = [40.08, 40.16, 40.24, 40.32, 40.40]
     for v, e in zip(values, expected, strict=True):
         assert v == pytest.approx(e)
 
 
-def test_heating_caps_at_35() -> None:
-    """Üst sınır 35°C — uzun süre RAISING'de bile aşmaz."""
+def test_heating_caps_at_75() -> None:
+    """Üst sınır 75°C — uzun süre RAISING'de bile aşmaz."""
     sensor = MotorTemperatureSensor(_config())
-    runtime = _make_runtime(DeviceState.HOLDING)  # motor enerjili
-    # 25'ten 35'e (10°C) çıkmak 10 / 0.08 = 125 tick. 200 tick'te kapağa otururuz.
-    for _ in range(200):
+    runtime = _make_runtime(DeviceState.HOLDING)
+    for _ in range(600):  # 40→75 (35°C) = 437 tick; 600'de kapağa oturur
         sensor.compute(runtime, position_mm=5000.0)
     final = sensor.compute(runtime, position_mm=5000.0)
-    assert final == pytest.approx(35.0)
+    assert final == pytest.approx(75.0)
 
 
 def test_cooling_in_idle_lineer_per_tick() -> None:
     """IDLE'da her tick 0.04°C azalır."""
     sensor = MotorTemperatureSensor(_config())
-    # Önce ısıt
     hot_runtime = _make_runtime(DeviceState.RAISING)
-    for _ in range(125):  # 25 → ~35
+    for _ in range(440):  # 40 → ~75
         sensor.compute(hot_runtime, position_mm=1000.0)
-    # Sonra soğut
     cool_runtime = _make_runtime(DeviceState.IDLE)
     before = sensor.compute(cool_runtime, position_mm=0.0)
     after = sensor.compute(cool_runtime, position_mm=0.0)
     assert before - after == pytest.approx(0.04)
 
 
-def test_cooling_caps_at_ambient_25() -> None:
-    """Alt sınır 25°C — uzun IDLE'da çevre sıcaklığının altına inmez."""
+def test_cooling_caps_at_ambient_40() -> None:
+    """Alt sınır 40°C — uzun IDLE'da çevre sıcaklığının altına inmez."""
     sensor = MotorTemperatureSensor(_config())
     runtime = _make_runtime(DeviceState.IDLE)
-    # Zaten 25'te; çok tick'te de aynı kalmalı.
     for _ in range(100):
         sensor.compute(runtime, position_mm=0.0)
     final = sensor.compute(runtime, position_mm=0.0)
-    assert final == pytest.approx(25.0)
+    assert final == pytest.approx(40.0)
 
 
 def test_lowering_heats_same_as_raising() -> None:
@@ -103,13 +97,11 @@ def test_state_change_preserves_instance_state() -> None:
     """Spec § 5 invaryant 5: state transition reset etmez."""
     sensor = MotorTemperatureSensor(_config())
     raising = _make_runtime(DeviceState.RAISING)
-    sensor.compute(raising, position_mm=1000.0)  # 25 → 25.08
-    sensor.compute(raising, position_mm=1000.0)  # 25.08 → 25.16
-    # Şimdi IDLE'a geç — son sıcaklık taşınmalı (reset değil)
+    sensor.compute(raising, position_mm=1000.0)  # 40 → 40.08
+    sensor.compute(raising, position_mm=1000.0)  # 40.08 → 40.16
     idle = _make_runtime(DeviceState.IDLE)
     value = sensor.compute(idle, position_mm=0.0)
-    # 25.16 - 0.04 = 25.12
-    assert value == pytest.approx(25.12)
+    assert value == pytest.approx(40.12)  # 40.16 - 0.04
 
 
 def test_rejects_wrong_sensor_name() -> None:
