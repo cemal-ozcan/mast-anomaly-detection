@@ -15,12 +15,29 @@
 ```
 `demo_up.sh` `config/devices.yaml` ve `config/detectors.yaml`'ı demo sürümleriyle DEĞİŞTİRİR (eskisini `.bak`'a yedekler) ve `data/telemetry.db`'yi `data/telemetry.db.pre-demo`'ya arşivler. Loglar: `logs/demo/`.
 
+## Cihaz ve Senaryo Tablosu
+
+| Cihaz | Senaryo | Arıza Kodu | Beklenen Uyarı | Açıklama |
+|---|---|---|---|---|
+| device_001 | temiz | — | *(uyarı yok)* | 0 FP referansı; tüm demo boyunca sessiz kalır |
+| device_002 | mechanical_wear | A | `motor_current_high` | Mekanik aşınma → motor akımı tırmanışı → birleşik kural+istatistik tespiti |
+| device_003 | hydraulic_leak | B | `hydraulic_pressure_decline` | Hidrolik sızıntı → basınç düşüşü → kural-katmanı tespiti |
+| device_004 | electrical_fault | C | `motor_voltage_erratic` | Elektriksel arıza → voltaj titreşimi → kural-katmanı tespiti (varyans arızası; istatistik kör, kural tamamlar) |
+| device_005 | temperature_overshoot | F | `motor_temperature_high` | Sıcaklık kritik eşiğe (95°C) tırmanış. Gerçekçi termal model: normal ~40-75°C, kritik 95°C. Erken termal teşhis. |
+| device_006 | sensor_fault | E | `sensor_out_of_range` | mast_position aralıklı imkânsız değer (−500mm) → anında yakalama. Sağlamlık göstergesi: bozuk sensöre dayanıklıyız (makine sağlam, sensör bozuk). |
+
+**Demo çerçevesi:** 4 kestirimci arıza (A/B/C/F) + 1 sağlamlık özelliği (E) + temiz referans (device_001).
+- **F (termal aşırı ısınma):** erken teşhis — sıcaklık alarm eşiğine ulaşmadan önce trendleri tespit et.
+- **E (sensör bütünlüğü):** kestirimci bakım değil, veri-kalitesi/sağlamlık doğrulaması — makine iyi, veri bozuk, sistem bunu ayırt eder.
+
 ## 15 Dakikalık Akış (beat-by-beat)
 1. **t≈0-60s — Temiz izleme:** Dashboard'da 6 sensör akar, "Uyarılar" boş. Mimariyi anlat: simulator → ingestion → SQLite → kural+istatistik dedektör → fusion → alert lifecycle → dashboard. (İstatistik baseline seed'den hazır.)
 2. **t≈60-120s — Kural tespiti:** device_002 (mechanical_wear) → `motor_current_high` `active` uyarı. device_003 (hydraulic_leak) → `hydraulic_pressure_decline`. device_004 (electrical_fault) → `motor_voltage_erratic`. device_001 temiz kalır (FP yok).
 3. **t≈90-180s — İki-katman overlap (GEÇİCİ fırsat penceresi):** device_002'de istatistik (`iqr:motor_current` / `three_sigma:motor_current`, +`iqr:vibration`) katılır → `fused(N)` (ör. canlı smoke: `motor_current_high(9.65) + iqr:motor_current(9.96) + vibration_elevated(0.42)`; kural+istatistik aynı arızayı corroborate eder). **Not:** istatistik on-the-fly rolling baseline kullanır; arıza onset'inden kısa süre sonra (current fault-dominant, baseline hâlâ temiz) tetiklenir ve alert kalkınca debounce ile kalır — overlap'i arıza belirir belirmez gösterin. İstatistik yalnız durağan sensörlere daraltıldı (`sensors: [motor_current, vibration, hydraulic_pressure]`); electrical_fault'ta istatistik SESSİZ — varyans arızası kural-katmanı işi (tamamlayıcılık). Overlap görünmezse: kural-katmanı tespiti zaten sağlam; istatistik üretimde ~1 saat baseline ile çalışır (bkz. Bilinen Sınırlar).
-4. **Manuel yaşam döngüsü:** Dashboard'da bir uyarıyı **Gör (ack)**, başkasını **Çöz (resolve)** yap; durum filtresiyle açık/kapalı gez.
-5. **t≈3-4dk — Auto-resolve:** device_002 mechanical_wear biter → detector arızanın temizlendiğini görür → uyarı **otomatik `resolved`** (durum filtresinde görünür).
+4. **t≈120-180s — Termal tırmanış (device_005 / F):** Dashboard grafiğinde `motor_temperature` dramatik yükseliş; ~95°C eşiğini geçtiğinde `motor_temperature_high` uyarısı açılır. Anlatı: "Sıcaklık trendi daha ilk dakikada görünür — bakım müdahalesi için zaman penceremiz var." (Termal model gerçekçi: normal 40-75°C, kritik 95°C — ani sıçrama değil, kademeli tırmanış.)
+5. **t≈120-180s — Sensör bütünlüğü (device_006 / E):** mast_position değeri aralıklı olarak −500mm (fiziksel olarak imkânsız) düşer → `sensor_out_of_range` uyarısı **anında** açılır. Anlatı: "Makine sağlam, sensör bozuk — sistem ikisini ayırt ediyor. Bozuk veriye körü körüne güvenmiyoruz." Sağlamlık özelliği olarak vurgula (kestirimci bakım değil).
+6. **Manuel yaşam döngüsü:** Dashboard'da bir uyarıyı **Gör (ack)**, başkasını **Çöz (resolve)** yap; durum filtresiyle açık/kapalı gez.
+7. **t≈3-4dk — Auto-resolve:** device_002 mechanical_wear biter → detector arızanın temizlendiğini görür → uyarı **otomatik `resolved`** (durum filtresinde görünür).
 
 ## Bilinen Sınırlar
 - **İstatistik üretimde ~1 saat baseline ister** — demo'da seed + reduced `baseline_window_s` (300s) ile canlı gösterilir; overlap GEÇİCİdir (rolling baseline).
@@ -28,6 +45,8 @@
 - **Alert lifecycle (Faz 7 § 9):** süregelen arızayı manuel resolve → kural-seti değişene dek yeni uyarı açılmaz; detector restart / auto-resolve DB hatası → orphan açık uyarı (manuel kapat); eskalasyonda cihaz başına >1 açık uyarı.
 - `demo_up.sh` runtime config'leri overwrite eder (`.bak`'tan geri al).
 - **Tespit flicker'ı (kozmetik):** arıza gelişirken (ramp) pencere-istatistiği eşiği aralıklı aşar → kural-seti dalgalanır → debounce birkaç resolve/re-arm satırı üretebilir (uyarı listesinde tekrar). Tespit doğru; gürültü kozmetik (Iter 8.2 / ileride yumuşatılabilir).
+- **`sensor_frozen` kuralı korunuyor (birim-testli):** donmuş sensörü de tespit ediyoruz — ama canlı demoda gösterilmiyor (device_006 imkânsız-değer senaryosu zaten sağlamlık açısını kapatıyor).
+- **D (aşırı yük) bilinçli kapsam dışı:** gerçek bir arıza durumu, ancak tespiti A=mekanik aşınma ile birebir örtüşür (aynı `motor_current_high` imzası) → şişirilmiş sayı yerine net, ayırt edilebilir tespit tercih edildi.
 
 ## Sorun Giderme
 - **Port dolu (8501/1883):** önceki demo açık olabilir → `./scripts/demo_down.sh`; mosquitto: `brew services list`.
