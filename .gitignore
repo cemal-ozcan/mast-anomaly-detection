@@ -81,3 +81,6 @@ config/*.yaml
 !config/*.demo.yaml
 # demo_up.sh runtime config yedekleri (lokal demo artefaktı)
 config/*.bak
+
+# Visual companion brainstorm artefaktları
+.superpowers/

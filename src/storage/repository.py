@@ -197,6 +197,32 @@ class TelemetryRepository:
             rows = conn.execute(stmt).all()
         return [self._row_to_reading(row) for row in rows]
 
+    def fetch_latest_readings(self) -> list[IngestedReading]:
+        """Her (device_id, sensor) çifti için en güncel okumayı döndürür (Faz 8 Iter 8.2 spec § 6).
+
+        SQLite window function (ROW_NUMBER ... PARTITION BY) ile tek sorgu — filo kartlarının
+        anlık state + son değer + unit kaynağı. Read-only (gözlem modu korunur).
+
+        Returns:
+            (device_id, sensor) sıralı IngestedReading listesi; boş tablo → boş liste.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        row_number = (
+            func.row_number()
+            .over(
+                partition_by=(telemetry.c.device_id, telemetry.c.sensor),
+                order_by=telemetry.c.timestamp.desc(),
+            )
+            .label("rn")
+        )
+        sub = select(telemetry, row_number).subquery()
+        stmt = select(sub).where(sub.c.rn == 1).order_by(sub.c.device_id, sub.c.sensor)
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return [self._row_to_reading(row) for row in rows]
+
     def insert_anomaly(self, anomaly: Anomaly, created_at: str) -> None:
         """Tek bir Anomaly'i anomalies tablosuna yazar.
 
