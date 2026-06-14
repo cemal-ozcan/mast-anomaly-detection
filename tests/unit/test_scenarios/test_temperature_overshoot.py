@@ -76,3 +76,22 @@ def test_registered() -> None:
     from simulator.scenarios.temperature_overshoot import TemperatureOvershoot
 
     assert SCENARIO_REGISTRY["temperature_overshoot"] is TemperatureOvershoot
+
+
+def test_rejects_nonpositive_params() -> None:
+    """rate veya max ≤ 0 → boot-time ValueError (docstring '> 0' kontratı)."""
+    from simulator.scenarios.temperature_overshoot import TemperatureOvershoot
+
+    with pytest.raises(ValueError, match="> 0"):
+        TemperatureOvershoot(params={"overshoot_rate_c_per_s": -0.8, "max_overshoot_c": 60})
+    with pytest.raises(ValueError, match="> 0"):
+        TemperatureOvershoot(params={"overshoot_rate_c_per_s": 0.8, "max_overshoot_c": 0})
+
+
+def test_lowering_returns_clean() -> None:
+    """LOWERING'de aktif değil (yalnız RAISING + HOLDING) → identity."""
+    from simulator.scenarios.temperature_overshoot import TemperatureOvershoot
+
+    sc = TemperatureOvershoot(params={"overshoot_rate_c_per_s": 0.8, "max_overshoot_c": 60})
+    ctx = ScenarioContext(runtime=_runtime(DeviceState.LOWERING), scenario_elapsed_s=100.0)
+    assert sc.modify("motor_temperature", 60.0, ctx) == 60.0
