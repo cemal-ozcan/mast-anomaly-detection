@@ -198,12 +198,13 @@ Bu faz **kritik psikolojik bir milestone'dur.** Bu noktadan sonra "çalışan bi
 
 **Kabul kriteri:**
 - Yöneticiye/firmaya 15 dakikada gösterilip anlatılabiliyor — ✅ Iter 8.1 (`docs/DEMO.md` beat-script + tek-komut `demo_up.sh`)
-- En az 3 farklı arıza senaryosu canlı demo edilebiliyor — ✅ Iter 8.1 (mechanical_wear + hydraulic_leak + electrical_fault canlı tespit; device_001 temiz 0 FP; kural+istatistik `fused` overlap; auto-resolve)
-- Kod kalitesi review için hazır — ✅ (335 test, mypy strict + ruff temiz)
+- En az 3 farklı arıza senaryosu canlı demo edilebiliyor — ✅ Iter 8.1/8.3 (5 arıza: mechanical_wear + hydraulic_leak + electrical_fault + temperature_overshoot + sensor_fault canlı tespit; device_001 temiz 0 FP; kural+istatistik `fused` overlap; auto-resolve)
+- Kod kalitesi review için hazır — ✅ (360 test, mypy strict + ruff temiz)
 
 **İlerleme:**
 - ✅ Iter 8.1 — Demo orkestrasyon (`scripts/demo_up.sh`/`demo_down.sh` + `seed_demo_baseline.py`) + `config/devices.demo.yaml` (temiz + A/B/C choreographed + kısa-arıza auto-resolve) + `config/detectors.demo.yaml` (reduced baseline + statistical `sensors` daraltma, canlı smoke kalibrasyonu) + `docs/DEMO.md` runbook + run-simulation/README düzeltme — 2026-06-03. Canlı demo smoke: 0 FP + ≥3 senaryo + overlap + auto-resolve doğrulandı. `src/` değişmedi. Spec: `docs/specs/2026-06-03-faz8-iter8-1-demo-orchestration-design.md`.
 - ✅ Iter 8.2 — Dashboard görsel zenginleştirme (komuta merkezi: KPI `st.metric` + filo sağlık kartları renk-kodlu rozet/state/değer + grafik üstü Altair anomali overlay [bant + kural etiketi + hover/zoom] + `.streamlit/config.toml` açık kurumsal tema + cihaz-özeti uyarı akışı [Iter 8.1 flicker yumuşatma]) — 2026-06-14. Streamlit-native (yeni saf modüller `dashboard/fleet.py` + `dashboard/charts.py`; `storage.fetch_latest_readings` read-only, gözlem modu korundu). 335 test + mypy strict + ruff temiz; canlı veri smoke (pencere-içi 0 FP, auto-resolve, 4-katman overlay, downsample 32k→1000). Spec/plan: `docs/specs/2026-06-03-faz8-iter8-2-dashboard-visual-design.md` + `docs/plans/2026-06-03-faz8-iter8-2-dashboard-visual.md`. **Not:** proje bu iterasyonda iCloud-bozulması nedeniyle `~/Desktop`'tan iCloud-dışı `~/Projects/`'e taşındı (CLAUDE.md altyapı dersi).
+- ✅ Iter 8.3 — Arıza kapsamı (POC sağlamlaştırma): F sıcaklık aşımı (`temperature_overshoot`) + gerçekçi termal model (40-75°C, eşik 95°C) + E sensör arızası (`sensor_fault` → imkânsız `mast_position`) + yeni `sensor_out_of_range` kuralı (fiziksel-imkânsızlık) + demo 6 cihaz — 2026-06-15. **D (aşırı yük) bilinçli atıldı** (tespiti A ile örtüşür; netlik > sayı). Çerçeve: 4 kestirimci arıza (A/B/C/F) + 1 sağlamlık (E=sensör bütünlüğü). 360 test + mypy strict + ruff temiz; canlı demo smoke (001 0 FP, 005 F→`motor_temperature_high` 123°C, 006 E→yalnız `sensor_out_of_range`). Spec/plan: `docs/specs/2026-06-14-faz8-iter8-3-fault-coverage-design.md` + `docs/plans/2026-06-14-faz8-iter8-3-fault-coverage.md`. Sıradaki POC iterasyonları: 8.4 skor standardizasyonu, 8.5 yaşam döngüsü kenar durumları.
 
 ---
 
