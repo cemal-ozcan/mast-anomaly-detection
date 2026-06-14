@@ -6,6 +6,7 @@ from simulator.scenarios.base import FaultScenario, ScenarioContext
 from simulator.scenarios.electrical_fault import ElectricalFault
 from simulator.scenarios.hydraulic_leak import HydraulicLeak
 from simulator.scenarios.mechanical_wear import MechanicalWear
+from simulator.scenarios.sensor_fault import SensorFault
 from simulator.scenarios.temperature_overshoot import TemperatureOvershoot
 
 # Registry: YAML'deki ad-string'i sınıfa eşler. Yeni senaryo eklemek
@@ -15,6 +16,7 @@ SCENARIO_REGISTRY: dict[str, type[FaultScenario]] = {
     "hydraulic_leak": HydraulicLeak,
     "electrical_fault": ElectricalFault,
     "temperature_overshoot": TemperatureOvershoot,
+    "sensor_fault": SensorFault,
 }
 
 
@@ -59,4 +61,5 @@ __all__ = [
     "HydraulicLeak",
     "ElectricalFault",
     "TemperatureOvershoot",
+    "SensorFault",
 ]
