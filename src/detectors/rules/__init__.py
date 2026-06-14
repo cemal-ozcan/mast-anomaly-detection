@@ -9,6 +9,7 @@ from detectors.rules.motor_current_high import MotorCurrentHigh
 from detectors.rules.motor_temperature_high import MotorTemperatureHigh
 from detectors.rules.motor_voltage_erratic import MotorVoltageErratic
 from detectors.rules.sensor_frozen import SensorFrozen
+from detectors.rules.sensor_out_of_range import SensorOutOfRange
 from detectors.rules.vibration_elevated import VibrationElevated
 
 # Callable[..., Detector]: kurallar farklı __init__ imzalı; build_detectors generic
@@ -19,5 +20,6 @@ RULE_REGISTRY: dict[str, Callable[..., Detector]] = {
     "motor_temperature_high": MotorTemperatureHigh,
     "motor_voltage_erratic": MotorVoltageErratic,
     "sensor_frozen": SensorFrozen,
+    "sensor_out_of_range": SensorOutOfRange,
     "vibration_elevated": VibrationElevated,
 }
