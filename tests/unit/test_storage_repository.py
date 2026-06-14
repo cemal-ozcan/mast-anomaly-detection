@@ -167,3 +167,35 @@ def test_fetch_window_query_uses_composite_index(migrated_engine: Engine) -> Non
         ).all()
     detail = " ".join(str(row[-1]) for row in plan)
     assert "USING INDEX idx_telemetry_device_sensor_ts" in detail, detail
+
+
+def test_fetch_latest_readings_latest_per_device_sensor(migrated_engine: Engine) -> None:
+    """Her (device, sensor) çifti için yalnız EN GÜNCEL okuma döner."""
+    from ingestion.message_parser import IngestedReading
+    from storage.repository import TelemetryRepository
+
+    repo = TelemetryRepository(migrated_engine)
+    rows = [
+        IngestedReading(device_id="dev_a", sensor="motor_current",
+                        timestamp="2026-06-03T12:00:00.000Z", state="idle", value=1.0, unit="A"),
+        IngestedReading(device_id="dev_a", sensor="motor_current",
+                        timestamp="2026-06-03T12:00:05.000Z", state="raising", value=2.0, unit="A"),
+        IngestedReading(device_id="dev_a", sensor="vibration",
+                        timestamp="2026-06-03T12:00:01.000Z", state="idle", value=0.05, unit="g"),
+        IngestedReading(device_id="dev_b", sensor="motor_current",
+                        timestamp="2026-06-03T12:00:02.000Z", state="holding", value=0.4, unit="A"),
+    ]
+    repo.insert_batch(rows)
+    latest = repo.fetch_latest_readings()
+    key = {(r.device_id, r.sensor): r for r in latest}
+    assert len(latest) == 3  # (dev_a, motor_current) tekilleşti
+    assert key[("dev_a", "motor_current")].value == 2.0  # en güncel kazandı
+    assert key[("dev_a", "motor_current")].state == "raising"
+    assert key[("dev_b", "motor_current")].state == "holding"
+
+
+def test_fetch_latest_readings_empty_db(migrated_engine: Engine) -> None:
+    """Boş tablo → boş liste."""
+    from storage.repository import TelemetryRepository
+
+    assert TelemetryRepository(migrated_engine).fetch_latest_readings() == []

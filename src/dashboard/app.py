@@ -1,8 +1,9 @@
-"""Streamlit dashboard entry (Faz 3): streamlit run src/dashboard/app.py.
+"""Streamlit dashboard entry (Faz 8 Iter 8.2): streamlit run src/dashboard/app.py.
 
-Cihaz + zaman-aralığı seçilir; 6 sensör line chart'ı st.experimental_fragment ile
-2 saniyede bir otomatik yenilenir. SQLite'ı (ingestion'ın yazdığı data/telemetry.db)
-read-only sorgular. Gözlem modu: hiçbir şey yazmaz.
+Tek sayfa komuta merkezi (spec § 3): KPI satırı → filo sağlık kartları → severity-stilli
+uyarı akışı (cihaz-özeti varsayılan) → uyarı yönetimi → seçili cihazın 6 Altair grafiği
+(anomali overlay'li). Üst blok 5s, grafikler 2s fragment; yönetim fragment DIŞI (S1).
+SQLite'ı read-only sorgular; tek yazma yolu uyarı durumu geçişleri (gözlem modu).
 
 db_path: DASHBOARD_DB_PATH env varsa o, yoksa config/ingestion.yaml db_path.
 """
@@ -13,6 +14,7 @@ import sys
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 # `streamlit run src/dashboard/app.py` yalnızca src/dashboard'ı sys.path'e ekler; top-level
 # paketler (dashboard, ingestion, storage) için src/ kökünü ekle. Editable install .pth'i
@@ -22,15 +24,30 @@ _SRC_ROOT = Path(__file__).resolve().parent.parent
 if str(_SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(_SRC_ROOT))
 
+import altair as alt  # noqa: E402
 import streamlit as st  # noqa: E402
 from loguru import logger  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
 from alerts.lifecycle import ACKNOWLEDGED, RESOLVED, can_transition  # noqa: E402
+from alerts.models import Alert  # noqa: E402
+from dashboard.charts import build_sensor_chart  # noqa: E402
+from dashboard.fleet import (  # noqa: E402
+    BADGE_CRITICAL,
+    BADGE_OK,
+    BADGE_WARNING,
+    DeviceHealth,
+    compute_kpis,
+    derive_fleet,
+)
 from dashboard.transform import (  # noqa: E402
+    OPEN_STATUSES,
     WINDOW_OPTIONS,
     alerts_to_frame,
-    readings_to_frame,
+    downsample_frame,
+    latest_alert_per_device,
+    readings_to_chart_frame,
+    severity_row_style,
     window_to_since,
 )
 from ingestion.config import load_ingestion_config  # noqa: E402
@@ -45,6 +62,17 @@ SIX_SENSORS = [
     "mast_position",
     "vibration",
 ]
+
+ALERTS_FETCH_LIMIT = 200  # spec § 6 — tek fetch, client-side türetim
+
+_BADGE_LABELS = {
+    BADGE_OK: "🟢 OK",
+    BADGE_WARNING: "🟡 UYARI",
+    BADGE_CRITICAL: "🔴 KRİTİK",
+}
+
+# Uyarı akışı görünümleri (spec § 3): cihaz özeti varsayılan; gerisi durum filtresi.
+_VIEW_OPTIONS = ["Cihaz özeti", "Açık", "Tümü", "active", "acknowledged", "resolved"]
 
 
 def _resolve_db_path() -> Path:
@@ -62,21 +90,12 @@ def _get_repository() -> TelemetryRepository:
     return TelemetryRepository(engine)
 
 
-_STATUS_FILTERS: dict[str, tuple[str, ...] | None] = {
-    "Açık": ("active", "acknowledged"),
-    "Tümü": None,
-    "active": ("active",),
-    "acknowledged": ("acknowledged",),
-    "resolved": ("resolved",),
-}
-
-
 def _now_iso() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def _apply_transition(fn: Callable[[int, str], bool], alert_id: int) -> None:
-    """Geçiş metodunu çağırır; sonuca göre kullanıcıyı bilgilendirir (spec § 9)."""
+    """Geçiş metodunu çağırır; sonuca göre kullanıcıyı bilgilendirir (Faz 7 spec § 9)."""
     try:
         ok = fn(alert_id, _now_iso())
     except OperationalError as e:
@@ -87,27 +106,85 @@ def _apply_transition(fn: Callable[[int, str], bool], alert_id: int) -> None:
         st.info("Uyarı durumu değişmiş olabilir — listeyi yenileyin.")
 
 
-@st.experimental_fragment(run_every="5s")
-def _render_alerts(repository: TelemetryRepository) -> None:
-    """Filo geneli uyarı tablosunu durum kolonu + filtre ile gösterir; 5s'de bir yenilenir (spec § 8).
-
-    SALT-GÖRÜNTÜ (auto-refresh). Yönetim (ack/resolve) butonları _render_alert_management'ta
-    (main() içinde, fragment dışında — auto-rerun buton yarışını önler, S1). Gözlem modu: hiçbir
-    şey yazmaz. anomalies tablosu yoksa bilgilendirir; çökmez (spec § 7/§ 9).
-    """
-    st.subheader("🚨 Uyarılar")
-    choice = st.selectbox("Durum filtresi", list(_STATUS_FILTERS.keys()), index=0, key="alert_filter")
-    statuses = _STATUS_FILTERS[choice or "Açık"]
+def _fetch_alerts_safe(repository: TelemetryRepository) -> tuple[list[Alert], bool]:
+    """Uyarıları çeker; anomalies tablosu yoksa (boş, False) döner — üst blok degrade (spec § 9)."""
     try:
-        alerts = repository.fetch_alerts(statuses, limit=50)
+        return repository.fetch_alerts(None, ALERTS_FETCH_LIMIT), True
     except OperationalError as e:
         logger.info("anomalies tablosu henüz yok: {}", e)
-        st.info("Henüz anomali yok — detector servisi (`python -m detectors`) çalıştı mı?")
+        return [], False
+
+
+def _filter_view(alerts: list[Alert], view: str) -> list[Alert]:
+    """Uyarı akışı görünümünü tek fetch sonucundan client-side türetir (spec § 6)."""
+    if view == "Cihaz özeti":
+        return latest_alert_per_device(alerts)
+    if view == "Açık":
+        return [a for a in alerts if a.status in OPEN_STATUSES]
+    if view == "Tümü":
+        return alerts
+    return [a for a in alerts if a.status == view]
+
+
+def _render_fleet_cards(fleet_health: list[DeviceHealth]) -> None:
+    """Filo sağlık kartlarını çizer (spec § 3 madde 3)."""
+    if not fleet_health:
         return
-    if not alerts:
-        st.caption("Bu filtrede uyarı yok.")
+    cols = st.columns(len(fleet_health))
+    for col, health in zip(cols, fleet_health, strict=True):
+        with col, st.container(border=True):
+            st.markdown(f"**{health.device_id}** · {_BADGE_LABELS[health.badge]}")
+            st.caption(f"state: {health.state}")
+            lines = []
+            for snap in health.snapshots:
+                text = f"{snap.sensor}: {snap.value:.2f} {snap.unit}"
+                # Bold renk köşeli parantezinin İÇİNDE — Streamlit'in dokümante deseni
+                # (":red[**...**]"); dışarıda iç içe markdown 1.36'da kırılgan (plan review S2).
+                lines.append(f":red[**{text}**]" if snap.highlighted else text)
+            st.markdown("  \n".join(lines))
+            if health.open_alert_count:
+                st.caption(f"⚠ {health.open_alert_count} açık uyarı · {health.top_rule}")
+
+
+@st.experimental_fragment(run_every="5s")
+def _render_overview(repository: TelemetryRepository) -> None:
+    """Üst blok: KPI satırı + filo kartları + uyarı akışı; 5s'de bir yenilenir (spec § 3).
+
+    SALT-GÖRÜNTÜ (gözlem modu). Sorgu bütçesi: fetch_alerts + fetch_latest_readings (spec § 6).
+    """
+    alerts, alerts_available = _fetch_alerts_safe(repository)
+    try:
+        latest = repository.fetch_latest_readings()
+    except OperationalError as e:
+        logger.error("Son okumalar alınamadı: {}", e)
+        st.error("Son okumalar alınamadı (DB hatası).")
         return
-    st.dataframe(alerts_to_frame(alerts), use_container_width=True, hide_index=True)
+    devices = sorted({r.device_id for r in latest})
+    now = datetime.now(UTC)
+
+    kpis = compute_kpis(devices, alerts, now)
+    kpi_cols = st.columns(4)
+    kpi_cols[0].metric("Cihaz", kpis.device_count)
+    kpi_cols[1].metric("Açık uyarı", kpis.open_alert_count)
+    kpi_cols[2].metric("Kritik", kpis.critical_alert_count)
+    kpi_cols[3].metric("Son tespit", kpis.last_detection)
+    if not alerts_available:
+        st.caption("Detector henüz çalışmadı — uyarı verisi yok (`python -m detectors`).")
+
+    _render_fleet_cards(derive_fleet(devices, latest, alerts))
+
+    st.subheader("🚨 Uyarılar")
+    choice = st.selectbox("Görünüm", _VIEW_OPTIONS, index=0, key="alert_view")
+    visible = _filter_view(alerts, choice or "Cihaz özeti")
+    if not visible:
+        st.caption("Bu görünümde uyarı yok.")
+        return
+    frame = alerts_to_frame(visible, now)
+    st.dataframe(
+        frame.style.apply(severity_row_style, axis=1),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 
 def _render_alert_management(repository: TelemetryRepository) -> None:
@@ -117,9 +194,9 @@ def _render_alert_management(repository: TelemetryRepository) -> None:
     tam app rerun'ı tetikler → liste tazelenir.
     """
     try:
-        open_alerts = repository.fetch_alerts(("active", "acknowledged"), limit=50)
+        open_alerts = repository.fetch_alerts(OPEN_STATUSES, limit=50)
     except OperationalError:
-        return  # tablo yoksa _render_alerts zaten bilgilendirdi
+        return  # tablo yoksa _render_overview zaten bilgilendirdi
     if not open_alerts:
         return
     options = {f"#{a.id} {a.device_id} · {a.rule_name} ({a.status})": a for a in open_alerts}
@@ -136,8 +213,13 @@ def _render_alert_management(repository: TelemetryRepository) -> None:
 
 @st.experimental_fragment(run_every="2s")
 def _render_charts(repository: TelemetryRepository, device_id: str, window: str) -> None:
-    """Seçili cihazın 6 sensörünü 2 kolonda çizer; her 2s otomatik yenilenir."""
+    """Seçili cihazın 6 sensörünü anomali overlay'li Altair grafikleriyle çizer (spec § 3/§ 5)."""
     since = window_to_since(datetime.now(UTC), window)
+    alerts, _ = _fetch_alerts_safe(repository)
+    device_alerts = [a for a in alerts if a.device_id == device_id]
+    if since is not None:
+        # Uyarı penceresi ∩ grafik zaman penceresi (lexicographic ISO karşılaştırma, spec § 6)
+        device_alerts = [a for a in device_alerts if a.window_end >= since]
     cols = st.columns(2)
     for i, sensor in enumerate(SIX_SENSORS):
         try:
@@ -147,16 +229,24 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
             with cols[i % 2]:
                 st.error(f"{sensor}: okuma hatası")
             continue
-        frame = readings_to_frame(readings)
+        frame = downsample_frame(readings_to_chart_frame(readings))
+        unit = readings[-1].unit if readings else ""
         with cols[i % 2]:
             st.subheader(sensor)
-            st.line_chart(frame, y="value")
+            # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
+            # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
+            st.altair_chart(
+                cast(alt.Chart, build_sensor_chart(frame, device_alerts, sensor, unit)),
+                use_container_width=True,
+                theme="streamlit",
+            )
 
 
 def main() -> None:
-    """Dashboard ana akışı."""
-    st.set_page_config(page_title="Mast Telemetri Dashboard", layout="wide")
-    st.title("Teleskopik Mast — Telemetri Dashboard")
+    """Dashboard ana akışı (spec § 3 sayfa yapısı)."""
+    st.set_page_config(page_title="Mast Filo İzleme", layout="wide")
+    st.title("Mast Filo İzleme")
+    st.caption("Teleskopik mast filosu — gerçek zamanlı telemetri ve erken uyarı (gözlem modu)")
 
     try:
         repository = _get_repository()
@@ -179,7 +269,7 @@ def main() -> None:
         st.info("Henüz veri yok — simulator + ingestion çalışıyor mu?")
         return
 
-    _render_alerts(repository)
+    _render_overview(repository)
     _render_alert_management(repository)
     st.divider()
 
