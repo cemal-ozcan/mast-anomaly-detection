@@ -57,8 +57,11 @@ değer varyantı).
 (çalışan motorlar 60-90°C). Düzeltme:
 - **Normal çalışma sıcaklığı gerçekçi aralığa** taşınır (ısınma RAISING'de, soğuma diğer state'lerde;
   taban kalibrasyonla belirlenir — § 9).
-- **F senaryosu aktifken** normal "çalışma tavanı" aşılabilir (tavan fiziksel limit değil, normal-çalışma
-  sınırı): senaryo taban üstüne aşım deltası ekler → sıcaklık kritik eşiği güvenle geçer.
+- **F aşımı senaryonun TOPLAMSAL `modify`'ıyla yapılır** (A'nın `clean_value + factor*8.0` deseniyle aynı):
+  senaryo, sensörün (tavanlı) temiz değerinin ÜSTÜNE bir aşım deltası ekler (`clean_value + overshoot(elapsed)`)
+  → sıcaklık kritik eşiği doğal olarak geçer. **Sensörün tavanı KALDIRILMAZ** (normal-çalışma sınırı olarak
+  kalır); yalnız § 4'teki taban sabitleri (ambient/max/rates) gerçekçilik için değişir. Bu sayede sensör saf
+  kalır, senaryodan habersizdir (mimari uyum).
 - `motor_temperature` istatistiksel dedektör kapsamı DIŞINDA kalır (mevcut FP koruması korunur) → gerçekçi
   taban yeni istatistik FP getirmez; F yalnız kuralla yakalanır (C gibi).
 
