@@ -1,4 +1,4 @@
-# Demo filosu (Faz 8 Iter 8.1): temiz kontrol + A/B/C choreographed.
+# Demo filosu (Faz 8 Iter 8.1 + 8.3): temiz kontrol + A/B/C/F/E choreographed (6 cihaz).
 # demo_up.sh bunu config/devices.yaml'a kopyalar. Süreler Task 5 canlı smoke ile kalibre edilir.
 devices:
   # device_001: temiz kontrol — hiç arıza, hiç uyarı (kontrast + FP yok kanıtı).

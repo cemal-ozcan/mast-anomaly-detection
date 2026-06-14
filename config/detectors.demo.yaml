@@ -1,4 +1,4 @@
-# Demo detector config (Faz 8 Iter 8.1): detectors.yaml.example + reduced baseline_window_s (300) + min_baseline 20 — istatistik 15-dk demoda canlı tetiklensin. demo_up.sh bunu config/detectors.yaml'a kopyalar.
+# Demo detector config (Faz 8 Iter 8.1 + 8.3): detectors.yaml.example + reduced baseline_window_s (300) + min_baseline 20 — istatistik 15-dk demoda canlı tetiklensin. Iter 8.3: sensor_out_of_range kuralı + motor_temperature_high eşiği 95°C. demo_up.sh bunu config/detectors.yaml'a kopyalar.
 detectors:
   poll_interval_s: 5.0
   # window_s=120: türev (slope) kuralının yeterli HOLDING örneği görmesi için.
