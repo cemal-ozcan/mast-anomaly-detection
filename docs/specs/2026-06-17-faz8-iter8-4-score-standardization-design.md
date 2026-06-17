@@ -70,6 +70,12 @@ Sözleşme: `trip > warn` (çağıran/config doğrular; `trip <= warn` → Value
 
 - İstatistik dedektörlerinde band-pozisyon doğal kapanır: 3σ → `(z−3)/(K−3)`; IQR → `mesafe/((far−1.5)·IQR)`
   = far=3.0 için `mesafe/(1.5·IQR)`.
+- **İstatistik dedektörler band_position_score'u SAPMA/MESAFE UZAYINDA çağırır** (value-space'te değil):
+  `q` = kodun önceden hesapladığı **non-negatif `deviation`/`distance` büyüklüğü**; `warn` = fence
+  büyüklüğü (3σ resp. `1.5·IQR`); `trip` = kritik-fence büyüklüğü (`Kσ` resp. `far·IQR`). Çift-taraflı
+  (alt/üst fence) ayrımı zaten `deviation = abs(...)` / `distance = max(fence-dışı)` ile koda gömülü →
+  band_position'a HAM İŞARETLİ değer DEĞİL büyüklük geçirilir (yön ters dönmesin). Tablo "warn/trip"
+  sütunları value-space çapalarını gösterir; uygulamada karşılıkları büyüklük uzayındadır.
 - **Keyfi paydalar (`2×`/`4×`/`5×`/`margin`/`fence`/`IQR`) tümüyle kalkar.** Yerine ya ölçülen kritik
   referans (eşik kuralları) ya da standart istatistik çapa (6σ, Tukey 3·IQR).
 - **trip seçimi tetiklemeyi DEĞİŞTİRMEZ** (kural yine `warn`'da tetikler) → FP/TP regresyon riski yok;
@@ -101,6 +107,15 @@ Sözleşme: `trip > warn` (çağıran/config doğrular; `trip <= warn` → Value
   tetiklenme assert ederler; skor assert eden satırlar varsa güncellenir).
 - **Skor değeri assert eden birim testler GÜNCELLENİR** (her kural + 3σ + IQR + fusion). Bu beklenen
   ve istenen değişim (eski keyfi skorlar → band-pozisyon).
+  - **DİKKAT — bazı testler ESKİ (hatalı) davranışı "beklenen" olarak kodluyor → tweak değil SEMANTİK
+    İNVERSİYON gerektirir** (plan açıkça listeler):
+    - `tests/unit/detectors/test_fusion.py` ödünç-`max` skorunu assert ediyor (`fused.score == 0.9`/`1.0`
+      iken `top` daha düşük skorlu) → yeni davranışta `fused.score = top.score` (örn. 0.4 / 0.1). Testin
+      "max skor" yorumları da tersine yazılır.
+    - `tests/unit/detectors/statistical/test_iqr.py` `score == distance/IQR` (örn. 0.25) "regresyon kilidi"
+      → yeni `distance/((far−1.5)·IQR)` (far=3 → `distance/(1.5·IQR)`, örn. ≈0.167).
+  - **Etkilenmeyen (over-scope yapma):** `test_storage_anomaly_repository.py` + `test_base.py` literal
+    `score=0.9` round-trip testleri — dataclass/DB serileştirme, formülden bağımsız → DEĞİŞMEZ.
 - **Füzyon temsilci tie-break flip riski:** band-pozisyon skoru same-severity tie-break'i değiştirebilir
   → temsilci aynı-severity başka anomaliye kayabilir (hâlâ dürüst). Canlı demo smoke doğrular.
 - **Şema/migration YOK** (`score` zaten float). **Dashboard yapısal değişmez** (skor zaten gösteriliyor;
@@ -114,8 +129,16 @@ Tüm trip/çapa değerleri **config-driven** (CLAUDE.md: hard-coded yok). `confi
 - Eşik kurallarına `critical_*` paramı eklenir (zorunlu; eksikse boot'ta fail-fast — sessiz default yok).
 - 3σ'ya `sigma_k_critical` (vars. 6.0), IQR'a `iqr_multiplier_critical` (vars. 3.0) — standart sabitler,
   dokümante varsayılanlı (eksikse standart değer; istatistik çapası "domain magic" değil).
-- Builder (`build_detectors` / `build_statistical_detectors`) generic `**params` ile zaten geçirir;
-  kural/dedektör `__init__`'leri yeni paramı kabul + `trip > warn` doğrular.
+- Builder (`build_detectors` / `build_statistical_detectors`) generic `**params` ile zaten geçirir
+  (`config.py` kodu DEĞİŞMEZ); kural/dedektör `__init__`'leri yeni paramı kabul + `trip > warn` doğrular.
+- **İstatistik guard sabit DEĞİL, config'lenmiş çarpana karşı:** `sigma_k_critical > sigma_k` ve
+  `iqr_multiplier_critical > iqr_multiplier` doğrulanır (sabit 3.0/1.5'e karşı değil — `sigma_k`
+  config'ten 3'ten farklı olabilir).
+- **SIRALAMA TEHLİKESİ (atomik iniş zorunlu):** `__init__` imzasına zorunlu `critical_*` eklenip
+  YAML'lar güncellenmeden bırakılırsa `build_detectors` `ValueError` fırlatır → **detector servisi +
+  canlı demo boot etmez** (`demo_up.sh` `detectors.demo.yaml` kopyalar). Bu yüzden bir kuralın
+  `__init__` değişikliği + `detectors.yaml.example` + `detectors.demo.yaml` **aynı task'ta birlikte**
+  iner; § 10 ölçüm adımı bu task'ın ÖN KOŞULUDUR (sonradan değil).
 
 ## 8. Dosya Düzeni
 
@@ -166,8 +189,11 @@ gerektirmez (standart). **Canlı demo smoke** skorların makullüğünü + 0 FP'
 | İmza/regresyon | A/B/C/F/E tetiklemeleri korunur (skor değil tetik); skor assert eden testler güncellenir |
 | Kapanış | **tam suite + mypy strict + ruff + canlı demo smoke (6 cihaz)** |
 
-**Canlı demo smoke kabul:** 001 temiz 0 FP; her arıza doğru uyarı + **makul band-pozisyon skoru**
-(örn. F sıcaklık ~0.7-0.9, sensör arızası 1.0); füzyonda gösterilen skor temsilciye ait; temiz teardown.
+**Canlı demo smoke kabul:** 001 temiz 0 FP; her arıza doğru uyarı + **makul band-pozisyon skoru**;
+füzyonda gösterilen skor temsilciye ait; temiz teardown. Beklenen skor profili (dürüstlük gereği
+**satürasyon normaldir**): eşik kuralları arızanın şiddetine göre orta-üst bant (örn. F sıcaklık ~123°C
+→ ~0.7-1.0); **istatistik dedektörler aşırı sapmalarda (A z≈15-19, K=6) band'ı 1.0'a satüre eder**
+(beklenen — gerçekten 6σ'yı çok aşıyor); sensör-sağlığı (E/donma) = 1.0 (ikili validity).
 
 ## 12. Kabul Kriterleri
 
