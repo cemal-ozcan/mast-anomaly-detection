@@ -41,7 +41,7 @@ def test_single_returns_same_anomaly_unchanged() -> None:
 
 
 def test_multiple_fuses_into_representative() -> None:
-    """Çoklu → 'fused(N)'; en yüksek severity baz; skor=max; pencere min/max; açıklama katkılar."""
+    """Çoklu → 'fused(N)'; en yüksek severity baz; skor=temsilcininki; pencere min/max; açıklama katkılar."""
     a1 = _anom(
         rule_name="motor_current_high", severity="high", score=0.4,
         sensor="motor_current", value=10.0,
@@ -59,7 +59,7 @@ def test_multiple_fuses_into_representative() -> None:
     assert fused.severity == "high"          # en yüksek severity (a1)
     assert fused.sensor == "motor_current"   # top katkının sensörü (a1, severity yüksek)
     assert fused.value == 10.0               # top katkının değeri
-    assert fused.score == 0.9                # max skor (a2)
+    assert fused.score == 0.4                # temsilcinin (a1, en yüksek severity) kendi skoru
     assert fused.window_start == "2026-05-30T00:00:00.000Z"  # min
     assert fused.window_end == "2026-05-30T00:01:00.000Z"    # max
     assert "motor_current_high" in fused.description
@@ -75,4 +75,4 @@ def test_top_chosen_by_severity_then_score() -> None:
     assert fused.severity == "critical"          # severity baskın
     assert fused.sensor == "motor_temperature"   # critical olan top
     assert fused.value == 95.0
-    assert fused.score == 1.0                     # ama skor yine max (warn_high)
+    assert fused.score == 0.1                     # temsilcinin (crit_low, critical) kendi skoru
