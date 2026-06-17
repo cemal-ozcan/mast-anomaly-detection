@@ -71,6 +71,17 @@ def test_empty_window() -> None:
     assert rule.detect(pd.DataFrame()) == []
 
 
+def test_score_is_one_binary_validity() -> None:
+    """Sensör-sağlığı = ikili 'veri geçersiz' → skor sabit 1.0 (band-pozisyon değil, Iter 8.4 spec § 5)."""
+    from detectors.rules.sensor_out_of_range import SensorOutOfRange
+
+    rule = SensorOutOfRange(bounds=_BOUNDS, severity="high")
+    window = _window([("mast_position", "t1", -500.0)])
+    anomalies = rule.detect(window)
+    assert len(anomalies) == 1
+    assert anomalies[0].score == 1.0
+
+
 def test_registered() -> None:
     from detectors.rules import RULE_REGISTRY
 
