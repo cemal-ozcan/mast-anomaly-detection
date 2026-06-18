@@ -84,17 +84,19 @@ def _since_cutoff(now: datetime, window_s: int) -> str:
 def _detect_once(
     repository: TelemetryRepository,
     detector_groups: list[tuple[list[Detector], int]],
-    active: dict[str, frozenset[str]],
     now: datetime,
 ) -> None:
-    """Tek poll turu: her cihaz × her dedektör-grubu (kendi penceresinde) → fusion → debounce.
+    """Tek poll turu: her cihaz × her dedektör-grubu → fusion → DB-tek-hakikat reconciliation (Iter 8.5).
 
     `detector_groups`: (dedektörler, window_s) çiftleri — kural grubu kısa pencere (120s),
-    istatistik grubu uzun pencere (3600s). Cihaz başına her grubun penceresi kurulur
-    (aynı window_s tekrar kurulmaz — window_cache), tüm anomaliler birleştirilir → fuse_anomalies →
-    epizot debounce (`active`). Faz 6 ML grubu yeni bir çift olarak eklenebilir.
+    istatistik grubu uzun pencere (3600s); cihaz başına window_cache. Tüm anomaliler birleştirilir
+    → fuse_anomalies. **In-memory durum YOK:** açık-uyarı fingerprint'leri her poll DB'den okunur
+    (`fetch_open_fingerprints`) ve level-triggered uzlaşılır: cihaz temiz + açık uyarı → auto-resolve;
+    firing + fingerprint açık (ack dahil) → debounce; firing + açık değil → yeni uyarı. Restart = bu
+    yolun ilk koşumu (orphan/duplikat yok). Faz 6 ML grubu yeni bir çift olarak eklenebilir.
     """
     created_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    open_fingerprints = repository.fetch_open_fingerprints()
 
     for device_id in repository.list_devices():
         device_anomalies: list[Anomaly] = []
@@ -115,10 +117,14 @@ def _detect_once(
                     logger.error("Dedektör '{}' hata verdi, atlandı: {}", detector.name, e)
                     continue
 
+        # Fingerprint = KATKIDA BULUNAN dedektörlerin rule_name'leri (fused(N) DEĞİL).
+        # Yazım `",".join(sorted(rule_set))` (insert_anomaly) ↔ okuma `frozenset(s.split(","))`
+        # (fetch_open_fingerprints) SİMETRİK olmalı; kural adlarında virgül yok (delimiter güvenli).
         rule_set = frozenset(a.rule_name for a in device_anomalies)
-        if not rule_set:
-            if device_id in active:  # izlenen arıza gerçekten temizlendi → auto-resolve (Faz 7)
-                active.pop(device_id, None)
+        open_fps = open_fingerprints.get(device_id, set())
+
+        if not rule_set:  # cihaz temiz
+            if open_fps:  # açık uyarısı varsa auto-resolve (restart'ta da DB'den okunur → orphan yok)
                 try:
                     closed = repository.resolve_open_alerts(device_id, created_at)
                     if closed:
@@ -129,17 +135,17 @@ def _detect_once(
                     logger.error("Auto-resolve yazılamadı (atlandı): {}", e)
             continue
         # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez".
-        if active.get(device_id) == rule_set:
-            continue  # aynı kural-seti süregeliyor → debounce
+        if rule_set in open_fps:
+            continue  # aynı fingerprint açık (active veya acknowledged) → debounce
+        # firing ama bu fingerprint açık değil → yeni uyarı (ilk tespit / eskalasyon)
         fused = fuse_anomalies(device_anomalies)
         if fused is None:  # pragma: no cover - rule_set boş değilse fused None olamaz
             continue
         try:
-            repository.insert_anomaly(fused, created_at)
+            repository.insert_anomaly(fused, created_at, ",".join(sorted(rule_set)))
         except OperationalError as e:
             logger.error("Anomali yazılamadı (atlandı): {}", e)
             continue
-        active[device_id] = rule_set
         logger.info(
             "Alert: device={} rules={} value={:.2f} sev={}",
             fused.device_id,
@@ -185,8 +191,6 @@ def run(
             detector_groups.append(
                 (statistical_detectors, detector_config.statistical.baseline_window_s)
             )
-        active: dict[str, frozenset[str]] = {}
-
         shutdown = threading.Event()
 
         def _on_signal(signum: int, _frame: FrameType | None) -> None:
@@ -204,7 +208,7 @@ def run(
         )
         while not shutdown.is_set():
             try:
-                _detect_once(repository, detector_groups, active, datetime.now(UTC))
+                _detect_once(repository, detector_groups, datetime.now(UTC))
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
             shutdown.wait(detector_config.poll_interval_s)

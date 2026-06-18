@@ -31,7 +31,7 @@ def _anomaly(
 def test_insert_anomaly_then_fetch_roundtrip(migrated_engine: Engine) -> None:
     """insert_anomaly sonrası fetch_recent_anomalies aynı alanları döndürür."""
     repo = TelemetryRepository(migrated_engine)
-    repo.insert_anomaly(_anomaly(value=92.0), created_at="2026-05-30T00:01:00.500Z")
+    repo.insert_anomaly(_anomaly(value=92.0), created_at="2026-05-30T00:01:00.500Z", rule_set="motor_temperature_high")
 
     rows = repo.fetch_recent_anomalies(limit=10)
     assert len(rows) == 1
@@ -52,6 +52,7 @@ def test_fetch_recent_anomalies_orders_by_created_desc_and_limits(
         repo.insert_anomaly(
             _anomaly(value=float(i)),
             created_at=f"2026-05-30T00:0{i}:00.000Z",
+            rule_set="motor_temperature_high",
         )
 
     rows = repo.fetch_recent_anomalies(limit=3)
@@ -62,6 +63,17 @@ def test_fetch_recent_anomalies_empty(migrated_engine: Engine) -> None:
     """Boş tablo → boş liste."""
     repo = TelemetryRepository(migrated_engine)
     assert repo.fetch_recent_anomalies(limit=10) == []
+
+
+def test_insert_anomaly_persists_rule_set(migrated_engine: Engine) -> None:
+    """insert_anomaly rule_set fingerprint'i anomalies.rule_set kolonuna yazar (Iter 8.5)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(
+        _anomaly(), created_at="2026-05-30T00:00:00.000Z", rule_set="motor_current_high,vibration_elevated"
+    )
+    with migrated_engine.connect() as conn:
+        rs = conn.execute(text("SELECT rule_set FROM anomalies")).scalar_one()
+    assert rs == "motor_current_high,vibration_elevated"
 
 
 def test_anomalies_table_has_device_created_index(migrated_engine: Engine) -> None:

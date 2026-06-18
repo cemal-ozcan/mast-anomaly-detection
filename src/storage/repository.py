@@ -49,8 +49,8 @@ class TelemetryRepository:
         )
 
     @staticmethod
-    def _anomaly_to_dict(anomaly: Anomaly, created_at: str) -> dict[str, object]:
-        """Anomaly + created_at'i anomalies kolon dict'ine çevirir."""
+    def _anomaly_to_dict(anomaly: Anomaly, created_at: str, rule_set: str) -> dict[str, object]:
+        """Anomaly + created_at + rule_set'i anomalies kolon dict'ine çevirir."""
         # NOT: status/acknowledged_at/resolved_at kasıtlı dışarıda — SQLite DEFAULT 'active' uygular (Faz 7 yaşam döngüsü).
         return {
             "device_id": anomaly.device_id,
@@ -63,6 +63,7 @@ class TelemetryRepository:
             "value": anomaly.value,
             "description": anomaly.description,
             "created_at": created_at,
+            "rule_set": rule_set,
         }
 
     @staticmethod
@@ -223,20 +224,22 @@ class TelemetryRepository:
             rows = conn.execute(stmt).all()
         return [self._row_to_reading(row) for row in rows]
 
-    def insert_anomaly(self, anomaly: Anomaly, created_at: str) -> None:
+    def insert_anomaly(self, anomaly: Anomaly, created_at: str, rule_set: str) -> None:
         """Tek bir Anomaly'i anomalies tablosuna yazar.
 
         Args:
             anomaly: Bir kuralın tetiklediği anomali.
             created_at: Kalıcılık zamanı ISO 8601 ms (çağıran kendi saatinden verir —
                 test edilebilirlik için DI; telemetry insert deseniyle tutarlı).
+            rule_set: Uyarının fingerprint'i — sıralı virgül-bağlı kural adları (reconciliation
+                kimliği, Iter 8.5).
 
         Raises:
             sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
         """
         with self._engine.begin() as conn:
             conn.execute(
-                anomalies.insert().values(**self._anomaly_to_dict(anomaly, created_at))
+                anomalies.insert().values(**self._anomaly_to_dict(anomaly, created_at, rule_set))
             )
 
     def fetch_recent_anomalies(self, limit: int) -> list[Anomaly]:
@@ -278,27 +281,6 @@ class TelemetryRepository:
             )
         return result.rowcount > 0
 
-    def resolve_alert(self, alert_id: int, resolved_at: str) -> bool:
-        """active|acknowledged bir uyarıyı resolved yapar (spec § 7).
-
-        Args:
-            alert_id: Güncellenecek anomalies satırının id'si.
-            resolved_at: ISO 8601 ms zaman damgası.
-
-        Returns:
-            Satır güncellendiyse True; 0 satır → False (zaten resolved).
-        """
-        with self._engine.begin() as conn:
-            result = conn.execute(
-                anomalies.update()
-                .where(
-                    anomalies.c.id == alert_id,
-                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED)),
-                )
-                .values(status=RESOLVED, resolved_at=resolved_at)
-            )
-        return result.rowcount > 0
-
     def resolve_open_alerts(self, device_id: str, resolved_at: str) -> int:
         """Bir cihazın TÜM açık (resolved olmayan) uyarılarını resolved yapar (detector auto-resolve, spec § 6).
 
@@ -316,6 +298,30 @@ class TelemetryRepository:
                 .values(status=RESOLVED, resolved_at=resolved_at)
             )
         return int(result.rowcount)
+
+    def fetch_open_fingerprints(self) -> dict[str, set[frozenset[str]]]:
+        """Açık (active|acknowledged) uyarıların rule_set fingerprint'lerini cihaz başına döndürür.
+
+        Reconciliation kaynağı (Iter 8.5): detector her poll bunu okuyup level-triggered uzlaşır
+        (DB tek hakikat). NULL rule_set (legacy satır) → boş frozenset.
+
+        Returns:
+            device_id → o cihazın açık uyarılarının rule_set frozenset'leri kümesi.
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        result: dict[str, set[frozenset[str]]] = {}
+        with self._engine.begin() as conn:
+            rows = conn.execute(
+                select(anomalies.c.device_id, anomalies.c.rule_set).where(
+                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED))
+                )
+            )
+            for device_id, rule_set_str in rows:
+                fingerprint = frozenset(rule_set_str.split(",")) if rule_set_str else frozenset()
+                result.setdefault(str(device_id), set()).add(fingerprint)
+        return result
 
     def fetch_alerts(self, statuses: tuple[str, ...] | None, limit: int) -> list[Alert]:
         """Uyarıları (opsiyonel status filtresiyle) created_at DESC döndürür (dashboard, spec § 7/§ 8).
