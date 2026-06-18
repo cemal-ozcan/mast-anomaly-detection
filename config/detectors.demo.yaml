@@ -39,6 +39,7 @@ detectors:
         # Eşik 3.0 + min_samples 60: kaçak (-5 bar/dk) ~%99 yakalanır, temiz gürültü ~%0.02 FP.
         # min_samples=60 az-örnekli oynak eğim FP'sini yapısal olarak da engeller (n<60 → skip).
         slope_threshold_bar_per_min: 3.0
+        trip_slope_bar_per_min: 6.0
         min_samples: 60
 
     - name: motor_voltage_erratic
