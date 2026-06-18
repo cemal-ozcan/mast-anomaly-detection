@@ -77,3 +77,18 @@ def test_fetch_alerts_status_filter_and_all(migrated_engine: Engine) -> None:
     assert len(repo.fetch_alerts(None, limit=10)) == 2
     assert len(repo.fetch_alerts(("active", "acknowledged"), limit=10)) == 1
     assert len(repo.fetch_alerts(("resolved",), limit=10)) == 1
+
+
+def test_fetch_open_fingerprints_groups_by_device(migrated_engine: Engine) -> None:
+    """active+acknowledged uyarıların rule_set'leri cihaz başına kümelenir; resolved hariç (Iter 8.5)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(device="d1", rule="motor_current_high"), "2026-05-30T00:00:00.000Z", "motor_current_high")
+    repo.insert_anomaly(_anom(device="d1", rule="fused(2)"), "2026-05-30T00:00:01.000Z", "motor_current_high,vibration_elevated")
+    repo.insert_anomaly(_anom(device="d2", rule="iqr:motor_current"), "2026-05-30T00:00:02.000Z", "iqr:motor_current")
+    # d2'nin uyarısını resolve et → fingerprints'te görünmemeli
+    repo.resolve_open_alerts("d2", "2026-05-30T00:01:00.000Z")
+
+    fps = repo.fetch_open_fingerprints()
+
+    assert fps["d1"] == {frozenset({"motor_current_high"}), frozenset({"motor_current_high", "vibration_elevated"})}
+    assert "d2" not in fps
