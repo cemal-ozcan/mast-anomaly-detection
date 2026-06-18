@@ -77,55 +77,28 @@ def test_fetch_alerts_status_filter_and_all(migrated_engine: Engine) -> None:
     assert len(repo.fetch_alerts(("resolved",), limit=10)) == 1
 
 
-def test_fetch_open_fingerprints_groups_by_device(migrated_engine: Engine) -> None:
-    """active+acknowledged uyarıların rule_set'leri cihaz başına kümelenir; resolved hariç (Iter 8.5)."""
-    repo = TelemetryRepository(migrated_engine)
-    repo.insert_anomaly(_anom(device="d1", rule="motor_current_high"), "2026-05-30T00:00:00.000Z", "motor_current_high")
-    repo.insert_anomaly(_anom(device="d1", rule="fused(2)"), "2026-05-30T00:00:01.000Z", "motor_current_high,vibration_elevated")
-    repo.insert_anomaly(_anom(device="d2", rule="iqr:motor_current"), "2026-05-30T00:00:02.000Z", "iqr:motor_current")
-    # d2'nin uyarısını resolve et → fingerprints'te görünmemeli
-    repo.resolve_open_alerts("d2", "2026-05-30T00:01:00.000Z")
-
-    fps = repo.fetch_open_fingerprints()
-
-    assert fps["d1"] == {frozenset({"motor_current_high"}), frozenset({"motor_current_high", "vibration_elevated"})}
-    assert "d2" not in fps
-
-
-def test_fetch_open_fingerprints_includes_acknowledged_and_null_safe(migrated_engine: Engine) -> None:
-    """acknowledged uyarılar DAHİL; NULL rule_set (legacy satır) → boş frozenset (Iter 8.5)."""
+def test_fetch_open_alerts_groups_by_device(migrated_engine: Engine) -> None:
+    """Açık (active|acknowledged) uyarılar cihaz başına liste; resolved hariç; created_at ASC;
+    legacy NULL rule_set satırı da açık sayılır (cihaz-seviyesi kimlik rule_set parse etmez, Iter 8.6)."""
     from storage.schema import anomalies
 
-    repo = TelemetryRepository(migrated_engine)
-    # d3: acknowledged uyarı → açık sayılır, dahil olmalı.
-    repo.insert_anomaly(_anom(device="d3", rule="motor_current_high"), "2026-05-30T00:00:00.000Z", "motor_current_high")
-    repo.acknowledge_alert(repo.fetch_alerts(("active",), limit=10)[-1].id, "2026-05-30T00:00:30.000Z")
-    # d4: legacy NULL rule_set satırı (insert_anomaly'yi atlayıp doğrudan NULL yaz).
-    with migrated_engine.begin() as conn:
-        conn.execute(
-            anomalies.insert().values(
-                device_id="d4", rule_name="x", sensor="s", severity="warning", score=0.1,
-                window_start="a", window_end="b", value=1.0, description="d",
-                created_at="2026-05-30T00:00:02.000Z", status="active", rule_set=None,
-            )
-        )
-
-    fps = repo.fetch_open_fingerprints()
-
-    assert fps["d3"] == {frozenset({"motor_current_high"})}  # acknowledged dahil
-    assert fps["d4"] == {frozenset()}  # NULL rule_set → boş frozenset (legacy-güvenli)
-
-
-def test_fetch_open_alerts_groups_by_device(migrated_engine: Engine) -> None:
-    """Açık (active|acknowledged) uyarılar cihaz başına liste; resolved hariç; created_at ASC (Iter 8.6)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert_anomaly(_anom(device="d1", rule="motor_current_high"), "2026-06-03T10:00:00.000Z", "motor_current_high")
     repo.insert_anomaly(_anom(device="d1", rule="fused(2)"), "2026-06-03T10:00:01.000Z", "motor_current_high,vibration_elevated")
     repo.insert_anomaly(_anom(device="d2"), "2026-06-03T10:00:02.000Z", "motor_current_high")
     repo.resolve_open_alerts("d2", "2026-06-03T10:01:00.000Z")  # d2 kapanır → görünmez
+    # d3: legacy NULL rule_set satırı (insert_anomaly'yi atlayıp doğrudan NULL yaz) → yine de açık sayılır.
+    with migrated_engine.begin() as conn:
+        conn.execute(
+            anomalies.insert().values(
+                device_id="d3", rule_name="x", sensor="s", severity="warning", score=0.1,
+                window_start="a", window_end="b", value=1.0, description="d",
+                created_at="2026-06-03T10:00:03.000Z", status="active", rule_set=None,
+            )
+        )
 
     open_alerts = repo.fetch_open_alerts()
-    assert set(open_alerts.keys()) == {"d1"}
+    assert set(open_alerts.keys()) == {"d1", "d3"}  # d2 resolved hariç; d3 NULL-rule_set dahil
     assert len(open_alerts["d1"]) == 2
     assert [a.created_at for a in open_alerts["d1"]] == sorted(a.created_at for a in open_alerts["d1"])  # ASC
 

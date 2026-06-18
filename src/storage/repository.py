@@ -299,30 +299,6 @@ class TelemetryRepository:
             )
         return int(result.rowcount)
 
-    def fetch_open_fingerprints(self) -> dict[str, set[frozenset[str]]]:
-        """Açık (active|acknowledged) uyarıların rule_set fingerprint'lerini cihaz başına döndürür.
-
-        Reconciliation kaynağı (Iter 8.5): detector her poll bunu okuyup level-triggered uzlaşır
-        (DB tek hakikat). NULL rule_set (legacy satır) → boş frozenset.
-
-        Returns:
-            device_id → o cihazın açık uyarılarının rule_set frozenset'leri kümesi.
-
-        Raises:
-            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
-        """
-        result: dict[str, set[frozenset[str]]] = {}
-        with self._engine.begin() as conn:
-            rows = conn.execute(
-                select(anomalies.c.device_id, anomalies.c.rule_set).where(
-                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED))
-                )
-            )
-            for device_id, rule_set_str in rows:
-                fingerprint = frozenset(rule_set_str.split(",")) if rule_set_str else frozenset()
-                result.setdefault(str(device_id), set()).add(fingerprint)
-        return result
-
     def fetch_open_alerts(self) -> dict[str, list[Alert]]:
         """Açık (active|acknowledged) uyarıları cihaz başına liste olarak döndürür (Iter 8.6).
 
