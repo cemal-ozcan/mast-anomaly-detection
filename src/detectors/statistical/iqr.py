@@ -73,6 +73,8 @@ class IQR(Detector):
             if lower <= cur_median <= upper:
                 continue
             # Band-pozisyon: iç-fence dışı mesafe, Tukey far-out fence'e (kritik) göre (Iter 8.4 spec § 3).
+            # Band orijini: burada q=fence-DIŞI mesafe & warn=0; three_sigma'da q=μ'den SAPMA & warn=fence —
+            # iki konvansiyon da "iç-fence → 0" verir (three_sigma.py ile çapraz-ref; yeni stat dedektörde dikkat).
             distance = (lower - cur_median) if cur_median < lower else (cur_median - upper)
             span = (self._iqr_multiplier_critical - self._iqr_multiplier) * iqr
             score = band_position_score(distance, 0.0, span)
