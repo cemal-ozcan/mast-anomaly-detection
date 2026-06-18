@@ -29,7 +29,7 @@ import streamlit as st  # noqa: E402
 from loguru import logger  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
-from alerts.lifecycle import ACKNOWLEDGED, RESOLVED, can_transition  # noqa: E402
+from alerts.lifecycle import ACKNOWLEDGED, can_transition  # noqa: E402
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
 from dashboard.fleet import (  # noqa: E402
@@ -188,10 +188,10 @@ def _render_overview(repository: TelemetryRepository) -> None:
 
 
 def _render_alert_management(repository: TelemetryRepository) -> None:
-    """Açık bir uyarı seçip ack/resolve eden yönetim kontrolü (main() içinde, fragment DIŞINDA, S1).
+    """Açık bir uyarıyı ACK eden yönetim kontrolü (main() içinde, fragment DIŞINDA, S1).
 
-    Gözlem modu: yalnız uyarı DURUMU yazılır (telemetri değil, cihaz komutu değil). Buton tıklaması
-    tam app rerun'ı tetikler → liste tazelenir.
+    P2 (Iter 8.5): manuel resolve YOK — çözümü detector sahiplenir (koşulun sahibi o; arıza sensörlerce
+    temizlenince auto-resolve). Teknisyen yalnız ack'ler. Gözlem modu: yalnız uyarı DURUMU yazılır.
     """
     try:
         open_alerts = repository.fetch_alerts(OPEN_STATUSES, limit=50)
@@ -204,11 +204,8 @@ def _render_alert_management(repository: TelemetryRepository) -> None:
     selected = options.get(label) if label else None
     if selected is None:
         return
-    cols = st.columns(2)
-    if can_transition(selected.status, ACKNOWLEDGED) and cols[0].button("Gör (ack)", key="ack_btn"):
+    if can_transition(selected.status, ACKNOWLEDGED) and st.button("Gör (ack)", key="ack_btn"):
         _apply_transition(repository.acknowledge_alert, selected.id)
-    if can_transition(selected.status, RESOLVED) and cols[1].button("Çöz (resolve)", key="resolve_btn"):
-        _apply_transition(repository.resolve_alert, selected.id)
 
 
 @st.experimental_fragment(run_every="2s")

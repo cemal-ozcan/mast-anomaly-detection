@@ -28,8 +28,8 @@ def test_insert_anomaly_defaults_status_active(migrated_engine: Engine) -> None:
     assert row.resolved_at is None
 
 
-def test_acknowledge_then_resolve_alert(migrated_engine: Engine) -> None:
-    """active→acknowledged→resolved geçişleri zaman damgalarını yazar."""
+def test_acknowledge_alert(migrated_engine: Engine) -> None:
+    """active→acknowledged geçişi acknowledged_at zaman damgasını yazar (P2: manuel resolve yok)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert_anomaly(_anom(), _CREATED, "motor_current_high")
     alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
@@ -38,17 +38,15 @@ def test_acknowledge_then_resolve_alert(migrated_engine: Engine) -> None:
     acked = repo.fetch_alerts(("acknowledged",), limit=10)
     assert len(acked) == 1 and acked[0].acknowledged_at == "2026-06-03T10:01:00.000Z"
 
-    assert repo.resolve_alert(alert_id, "2026-06-03T10:02:00.000Z") is True
-    resolved = repo.fetch_alerts(("resolved",), limit=10)
-    assert len(resolved) == 1 and resolved[0].resolved_at == "2026-06-03T10:02:00.000Z"
-
 
 def test_acknowledge_resolved_alert_is_noop(migrated_engine: Engine) -> None:
-    """resolved bir uyarı ack'lenemez (geçersiz geçiş → 0 satır → False)."""
+    """resolved bir uyarı ack'lenemez (geçersiz geçiş → 0 satır → False).
+
+    Kurulum: detector auto-resolve (resolve_open_alerts) ile resolved'a getir (P2: manuel resolve yok)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert_anomaly(_anom(), _CREATED, "motor_current_high")
     alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
-    repo.resolve_alert(alert_id, "2026-06-03T10:02:00.000Z")
+    repo.resolve_open_alerts("device_001", "2026-06-03T10:02:00.000Z")
     assert repo.acknowledge_alert(alert_id, "2026-06-03T10:03:00.000Z") is False
 
 
@@ -73,7 +71,7 @@ def test_fetch_alerts_status_filter_and_all(migrated_engine: Engine) -> None:
     repo = TelemetryRepository(migrated_engine)
     repo.insert_anomaly(_anom(), _CREATED, "motor_current_high")
     repo.insert_anomaly(_anom(device="device_002"), "2026-06-03T10:00:05.000Z", "motor_current_high")
-    repo.resolve_alert(repo.fetch_alerts(("active",), limit=10)[-1].id, "2026-06-03T10:06:00.000Z")
+    repo.resolve_open_alerts("device_001", "2026-06-03T10:06:00.000Z")
     assert len(repo.fetch_alerts(None, limit=10)) == 2
     assert len(repo.fetch_alerts(("active", "acknowledged"), limit=10)) == 1
     assert len(repo.fetch_alerts(("resolved",), limit=10)) == 1
