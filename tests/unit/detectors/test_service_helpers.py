@@ -4,7 +4,7 @@ from __future__ import annotations
 from alerts.models import Alert
 from detectors.base import Anomaly
 from detectors.config import SeverityBands
-from detectors.service import _reconcile_status, apply_band_severity
+from detectors.service import _should_reactivate, apply_band_severity
 
 _BANDS = SeverityBands(high_cutoff=0.40, critical_cutoff=0.75)
 
@@ -33,14 +33,15 @@ def test_apply_band_severity_exempts_validity_rules() -> None:
     assert apply_band_severity(f, _BANDS).severity == "warning"
 
 
-def test_reconcile_status_reactivates_acknowledged_on_band_up() -> None:
-    assert _reconcile_status(_alert("acknowledged", "high", "t"), "critical") == ("active", None)
+def test_should_reactivate_true_for_acknowledged_band_up() -> None:
+    assert _should_reactivate(_alert("acknowledged", "high", "t"), "critical") is True
 
 
-def test_reconcile_status_keeps_acknowledged_within_band() -> None:
-    assert _reconcile_status(_alert("acknowledged", "high", "t"), "high") == ("acknowledged", "t")
-    assert _reconcile_status(_alert("acknowledged", "critical", "t"), "high") == ("acknowledged", "t")
+def test_should_reactivate_false_within_band() -> None:
+    assert _should_reactivate(_alert("acknowledged", "high", "t"), "high") is False
+    assert _should_reactivate(_alert("acknowledged", "critical", "t"), "high") is False
 
 
-def test_reconcile_status_active_stays_active() -> None:
-    assert _reconcile_status(_alert("active", "warning", None), "critical") == ("active", None)
+def test_should_reactivate_false_for_active() -> None:
+    # active uyarı (zaten dikkat çekiyor) band-up olsa da re-activate gerektirmez.
+    assert _should_reactivate(_alert("active", "warning", None), "critical") is False
