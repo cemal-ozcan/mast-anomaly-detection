@@ -69,8 +69,7 @@ def test_config_driven_detectors_persist_anomalies(tmp_path: Path) -> None:
 
         config = load_detector_config(cfg_path)
         detectors = build_detectors(config)
-        active: dict[str, frozenset[str]] = {}
-        _detect_once(repo, [(detectors, config.window_s)], active, datetime(2026, 5, 30, 1, 0, 0, tzinfo=UTC))
+        _detect_once(repo, [(detectors, config.window_s)], datetime(2026, 5, 30, 1, 0, 0, tzinfo=UTC))
 
         stored = repo.fetch_recent_anomalies(limit=10)
         # İki kural aynı cihazda → TEK fused satır (write-side fusion, Iter 4.3).
