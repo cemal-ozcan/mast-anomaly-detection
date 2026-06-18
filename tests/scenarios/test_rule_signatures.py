@@ -56,7 +56,7 @@ def test_hydraulic_leak_triggers_pressure_decline(
         FIXTURES / "devices_with_hydraulic_leak.yaml", max_iterations=120,
     )
     rule = HydraulicPressureDecline(
-        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60, trip_slope_bar_per_min=6.0
     )
     anomalies = rule.detect(window)
     assert len(anomalies) == 1
