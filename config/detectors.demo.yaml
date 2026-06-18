@@ -82,7 +82,7 @@ statistical:
     - name: three_sigma
       enabled: true
       severity: warning
-      params: {sigma_k: 3.0, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
+      params: {sigma_k: 3.0, sigma_k_critical: 6.0, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
     - name: iqr
       enabled: true
       severity: warning
