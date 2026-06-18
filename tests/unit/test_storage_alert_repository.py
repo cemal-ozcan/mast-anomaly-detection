@@ -113,7 +113,6 @@ def test_update_alert_changes_fields(migrated_engine: Engine) -> None:
         alert_id, rule_name="fused(2)", sensor="motor_voltage", severity="critical", score=0.9,
         value=12.5, window_end="2026-06-03T10:05:00.000Z",
         rule_set="motor_current_high,vibration_elevated", description="updated",
-        status="active", acknowledged_at=None,
     )
     assert ok is True
     a = repo.fetch_alerts(None, limit=10)[0]
@@ -122,8 +121,8 @@ def test_update_alert_changes_fields(migrated_engine: Engine) -> None:
     assert a.created_at == "2026-06-03T10:00:00.000Z"  # created_at DOKUNULMAZ
 
 
-def test_update_alert_reactivates(migrated_engine: Engine) -> None:
-    """update_alert status=active + acknowledged_at=None ile ack'lenmiş satırı yeniden aktifleştirir."""
+def test_update_alert_preserves_operator_status(migrated_engine: Engine) -> None:
+    """update_alert status/acknowledged_at'a DOKUNMAZ → eşzamanlı ack ezilmez (operatör-sahipli)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
     alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
@@ -131,8 +130,21 @@ def test_update_alert_reactivates(migrated_engine: Engine) -> None:
 
     repo.update_alert(alert_id, rule_name="motor_current_high", sensor="motor_current",
                       severity="critical", score=0.9, value=12.5,
-                      window_end="w", rule_set="motor_current_high", description="d",
-                      status="active", acknowledged_at=None)
+                      window_end="w", rule_set="motor_current_high", description="d")
+    a = repo.fetch_alerts(None, limit=10)[0]
+    assert a.status == "acknowledged" and a.acknowledged_at == "2026-06-03T10:01:00.000Z"  # ack korunur
+    assert a.severity == "critical"  # ölçüm alanı yine de tazelendi
+
+
+def test_reactivate_alert_only_flips_acknowledged(migrated_engine: Engine) -> None:
+    """reactivate_alert yalnız acknowledged satırı active yapar (guard); active/resolved → False."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+
+    assert repo.reactivate_alert(alert_id) is False  # active → guard no-op
+    repo.acknowledge_alert(alert_id, "2026-06-03T10:01:00.000Z")
+    assert repo.reactivate_alert(alert_id) is True   # acknowledged → active
     a = repo.fetch_alerts(None, limit=10)[0]
     assert a.status == "active" and a.acknowledged_at is None
 

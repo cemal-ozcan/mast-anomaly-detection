@@ -336,15 +336,13 @@ class TelemetryRepository:
         window_end: str,
         rule_set: str,
         description: str,
-        status: str,
-        acknowledged_at: str | None,
     ) -> bool:
-        """Açık bir uyarıyı yerinde günceller (yaşayan uyarı, Iter 8.6).
+        """Açık bir uyarının DETECTOR-SAHİPLİ ölçüm alanlarını yerinde günceller (yaşayan uyarı, Iter 8.6).
 
-        `created_at`/`window_start`/`resolved_at` DOKUNULMAZ (olay başlangıcı + çözüm zamanı sabit).
-        Temsilciden (fused) türeyen TÜM gösterim alanları birlikte tazelenir — rule_name/sensor dahil —
-        ki satır tek bir tutarlı temsilciyi yansıtsın (8.4 "ödünç alan" tutarsızlığını önler); ayrıca
-        rule_set + (re-activate için) status/acknowledged_at güncellenir.
+        Yalnız temsilciden (fused) türeyen gösterim alanlarını yazar — rule_name/sensor dahil — ki satır
+        tek tutarlı temsilciyi yansıtsın (8.4 "ödünç alan" tutarsızlığını önler). `status`/`acknowledged_at`
+        OPERATÖR-SAHİPLİDİR ve burada DOKUNULMAZ → rutin skor refresh, eşzamanlı bir ack'i ezemez
+        (re-activate için ayrı guard'lı `reactivate_alert`). `created_at`/`window_start`/`resolved_at` de sabit.
 
         Args:
             alert_id: Güncellenecek satır id'si.
@@ -356,8 +354,6 @@ class TelemetryRepository:
             window_end: En güncel pencere bitişi.
             rule_set: En güncel fingerprint (sıralı virgül-bağlı kural adları).
             description: En güncel fused açıklama.
-            status: Yeni durum (active veya korunan acknowledged).
-            acknowledged_at: Re-activate'te None; aksi halde korunan değer.
 
         Returns:
             Satır güncellendiyse True; id bulunamazsa False.
@@ -375,9 +371,28 @@ class TelemetryRepository:
                     window_end=window_end,
                     rule_set=rule_set,
                     description=description,
-                    status=status,
-                    acknowledged_at=acknowledged_at,
                 )
+            )
+        return result.rowcount > 0
+
+    def reactivate_alert(self, alert_id: int) -> bool:
+        """acknowledged bir uyarıyı yeniden active yapar (eskalasyon re-activate, Iter 8.6).
+
+        Geçiş SQL WHERE ile atomik zorlanır (`status='acknowledged'`) → yalnız gerçekten ack'lenmiş
+        satırı çevirir; active satıra no-op, eşzamanlı durum değişiminde yarış yok. `acknowledged_at`
+        temizlenir (uyarı taze dikkat ister).
+
+        Args:
+            alert_id: Yeniden aktifleştirilecek satır id'si.
+
+        Returns:
+            Satır acknowledged'dı ve active yapıldıysa True; değilse (active/resolved/yok) False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id, anomalies.c.status == ACKNOWLEDGED)
+                .values(status=ACTIVE, acknowledged_at=None)
             )
         return result.rowcount > 0
 

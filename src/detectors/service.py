@@ -20,7 +20,7 @@ import pandas as pd
 from loguru import logger
 from sqlalchemy.exc import OperationalError
 
-from alerts.lifecycle import ACKNOWLEDGED, ACTIVE
+from alerts.lifecycle import ACKNOWLEDGED
 from alerts.models import Alert
 from detectors.base import Anomaly, Detector
 from detectors.config import (
@@ -119,24 +119,23 @@ def apply_band_severity(anomaly: Anomaly, severity_bands: SeverityBands) -> Anom
     return replace(anomaly, severity=new_sev)
 
 
-def _reconcile_status(primary: Alert, new_severity: str) -> tuple[str, str | None]:
-    """Açık bir uyarının yeni severity karşısında durumunu/ack zamanını belirler (Iter 8.6).
+def _should_reactivate(primary: Alert, new_severity: str) -> bool:
+    """Ack'lenmiş bir uyarı bu poll'da re-activate edilmeli mi? (Iter 8.6).
 
-    Ack'lenmiş bir uyarı severity bir ÜST banda geçerse re-activate olur (acknowledged_at temizlenir);
-    aksi halde durum/ack korunur (active zaten active kalır, aynı/düşük band ack korur).
+    Yalnız acknowledged bir uyarı severity bir ÜST banda geçince True (taze dikkat ister); active uyarı
+    veya aynı/düşük band → False. Karar `primary` snapshot'ına dayanır; gerçek çevirme `reactivate_alert`
+    içinde `status='acknowledged'` guard'ıyla atomik (eşzamanlı durum değişiminde yarış yok).
 
     Args:
-        primary: Cihazın mevcut açık uyarısı (birincil).
+        primary: Cihazın mevcut açık uyarısı (birincil, poll başı snapshot).
         new_severity: Bu poll'da türetilen fused severity.
 
     Returns:
-        (yeni_status, yeni_acknowledged_at).
+        Re-activate (acknowledged→active) denenmeli mi.
     """
-    if primary.status == ACKNOWLEDGED and SEVERITY_RANK.get(new_severity, 0) > SEVERITY_RANK.get(
+    return primary.status == ACKNOWLEDGED and SEVERITY_RANK.get(new_severity, 0) > SEVERITY_RANK.get(
         primary.severity, 0
-    ):
-        return (ACTIVE, None)
-    return (primary.status, primary.acknowledged_at)
+    )
 
 
 def _detect_once(
@@ -214,7 +213,7 @@ def _detect_once(
             for extra in open_list:  # legacy çoklu-açık → fazlalıkları kapat (yakınsama)
                 if extra.id != primary.id:
                     repository.resolve_alert_by_id(extra.id, created_at)
-            new_status, new_ack = _reconcile_status(primary, fused.severity)
+            # Ölçüm alanlarını her zaman tazele (detector-sahipli; operatör ack'ini EZMEZ).
             repository.update_alert(
                 primary.id,
                 rule_name=fused.rule_name,
@@ -225,14 +224,13 @@ def _detect_once(
                 window_end=fused.window_end,
                 rule_set=rule_set_str,
                 description=fused.description,
-                status=new_status,
-                acknowledged_at=new_ack,
             )
+            # Eskalasyon (band-yukarı) → ack'lenmiş uyarıyı guard'lı re-activate et.
+            if _should_reactivate(primary, fused.severity) and repository.reactivate_alert(primary.id):
+                logger.info("Re-activate: device={} sev={} (eskalasyon)", device_id, fused.severity)
         except OperationalError as e:
             logger.error("Uyarı güncellenemedi (atlandı): {}", e)
             continue
-        if new_status == ACTIVE and primary.status == ACKNOWLEDGED:
-            logger.info("Re-activate: device={} sev={} (eskalasyon)", device_id, fused.severity)
 
 
 def run(
