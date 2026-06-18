@@ -37,11 +37,13 @@ detectors:
       severity: critical
       params:
         critical_threshold_c: 80.0
+        trip_c: 130.0
     - name: motor_voltage_erratic
       enabled: true
       severity: warning
       params:
         std_threshold_v: 1.0
+        trip_std_v: 5.0
         min_samples: 10
 """
 

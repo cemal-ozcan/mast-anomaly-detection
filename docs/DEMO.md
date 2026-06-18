@@ -39,6 +39,13 @@
 6. **Manuel yaşam döngüsü:** Dashboard'da bir uyarıyı **Gör (ack)**, başkasını **Çöz (resolve)** yap; durum filtresiyle açık/kapalı gez.
 7. **t≈3-4dk — Auto-resolve:** device_002 mechanical_wear biter → detector arızanın temizlendiğini görür → uyarı **otomatik `resolved`** (durum filtresinde görünür).
 
+## Skor Anlamı (Iter 8.4 — band-pozisyon)
+Tüm dedektörlerde `score` artık **ortak, karşılaştırılabilir** bir band-pozisyondur: **0 = alarm (warn) sınırını yeni geçti, 1 = kritik (trip) seviyesi**. Yani "0.8" her dedektörde aynı şeyi ifade eder (alarm→kritik yolunun %80'i). ISO 20816 bölge (alarm=B/C, trip=C/D) mantığı.
+- **Eşik kuralları** (sıcaklık/akım/titreşim/basınç-eğimi/voltaj): trip değerleri gerçek simülatör çıktısıyla kalibre (örn. sıcaklık warn 95°C → trip 130°C).
+- **İstatistik** (3σ/IQR): standart çapa — 3σ→6σ, IQR→Tukey far-out (3·IQR). Aşırı sapmada skor **1.0'a satüre** olur (dürüst; gerçekten çok sapmış).
+- **Sensör-sağlığı** (`sensor_out_of_range`, `sensor_frozen`): ikili "veri geçersiz" → **skor 1.0** (band-pozisyon değil).
+- **Füzyonda** gösterilen skor **temsilci** uyarınınkidir (en-kötü-kazanır; ödünç max yok).
+
 ## Bilinen Sınırlar
 - **İstatistik üretimde ~1 saat baseline ister** — demo'da seed + reduced `baseline_window_s` (300s) ile canlı gösterilir; overlap GEÇİCİdir (rolling baseline).
 - **Faz 6 (ML) atlandı** → Faz 9+ stretch (sentetik veride marjinal tespit değeri düşük).

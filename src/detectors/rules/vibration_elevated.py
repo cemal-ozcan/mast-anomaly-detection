@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 from detectors.base import Anomaly, Detector
+from detectors.scoring import band_position_score
 
 SENSOR = "vibration"
 
@@ -22,13 +23,18 @@ class VibrationElevated(Detector):
         state: str,
         threshold_g: float,
         min_samples: int,
+        trip_g: float,
         severity: str = "warning",
     ) -> None:
-        """Args: state — aktif state; threshold_g — titreşim eşiği (g);
-        min_samples — minimum örnek; severity — anomali şiddeti."""
+        """Args: state — aktif state; threshold_g — titreşim (warn) eşiği (g);
+        min_samples — minimum örnek; trip_g — band-pozisyon kritik referansı (g, skor 1.0;
+        trip_g > threshold_g olmalı); severity — anomali şiddeti."""
+        if trip_g <= threshold_g:
+            raise ValueError(f"VibrationElevated: trip_g ({trip_g}) > threshold_g ({threshold_g}) olmalı")
         self._state = state
         self._threshold = threshold_g
         self._min_samples = min_samples
+        self._trip_g = trip_g
         self._severity = severity
 
     @property
@@ -44,7 +50,7 @@ class VibrationElevated(Detector):
         mean_g = float(rows["value"].mean())
         if mean_g <= self._threshold:
             return []
-        score = min(1.0, (mean_g - self._threshold) / self._threshold)
+        score = band_position_score(mean_g, self._threshold, self._trip_g)
         return [
             Anomaly(
                 device_id=str(rows["device_id"].iloc[0]),

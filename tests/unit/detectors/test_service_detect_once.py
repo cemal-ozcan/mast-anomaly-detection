@@ -41,7 +41,7 @@ def test_detect_once_persists_single_anomaly(migrated_engine: Engine) -> None:
     """Tek kural tetiklenince fused değil kendi rule_name'iyle yazılır; active güncellenir."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
 
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
@@ -60,8 +60,8 @@ def test_detect_once_fuses_multiple_rules(migrated_engine: Engine) -> None:
     for i, v in enumerate([24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]):
         repo.insert(_reading("motor_voltage", f"2026-05-30T00:01:{i:02d}.000Z", v))
     detectors: list[Detector] = [
-        MotorTemperatureHigh(critical_threshold_c=80.0),
-        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10),
+        MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0),
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0),
     ]
     active: dict[str, frozenset[str]] = {}
 
@@ -82,7 +82,7 @@ def test_detect_once_debounces_persisting_fault(migrated_engine: Engine) -> None
     """Aynı kural-seti iki ardışık turda süregelirse yalnız bir kez yazılır (epizot debounce)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
 
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
@@ -95,7 +95,7 @@ def test_detect_once_rearms_after_fault_clears(migrated_engine: Engine) -> None:
     """Fault temizlenince active'ten düşer; tekrar oluşursa YENİ satır yazılır (re-arm)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
 
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # tur 1: yazar
@@ -117,8 +117,8 @@ def test_detect_once_escalation_writes_new_row(migrated_engine: Engine) -> None:
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
     detectors: list[Detector] = [
-        MotorTemperatureHigh(critical_threshold_c=80.0),
-        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10),
+        MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0),
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0),
     ]
     active: dict[str, frozenset[str]] = {}
 
@@ -144,7 +144,7 @@ def test_detect_once_below_threshold_writes_nothing(migrated_engine: Engine) -> 
     """Eşik altı → hiçbir anomali yazılmaz, active boş kalır."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 25.0))
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
 
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
@@ -159,7 +159,7 @@ def test_detect_once_failing_rule_does_not_block_others(migrated_engine: Engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
     detectors: list[Detector] = [
         _FailingDetector(),
-        MotorTemperatureHigh(critical_threshold_c=80.0),
+        MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0),
     ]
     active: dict[str, frozenset[str]] = {}
 
@@ -174,7 +174,7 @@ def test_detect_once_auto_resolves_open_alert_on_clear(migrated_engine: Engine) 
     """Arıza temizlenince (re-arm) cihazın açık uyarısı otomatik resolved olur (Faz 7)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
 
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)  # active uyarı yazılır
@@ -194,7 +194,7 @@ def test_detect_once_no_resolve_when_device_never_active(migrated_engine: Engine
     """Hiç arıza vermemiş cihaz için re-arm dalı resolve_open_alerts çağırmaz (boşa UPDATE yok)."""
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 25.0))  # eşik altı
-    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+    detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
     active: dict[str, frozenset[str]] = {}
     # Önce manuel bir resolved-olmayan satır ekle; clean cihaz turu buna DOKUNMAMALI.
     repo.insert_anomaly(

@@ -4,6 +4,7 @@ Faz 8 Iter 8.3 spec § 6a. sensor_frozen'ın kardeşi (sensör-sağlığı). Sı
 sınırıdır, "normal" değil: meşru arıza değerleri (F'in yüksek sıcaklığı, C'nin voltaj spike'ları,
 B'nin düşük basıncı) sınır İÇİNDE kalır → bu kuralı tetiklemez (onları eşik kuralları yakalar).
 Yalnız fiziksel saçmalık (örn. negatif mast pozisyonu) tetikler. Read-only / gözlem modu.
+Skor ikili validity (sabit 1.0); band-pozisyon değil — bkz. Iter 8.4 spec § 5.
 """
 from __future__ import annotations
 
@@ -49,8 +50,8 @@ class SensorOutOfRange(Detector):
                 continue  # hepsi sınır içinde
             row = sub.iloc[worst]
             value = float(row["value"])
-            margin = hi - lo
-            score = min(1.0, float(excess[worst]) / margin) if margin > 0 else 1.0
+            # Sensör-sağlığı = ikili "veri geçersiz" → skor 1.0 (band-pozisyon değil, Iter 8.4 spec § 5).
+            score = 1.0
             anomalies.append(
                 Anomaly(
                     device_id=str(row["device_id"]),

@@ -43,7 +43,7 @@ def test_three_sigma_detects_and_fuses_with_rule(tmp_path: Path) -> None:
         # Aynı turda bir kural da tetiklensin: motor_temperature 95°C (güncel).
         repo.insert(_reading("motor_temperature", "2026-05-30T12:00:03.000Z", 95.0))
 
-        rule_detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0)]
+        rule_detectors: list[Detector] = [MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)]
         stat_detectors: list[Detector] = [
             ThreeSigma(current_window_s=60, sigma_k=3.0, min_baseline=30, min_current=5)
         ]

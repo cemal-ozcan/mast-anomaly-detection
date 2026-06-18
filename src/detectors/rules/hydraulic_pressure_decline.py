@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from detectors.base import Anomaly, Detector
+from detectors.scoring import band_position_score
 
 SENSOR = "hydraulic_pressure"
 
@@ -26,13 +27,21 @@ class HydraulicPressureDecline(Detector):
         state: str,
         slope_threshold_bar_per_min: float,
         min_samples: int,
+        trip_slope_bar_per_min: float,
         severity: str = "warning",
     ) -> None:
-        """Args: state — aktif state ("holding"); slope_threshold_bar_per_min — pozitif
-        eşik (slope < -bu değer → anomali); min_samples — eğim için min örnek; severity."""
+        """Args: state — aktif state ("holding"); slope_threshold_bar_per_min — pozitif (warn)
+        eşik (slope < -bu değer → anomali); min_samples — eğim için min örnek; trip_slope_bar_per_min
+        — band-pozisyon kritik referansı (pozitif büyüklük, skor 1.0; > warn olmalı); severity."""
+        if trip_slope_bar_per_min <= slope_threshold_bar_per_min:
+            raise ValueError(
+                f"HydraulicPressureDecline: trip_slope_bar_per_min ({trip_slope_bar_per_min}) > "
+                f"slope_threshold_bar_per_min ({slope_threshold_bar_per_min}) olmalı"
+            )
         self._state = state
         self._threshold = slope_threshold_bar_per_min
         self._min_samples = min_samples
+        self._trip = trip_slope_bar_per_min
         self._severity = severity
 
     @property
@@ -54,7 +63,8 @@ class HydraulicPressureDecline(Detector):
         slope_per_min = float(np.polyfit(x, y, 1)[0]) * 60.0
         if slope_per_min >= -self._threshold:
             return []
-        score = min(1.0, (-slope_per_min) / (self._threshold * 4.0))
+        # Band-pozisyon: kaçak hızı büyüklüğü (-slope, pozitif) warn→trip bandında (Iter 8.4).
+        score = band_position_score(-slope_per_min, self._threshold, self._trip)
         return [
             Anomaly(
                 device_id=str(rows["device_id"].iloc[0]),

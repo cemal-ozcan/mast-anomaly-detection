@@ -110,7 +110,7 @@ def test_electrical_fault_statistical_silent_rule_catches(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_electrical_fault.yaml", max_iterations=200,
     )
-    erratic = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    erratic = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert len(erratic.detect(rule_window)) == 1
 
 

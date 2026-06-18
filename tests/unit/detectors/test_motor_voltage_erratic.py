@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from detectors.rules.motor_voltage_erratic import MotorVoltageErratic
 
@@ -21,7 +22,7 @@ def _window(values: list[float], sensor: str = "motor_voltage") -> pd.DataFrame:
 def test_triggers_on_high_variance() -> None:
     # ElectricalFault: spike'lar + jitter → yüksek std. 24 etrafında ±20 salınım.
     values = [24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     anomalies = rule.detect(_window(values))
     assert len(anomalies) == 1
     assert anomalies[0].rule_name == "motor_voltage_erratic"
@@ -33,23 +34,37 @@ def test_triggers_on_high_variance() -> None:
 def test_no_trigger_on_stable_voltage() -> None:
     # Clean: 24V ± 0.2 gürültü → std ~0.2 < 1.0.
     values = [24.0, 24.2, 23.8, 24.1, 23.9, 24.0, 24.2, 23.8, 24.1, 23.9, 24.0, 24.1]
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert rule.detect(_window(values)) == []
 
 
 def test_no_trigger_too_few_samples() -> None:
     values = [24.0, 4.0, 44.0, 24.0, -3.0]
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert rule.detect(_window(values)) == []
 
 
 def test_ignores_other_sensors() -> None:
     values = [24.0, 4.0, 44.0, 24.0, -3.0, 49.0, 24.0, 10.0, 38.0, 24.0, 0.0, 48.0]
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert rule.detect(_window(values, sensor="motor_current")) == []
 
 
 def test_empty_window_returns_empty() -> None:
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     empty = pd.DataFrame(columns=["device_id", "timestamp", "sensor", "state", "value"])
     assert rule.detect(empty) == []
+
+
+def test_trip_not_greater_than_warn_raises() -> None:
+    """trip_std_v <= std_threshold_v → ValueError (band tanımsız, Iter 8.4)."""
+    with pytest.raises(ValueError):
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=1.0)
+
+
+def test_score_is_band_position() -> None:
+    """std=3.0, warn=1.0, trip=5.0 → band-pozisyon 0.5 (Iter 8.4 spec § 3)."""
+    # [21,27]×5 + [24]: mean 24, sapma kareler toplamı 90, n=11 → örnek std (ddof=1) = √(90/10) = 3.0.
+    values = [21.0, 27.0] * 5 + [24.0]
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
+    assert rule.detect(_window(values))[0].score == pytest.approx(0.5)
