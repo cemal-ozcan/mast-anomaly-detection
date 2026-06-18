@@ -30,6 +30,7 @@ detectors:
       severity: critical
       params:
         critical_threshold_c: 80.0
+        trip_c: 130.0
     - name: motor_current_high
       enabled: false
       severity: high
@@ -48,7 +49,7 @@ def test_load_parses_detectors_block(tmp_path: Path) -> None:
     assert len(cfg.rules) == 2
     assert cfg.rules[0] == RuleConfig(
         name="motor_temperature_high", severity="critical", enabled=True,
-        params={"critical_threshold_c": 80.0},
+        params={"critical_threshold_c": 80.0, "trip_c": 130.0},
     )
     assert cfg.rules[1].enabled is False
 
@@ -122,7 +123,7 @@ detectors:
     - name: motor_temperature_high
       enabled: true
       severity: critical
-      params: {critical_threshold_c: 80.0}
+      params: {critical_threshold_c: 80.0, trip_c: 130.0}
 statistical:
   baseline_window_s: 3600
   current_window_s: 60

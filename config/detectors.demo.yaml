@@ -11,6 +11,7 @@ detectors:
       severity: critical
       params:
         critical_threshold_c: 95.0
+        trip_c: 130.0
 
     - name: motor_current_high
       enabled: true

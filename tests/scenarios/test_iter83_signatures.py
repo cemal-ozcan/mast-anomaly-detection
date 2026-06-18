@@ -26,7 +26,7 @@ def test_temperature_overshoot_triggers_motor_temperature_high(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_temperature_overshoot.yaml", max_iterations=300,
     )
-    rule = MotorTemperatureHigh(critical_threshold_c=95.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=95.0, trip_c=130.0)
     assert len(rule.detect(window)) == 1
 
 
@@ -63,7 +63,7 @@ def test_sensor_fault_not_temperature_high(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_sensor_fault.yaml", max_iterations=300,
     )
-    assert MotorTemperatureHigh(critical_threshold_c=95.0).detect(window) == []
+    assert MotorTemperatureHigh(critical_threshold_c=95.0, trip_c=130.0).detect(window) == []
 
 
 def test_clean_baseline_no_iter83_rules(
@@ -74,5 +74,5 @@ def test_clean_baseline_no_iter83_rules(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_clean_baseline.yaml", max_iterations=300,
     )
-    assert MotorTemperatureHigh(critical_threshold_c=95.0).detect(window) == []
+    assert MotorTemperatureHigh(critical_threshold_c=95.0, trip_c=130.0).detect(window) == []
     assert SensorOutOfRange(bounds=_BOUNDS).detect(window) == []
