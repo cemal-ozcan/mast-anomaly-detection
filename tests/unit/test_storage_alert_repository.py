@@ -92,3 +92,27 @@ def test_fetch_open_fingerprints_groups_by_device(migrated_engine: Engine) -> No
 
     assert fps["d1"] == {frozenset({"motor_current_high"}), frozenset({"motor_current_high", "vibration_elevated"})}
     assert "d2" not in fps
+
+
+def test_fetch_open_fingerprints_includes_acknowledged_and_null_safe(migrated_engine: Engine) -> None:
+    """acknowledged uyarılar DAHİL; NULL rule_set (legacy satır) → boş frozenset (Iter 8.5)."""
+    from storage.schema import anomalies
+
+    repo = TelemetryRepository(migrated_engine)
+    # d3: acknowledged uyarı → açık sayılır, dahil olmalı.
+    repo.insert_anomaly(_anom(device="d3", rule="motor_current_high"), "2026-05-30T00:00:00.000Z", "motor_current_high")
+    repo.acknowledge_alert(repo.fetch_alerts(("active",), limit=10)[-1].id, "2026-05-30T00:00:30.000Z")
+    # d4: legacy NULL rule_set satırı (insert_anomaly'yi atlayıp doğrudan NULL yaz).
+    with migrated_engine.begin() as conn:
+        conn.execute(
+            anomalies.insert().values(
+                device_id="d4", rule_name="x", sensor="s", severity="warning", score=0.1,
+                window_start="a", window_end="b", value=1.0, description="d",
+                created_at="2026-05-30T00:00:02.000Z", status="active", rule_set=None,
+            )
+        )
+
+    fps = repo.fetch_open_fingerprints()
+
+    assert fps["d3"] == {frozenset({"motor_current_high"})}  # acknowledged dahil
+    assert fps["d4"] == {frozenset()}  # NULL rule_set → boş frozenset (legacy-güvenli)
