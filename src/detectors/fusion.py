@@ -9,12 +9,12 @@ from __future__ import annotations
 from detectors.base import Anomaly
 
 # Severity sıralaması (yüksekten düşüğe karşılaştırma için).
-_SEVERITY_RANK: dict[str, int] = {"critical": 3, "high": 2, "warning": 1, "info": 0}
+SEVERITY_RANK: dict[str, int] = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 
 
 def _rank(anomaly: Anomaly) -> tuple[int, float]:
     """Önem anahtarı: önce severity, sonra score (max ile 'top' seçimi için)."""
-    return (_SEVERITY_RANK.get(anomaly.severity, 0), anomaly.score)
+    return (SEVERITY_RANK.get(anomaly.severity, 0), anomaly.score)
 
 
 def fuse_anomalies(anomalies: list[Anomaly]) -> Anomaly | None:

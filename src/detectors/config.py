@@ -17,6 +17,17 @@ from detectors.statistical import STATISTICAL_REGISTRY
 
 
 @dataclass(frozen=True)
+class SeverityBands:
+    """Band-pozisyon skorunu severity'ye eşleyen global eşikler (Faz 8 Iter 8.6 (4), spec § 6).
+
+    Defaults ISO 20816 zone mantığı + sim kalibrasyonu için başlangıç; canlı smoke'ta doğrulanır.
+    """
+
+    high_cutoff: float = 0.40
+    critical_cutoff: float = 0.75
+
+
+@dataclass(frozen=True)
 class RuleConfig:
     """detectors.yaml'daki tek kural girişi."""
 
@@ -43,6 +54,7 @@ class DetectorConfig:
     window_s: int
     rules: tuple[RuleConfig, ...]
     statistical: StatisticalConfig | None = None
+    severity_bands: SeverityBands = SeverityBands()
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -107,11 +119,17 @@ def load_detector_config(path: Path) -> DetectorConfig:
             for r in det["rules"]
         )
         statistical = _parse_statistical(data.get("statistical"))
+        sb = data.get("severity_bands") or {}
+        severity_bands = SeverityBands(
+            high_cutoff=float(sb.get("high_cutoff", 0.40)),
+            critical_cutoff=float(sb.get("critical_cutoff", 0.75)),
+        )
         return DetectorConfig(
             poll_interval_s=float(det["poll_interval_s"]),
             window_s=int(det["window_s"]),
             rules=rules,
             statistical=statistical,
+            severity_bands=severity_bands,
         )
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"detectors config geçersiz ({path}): {e}") from e
