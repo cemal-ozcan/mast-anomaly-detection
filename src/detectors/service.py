@@ -11,6 +11,7 @@ from __future__ import annotations
 import signal
 import sys
 import threading
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import FrameType
@@ -19,9 +20,17 @@ import pandas as pd
 from loguru import logger
 from sqlalchemy.exc import OperationalError
 
+from alerts.lifecycle import ACKNOWLEDGED
+from alerts.models import Alert
 from detectors.base import Anomaly, Detector
-from detectors.config import build_detectors, build_statistical_detectors, load_detector_config
-from detectors.fusion import fuse_anomalies
+from detectors.config import (
+    SeverityBands,
+    build_detectors,
+    build_statistical_detectors,
+    load_detector_config,
+)
+from detectors.fusion import SEVERITY_RANK, fuse_anomalies
+from detectors.scoring import severity_from_band
 from ingestion.config import load_ingestion_config
 from storage.engine import create_sqlite_engine
 from storage.migrator import MIGRATIONS_DIR, apply_migrations
@@ -81,22 +90,71 @@ def _since_cutoff(now: datetime, window_s: int) -> str:
     return cutoff.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+# Sensör-sağlığı (veri-kalitesi) kuralları: skoru ikili validity bayrağı (1.0), band konumu DEĞİL
+# → severity banttan türetilmez, config severity'leri korunur (spec § 6; ayrı eksen Iter 8.7).
+VALIDITY_RULES: frozenset[str] = frozenset({"sensor_out_of_range", "sensor_frozen"})
+
+# _detect_once default'u için module-level singleton (frozen → paylaşımı güvenli; ruff B008).
+_DEFAULT_SEVERITY_BANDS = SeverityBands()
+
+
+def apply_band_severity(anomaly: Anomaly, severity_bands: SeverityBands) -> Anomaly:
+    """Band-skorlu bir anomaliye severity'sini band'dan türeterek atar (Iter 8.6 (4)).
+
+    Validity-rule (`VALIDITY_RULES`) anomalileri değişmeden döner (config severity korunur).
+    `Anomaly` frozen → türetme gerektiğinde `replace` ile YENİ nesne döner.
+
+    Args:
+        anomaly: Bir dedektörün ürettiği anomali.
+        severity_bands: high/critical eşikleri.
+
+    Returns:
+        Severity'si türetilmiş yeni Anomaly; validity-rule ise aynı nesne.
+    """
+    if anomaly.rule_name in VALIDITY_RULES:
+        return anomaly
+    new_sev = severity_from_band(
+        anomaly.score, severity_bands.high_cutoff, severity_bands.critical_cutoff
+    )
+    return replace(anomaly, severity=new_sev)
+
+
+def _should_reactivate(primary: Alert, new_severity: str) -> bool:
+    """Ack'lenmiş bir uyarı bu poll'da re-activate edilmeli mi? (Iter 8.6).
+
+    Yalnız acknowledged bir uyarı severity bir ÜST banda geçince True (taze dikkat ister); active uyarı
+    veya aynı/düşük band → False. Karar `primary` snapshot'ına dayanır; gerçek çevirme `reactivate_alert`
+    içinde `status='acknowledged'` guard'ıyla atomik (eşzamanlı durum değişiminde yarış yok).
+
+    Args:
+        primary: Cihazın mevcut açık uyarısı (birincil, poll başı snapshot).
+        new_severity: Bu poll'da türetilen fused severity.
+
+    Returns:
+        Re-activate (acknowledged→active) denenmeli mi.
+    """
+    return primary.status == ACKNOWLEDGED and SEVERITY_RANK.get(new_severity, 0) > SEVERITY_RANK.get(
+        primary.severity, 0
+    )
+
+
 def _detect_once(
     repository: TelemetryRepository,
     detector_groups: list[tuple[list[Detector], int]],
     now: datetime,
+    severity_bands: SeverityBands = _DEFAULT_SEVERITY_BANDS,
 ) -> None:
-    """Tek poll turu: her cihaz × her dedektör-grubu → fusion → DB-tek-hakikat reconciliation (Iter 8.5).
+    """Tek poll turu: her cihaz × dedektör-grubu → severity türet → fusion → cihaz-seviyesi reconciliation.
 
-    `detector_groups`: (dedektörler, window_s) çiftleri — kural grubu kısa pencere (120s),
-    istatistik grubu uzun pencere (3600s); cihaz başına window_cache. Tüm anomaliler birleştirilir
-    → fuse_anomalies. **In-memory durum YOK:** açık-uyarı fingerprint'leri her poll DB'den okunur
-    (`fetch_open_fingerprints`) ve level-triggered uzlaşılır: cihaz temiz + açık uyarı → auto-resolve;
-    firing + fingerprint açık (ack dahil) → debounce; firing + açık değil → yeni uyarı. Restart = bu
-    yolun ilk koşumu (orphan/duplikat yok). Faz 6 ML grubu yeni bir çift olarak eklenebilir.
+    Kimlik CİHAZ seviyesidir (Iter 8.6): bir cihazın açık en fazla TEK uyarısı olur ("olay"). Diff:
+    cihaz temiz + açık → auto-resolve; firing + açık VAR → o satırı in-place UPDATE (skor/severity refresh
+    + eskalasyon birleşik; ack→band-yukarı ise re-activate); firing + açık YOK → yeni uyarı. Severity
+    fusion'dan ÖNCE band'dan türetilir (validity-rule muaf, `apply_band_severity`). DB tek hakikat
+    (in-memory yok); restart = normal yol. Legacy çoklu-açık → en yeni güncellenir, fazlalık resolve
+    (yakınsama). `detector_groups`: (dedektörler, window_s) çiftleri; cihaz başına window_cache.
     """
     created_at = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    open_fingerprints = repository.fetch_open_fingerprints()
+    open_alerts = repository.fetch_open_alerts()
 
     for device_id in repository.list_devices():
         device_anomalies: list[Anomaly] = []
@@ -117,42 +175,62 @@ def _detect_once(
                     logger.error("Dedektör '{}' hata verdi, atlandı: {}", detector.name, e)
                     continue
 
-        # Fingerprint = KATKIDA BULUNAN dedektörlerin rule_name'leri (fused(N) DEĞİL).
-        # Yazım `",".join(sorted(rule_set))` (insert_anomaly) ↔ okuma `frozenset(s.split(","))`
-        # (fetch_open_fingerprints) SİMETRİK olmalı; kural adlarında virgül yok (delimiter güvenli).
+        # (4) severity'yi band'dan türet (validity-rule muaf) — fusion'dan ÖNCE.
+        device_anomalies = [apply_band_severity(a, severity_bands) for a in device_anomalies]
         rule_set = frozenset(a.rule_name for a in device_anomalies)
-        open_fps = open_fingerprints.get(device_id, set())
+        open_list = open_alerts.get(device_id, [])
 
         if not rule_set:  # cihaz temiz
-            if open_fps:  # açık uyarısı varsa auto-resolve (restart'ta da DB'den okunur → orphan yok)
+            if open_list:  # açık uyarısı varsa auto-resolve (restart'ta da DB'den okunur → orphan yok)
                 try:
                     closed = repository.resolve_open_alerts(device_id, created_at)
                     if closed:
-                        logger.info(
-                            "Auto-resolve: device={} kapatılan uyarı={}", device_id, closed
-                        )
+                        logger.info("Auto-resolve: device={} kapatılan={}", device_id, closed)
                 except OperationalError as e:
                     logger.error("Auto-resolve yazılamadı (atlandı): {}", e)
             continue
-        # NOT: list_devices() append-only telemetry'den DISTINCT okur → cihaz asla "düşmez".
-        if rule_set in open_fps:
-            continue  # aynı fingerprint açık (active veya acknowledged) → debounce
-        # firing ama bu fingerprint açık değil → yeni uyarı (ilk tespit / eskalasyon)
+
         fused = fuse_anomalies(device_anomalies)
         if fused is None:  # pragma: no cover - rule_set boş değilse fused None olamaz
             continue
-        try:
-            repository.insert_anomaly(fused, created_at, ",".join(sorted(rule_set)))
-        except OperationalError as e:
-            logger.error("Anomali yazılamadı (atlandı): {}", e)
+        rule_set_str = ",".join(sorted(rule_set))
+
+        if not open_list:  # firing + açık yok → ilk tespit
+            try:
+                repository.insert_anomaly(fused, created_at, rule_set_str)
+            except OperationalError as e:
+                logger.error("Anomali yazılamadı (atlandı): {}", e)
+                continue
+            logger.info(
+                "Alert (yeni): device={} rules={} sev={}", device_id, sorted(rule_set), fused.severity
+            )
             continue
-        logger.info(
-            "Alert: device={} rules={} value={:.2f} sev={}",
-            fused.device_id,
-            sorted(rule_set),
-            fused.value,
-            fused.severity,
-        )
+
+        # firing + açık VAR → in-place UPDATE (skor refresh + eskalasyon + re-activate)
+        # tiebreak (a.created_at, a.id): eşit created_at'te bile deterministik birincil seçimi.
+        primary = max(open_list, key=lambda a: (a.created_at, a.id))
+        try:
+            for extra in open_list:  # legacy çoklu-açık → fazlalıkları kapat (yakınsama)
+                if extra.id != primary.id:
+                    repository.resolve_alert_by_id(extra.id, created_at)
+            # Ölçüm alanlarını her zaman tazele (detector-sahipli; operatör ack'ini EZMEZ).
+            repository.update_alert(
+                primary.id,
+                rule_name=fused.rule_name,
+                sensor=fused.sensor,
+                severity=fused.severity,
+                score=fused.score,
+                value=fused.value,
+                window_end=fused.window_end,
+                rule_set=rule_set_str,
+                description=fused.description,
+            )
+            # Eskalasyon (band-yukarı) → ack'lenmiş uyarıyı guard'lı re-activate et.
+            if _should_reactivate(primary, fused.severity) and repository.reactivate_alert(primary.id):
+                logger.info("Re-activate: device={} sev={} (eskalasyon)", device_id, fused.severity)
+        except OperationalError as e:
+            logger.error("Uyarı güncellenemedi (atlandı): {}", e)
+            continue
 
 
 def run(
@@ -208,7 +286,9 @@ def run(
         )
         while not shutdown.is_set():
             try:
-                _detect_once(repository, detector_groups, datetime.now(UTC))
+                _detect_once(
+                    repository, detector_groups, datetime.now(UTC), detector_config.severity_bands
+                )
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
             shutdown.wait(detector_config.poll_interval_s)

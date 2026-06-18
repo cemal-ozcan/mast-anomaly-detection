@@ -299,29 +299,120 @@ class TelemetryRepository:
             )
         return int(result.rowcount)
 
-    def fetch_open_fingerprints(self) -> dict[str, set[frozenset[str]]]:
-        """Açık (active|acknowledged) uyarıların rule_set fingerprint'lerini cihaz başına döndürür.
+    def fetch_open_alerts(self) -> dict[str, list[Alert]]:
+        """Açık (active|acknowledged) uyarıları cihaz başına liste olarak döndürür (Iter 8.6).
 
-        Reconciliation kaynağı (Iter 8.5): detector her poll bunu okuyup level-triggered uzlaşır
-        (DB tek hakikat). NULL rule_set (legacy satır) → boş frozenset.
+        Reconciliation kaynağı: detector her poll bunu okur, cihaz-seviyesi tek-incident kararı
+        verir (DB tek hakikat). Her liste created_at ASC; resolved hariç. Karar cihaz-seviyesi
+        olduğu için `rule_set` PARSE EDİLMEZ → legacy NULL-rule_set açık satırlar da doğru
+        ("açık uyarı var") sayılır (Iter 8.5 fingerprint-NULL özel-durumu artık gereksiz).
 
         Returns:
-            device_id → o cihazın açık uyarılarının rule_set frozenset'leri kümesi.
+            device_id → o cihazın açık Alert'leri (created_at ASC).
 
         Raises:
             sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
         """
-        result: dict[str, set[frozenset[str]]] = {}
+        stmt = (
+            select(anomalies)
+            .where(anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED)))
+            .order_by(anomalies.c.created_at.asc())
+        )
+        result: dict[str, list[Alert]] = {}
+        with self._engine.connect() as conn:
+            for row in conn.execute(stmt).all():
+                result.setdefault(row.device_id, []).append(self._row_to_alert(row))
+        return result
+
+    def update_alert(
+        self,
+        alert_id: int,
+        *,
+        rule_name: str,
+        sensor: str,
+        severity: str,
+        score: float,
+        value: float,
+        window_end: str,
+        rule_set: str,
+        description: str,
+    ) -> bool:
+        """Açık bir uyarının DETECTOR-SAHİPLİ ölçüm alanlarını yerinde günceller (yaşayan uyarı, Iter 8.6).
+
+        Yalnız temsilciden (fused) türeyen gösterim alanlarını yazar — rule_name/sensor dahil — ki satır
+        tek tutarlı temsilciyi yansıtsın (8.4 "ödünç alan" tutarsızlığını önler). `status`/`acknowledged_at`
+        OPERATÖR-SAHİPLİDİR ve burada DOKUNULMAZ → rutin skor refresh, eşzamanlı bir ack'i ezemez
+        (re-activate için ayrı guard'lı `reactivate_alert`). `created_at`/`window_start`/`resolved_at` de sabit.
+
+        Args:
+            alert_id: Güncellenecek satır id'si.
+            rule_name: En güncel fused temsilci adı (tek kural / "fused(N)").
+            sensor: En güncel fused temsilci sensörü.
+            severity: En güncel fused severity.
+            score: En güncel fused score.
+            value: En güncel fused value.
+            window_end: En güncel pencere bitişi.
+            rule_set: En güncel fingerprint (sıralı virgül-bağlı kural adları).
+            description: En güncel fused açıklama.
+
+        Returns:
+            Satır güncellendiyse True; id bulunamazsa False.
+        """
         with self._engine.begin() as conn:
-            rows = conn.execute(
-                select(anomalies.c.device_id, anomalies.c.rule_set).where(
-                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED))
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id)
+                .values(
+                    rule_name=rule_name,
+                    sensor=sensor,
+                    severity=severity,
+                    score=score,
+                    value=value,
+                    window_end=window_end,
+                    rule_set=rule_set,
+                    description=description,
                 )
             )
-            for device_id, rule_set_str in rows:
-                fingerprint = frozenset(rule_set_str.split(",")) if rule_set_str else frozenset()
-                result.setdefault(str(device_id), set()).add(fingerprint)
-        return result
+        return result.rowcount > 0
+
+    def reactivate_alert(self, alert_id: int) -> bool:
+        """acknowledged bir uyarıyı yeniden active yapar (eskalasyon re-activate, Iter 8.6).
+
+        Geçiş SQL WHERE ile atomik zorlanır (`status='acknowledged'`) → yalnız gerçekten ack'lenmiş
+        satırı çevirir; active satıra no-op, eşzamanlı durum değişiminde yarış yok. `acknowledged_at`
+        temizlenir (uyarı taze dikkat ister).
+
+        Args:
+            alert_id: Yeniden aktifleştirilecek satır id'si.
+
+        Returns:
+            Satır acknowledged'dı ve active yapıldıysa True; değilse (active/resolved/yok) False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id, anomalies.c.status == ACKNOWLEDGED)
+                .values(status=ACTIVE, acknowledged_at=None)
+            )
+        return result.rowcount > 0
+
+    def resolve_alert_by_id(self, alert_id: int, resolved_at: str) -> bool:
+        """Tek bir açık uyarıyı resolved yapar (legacy çoklu-açık yakınsaması, Iter 8.6).
+
+        Args:
+            alert_id: Kapatılacak satır id'si.
+            resolved_at: ISO 8601 ms zaman damgası.
+
+        Returns:
+            Kapatıldıysa True; zaten resolved / yoksa False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id, anomalies.c.status != RESOLVED)
+                .values(status=RESOLVED, resolved_at=resolved_at)
+            )
+        return result.rowcount > 0
 
     def fetch_alerts(self, statuses: tuple[str, ...] | None, limit: int) -> list[Alert]:
         """Uyarıları (opsiyonel status filtresiyle) created_at DESC döndürür (dashboard, spec § 7/§ 8).
