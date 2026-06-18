@@ -11,6 +11,7 @@ from collections.abc import Sequence
 import pandas as pd
 
 from detectors.base import Anomaly, Detector
+from detectors.scoring import band_position_score
 from detectors.statistical.base import EPSILON, iter_sensor_state_groups, split_recent
 
 
@@ -21,15 +22,23 @@ class IQR(Detector):
         self,
         current_window_s: int,
         iqr_multiplier: float = 1.5,
+        iqr_multiplier_critical: float = 3.0,
         min_baseline: int = 30,
         min_current: int = 5,
         sensors: Sequence[str] | None = None,
         severity: str = "warning",
     ) -> None:
-        """Args: current_window_s — güncel tail saniyesi (config'ten); iqr_multiplier — fence çarpanı;
-        min_baseline/min_current — minimum örnek; sensors — izlenen sensörler (None=tümü); severity."""
+        """Args: current_window_s — güncel tail saniyesi (config'ten); iqr_multiplier — iç (warn)
+        fence çarpanı; iqr_multiplier_critical — Tukey far-out (kritik) fence çarpanı (band skor 1.0;
+        > iqr_multiplier olmalı); min_baseline/min_current — minimum örnek; sensors (None=tümü); severity."""
+        if iqr_multiplier_critical <= iqr_multiplier:
+            raise ValueError(
+                f"IQR: iqr_multiplier_critical ({iqr_multiplier_critical}) > "
+                f"iqr_multiplier ({iqr_multiplier}) olmalı"
+            )
         self._current_window_s = current_window_s
         self._iqr_multiplier = iqr_multiplier
+        self._iqr_multiplier_critical = iqr_multiplier_critical
         self._min_baseline = min_baseline
         self._min_current = min_current
         self._sensors = list(sensors) if sensors is not None else None
@@ -63,9 +72,10 @@ class IQR(Detector):
             upper = q3 + fence
             if lower <= cur_median <= upper:
                 continue
-            # Fence dışı mesafenin IQR'a oranı (spec § 6: "mesafenin IQR'a oranı"); ≥0, ≤1 clamp.
+            # Band-pozisyon: iç-fence dışı mesafe, Tukey far-out fence'e (kritik) göre (Iter 8.4 spec § 3).
             distance = (lower - cur_median) if cur_median < lower else (cur_median - upper)
-            score = min(1.0, distance / iqr)
+            span = (self._iqr_multiplier_critical - self._iqr_multiplier) * iqr
+            score = band_position_score(distance, 0.0, span)
             anomalies.append(
                 Anomaly(
                     device_id=device_id,

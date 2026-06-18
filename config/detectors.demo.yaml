@@ -86,4 +86,4 @@ statistical:
     - name: iqr
       enabled: true
       severity: warning
-      params: {iqr_multiplier: 1.5, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
+      params: {iqr_multiplier: 1.5, iqr_multiplier_critical: 3.0, min_baseline: 20, min_current: 5, sensors: [motor_current, vibration, hydraulic_pressure]}
