@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 from detectors.base import Anomaly, Detector
+from detectors.scoring import band_position_score
 
 SENSOR = "motor_voltage"
 
@@ -21,11 +22,16 @@ class MotorVoltageErratic(Detector):
         self,
         std_threshold_v: float,
         min_samples: int,
+        trip_std_v: float,
         severity: str = "warning",
     ) -> None:
-        """Args: std_threshold_v — std eşiği (V); min_samples — min örnek; severity."""
+        """Args: std_threshold_v — std (warn) eşiği (V); min_samples — min örnek;
+        trip_std_v — band-pozisyon kritik referansı (V, skor 1.0; > std_threshold_v olmalı); severity."""
+        if trip_std_v <= std_threshold_v:
+            raise ValueError(f"MotorVoltageErratic: trip_std_v ({trip_std_v}) > std_threshold_v ({std_threshold_v}) olmalı")
         self._threshold = std_threshold_v
         self._min_samples = min_samples
+        self._trip = trip_std_v
         self._severity = severity
 
     @property
@@ -41,7 +47,7 @@ class MotorVoltageErratic(Detector):
         std_v = float(rows["value"].std())  # pandas ddof=1
         if std_v <= self._threshold:
             return []
-        score = min(1.0, (std_v - self._threshold) / (self._threshold * 5.0))
+        score = band_position_score(std_v, self._threshold, self._trip)
         return [
             Anomaly(
                 device_id=str(rows["device_id"].iloc[0]),

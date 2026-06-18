@@ -13,6 +13,7 @@ detectors:
       severity: critical
       params:
         critical_threshold_c: 95.0
+        trip_c: 130.0
 
     - name: motor_current_high
       enabled: true
@@ -20,6 +21,7 @@ detectors:
       params:
         state: raising
         threshold_a: 9.0
+        trip_a: 11.0
         min_samples: 10
 
     - name: vibration_elevated
@@ -28,6 +30,7 @@ detectors:
       params:
         state: raising
         threshold_g: 0.37
+        trip_g: 0.50
         min_samples: 10
 
     - name: hydraulic_pressure_decline
@@ -38,6 +41,7 @@ detectors:
         # Eşik 3.0 + min_samples 60: kaçak (-5 bar/dk) ~%99 yakalanır, temiz gürültü ~%0.02 FP.
         # min_samples=60 az-örnekli oynak eğim FP'sini yapısal olarak da engeller (n<60 → skip).
         slope_threshold_bar_per_min: 3.0
+        trip_slope_bar_per_min: 6.0
         min_samples: 60
 
     - name: motor_voltage_erratic
@@ -45,6 +49,7 @@ detectors:
       severity: warning
       params:
         std_threshold_v: 1.0
+        trip_std_v: 5.0
         min_samples: 10
 
     - name: sensor_frozen
@@ -76,8 +81,8 @@ statistical:
     - name: three_sigma
       enabled: true
       severity: warning
-      params: {sigma_k: 3.0, min_baseline: 30, min_current: 5}
+      params: {sigma_k: 3.0, sigma_k_critical: 6.0, min_baseline: 30, min_current: 5}
     - name: iqr
       enabled: true
       severity: warning
-      params: {iqr_multiplier: 1.5, min_baseline: 30, min_current: 5}
+      params: {iqr_multiplier: 1.5, iqr_multiplier_critical: 3.0, min_baseline: 30, min_current: 5}

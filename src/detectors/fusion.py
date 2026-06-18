@@ -26,7 +26,8 @@ def fuse_anomalies(anomalies: list[Anomaly]) -> Anomaly | None:
     Returns:
         Boş liste → None. Tek anomali → kendisi (değişmez). Çoklu → "fused(N)" temsilci:
         en yüksek (severity, score) anomali baz alınır (device_id, sensor, value, severity
-        ondan); score = max; window_start = min, window_end = max; description katkıda
+        ondan); score = temsilcinin (top) kendi skoru — gösterilen tüm alanlar tek anomaliye
+        ait, tutarlı (Iter 8.4); window_start = min, window_end = max; description katkıda
         bulunan kuralları (önemden düşüğe) listeler.
     """
     if not anomalies:
@@ -41,7 +42,7 @@ def fuse_anomalies(anomalies: list[Anomaly]) -> Anomaly | None:
         rule_name=f"fused({len(anomalies)})",
         sensor=top.sensor,
         severity=top.severity,
-        score=max(a.score for a in anomalies),
+        score=top.score,
         window_start=min(a.window_start for a in anomalies),
         window_end=max(a.window_end for a in anomalies),
         value=top.value,

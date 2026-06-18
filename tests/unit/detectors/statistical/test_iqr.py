@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from detectors.base import Anomaly
 from detectors.statistical.iqr import IQR
@@ -87,10 +88,17 @@ def test_empty_window_returns_empty() -> None:
     assert rule.detect(empty) == []
 
 
-def test_score_proportional_to_distance_beyond_fence() -> None:
-    """score = distance/IQR (clamp'lanmamış orta değer) — divisor IQR, fence değil (regresyon kilidi)."""
-    rule = IQR(current_window_s=60, iqr_multiplier=1.5, min_baseline=30, min_current=5)
-    # baseline Q1=0.4 Q3=0.6 IQR=0.2 upper=0.9; cur medyan 0.95 → distance 0.05 → score 0.25
+def test_score_is_band_position_far_out_fence() -> None:
+    """score = distance/((far−1.5)·IQR) — Tukey far-out fence band-pozisyonu (Iter 8.4 spec § 3)."""
+    rule = IQR(current_window_s=60, iqr_multiplier=1.5, iqr_multiplier_critical=3.0, min_baseline=30, min_current=5)
+    # baseline Q1=0.4 Q3=0.6 IQR=0.2; cur medyan 0.95 → iç-fence 0.9 dışı mesafe 0.05;
+    # far-out span (3.0−1.5)·0.2=0.3 → band 0.05/0.3 ≈ 0.1667
     anomalies = rule.detect(_window(_BASELINE, [0.95] * 6))
     assert len(anomalies) == 1
-    assert abs(anomalies[0].score - 0.25) < 0.01
+    assert anomalies[0].score == pytest.approx(0.1667, abs=0.01)
+
+
+def test_iqr_multiplier_critical_not_greater_raises() -> None:
+    """iqr_multiplier_critical <= iqr_multiplier → ValueError (band tanımsız, Iter 8.4)."""
+    with pytest.raises(ValueError):
+        IQR(current_window_s=60, iqr_multiplier=3.0, iqr_multiplier_critical=3.0)

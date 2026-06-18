@@ -4,6 +4,9 @@ Spec § 6 (E universal, süre). Konfigüre edilen sensörün en yeni `min_sample
 değer aralığı (max - min) `epsilon`'u aşmıyorsa "donmuş" kabul edilir. Simülatör donmuş
 sensör üretmediğinden (her sensör gauss gürültülü) yalnız birim test ile doğrulanır;
 gerçek gürültülü veride asla tetiklenmez (FP güvenli).
+
+Skor ikili validity (sabit 1.0) — `sensor_out_of_range` ile aynı veri-kalitesi sınıfı
+(band-pozisyon değil; donmuş sensör = geçersiz veri, Iter 8.4 spec § 5).
 """
 from __future__ import annotations
 

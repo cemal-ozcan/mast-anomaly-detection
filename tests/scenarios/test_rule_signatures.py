@@ -26,7 +26,7 @@ def test_mechanical_wear_triggers_motor_current_high(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_mechanical_wear.yaml", max_iterations=200,
     )
-    rule = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10)
+    rule = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10, trip_a=11.0)
     assert len(rule.detect(window)) == 1
 
 
@@ -38,7 +38,7 @@ def test_mechanical_wear_triggers_vibration_elevated(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_mechanical_wear.yaml", max_iterations=200,
     )
-    rule = VibrationElevated(state="raising", threshold_g=0.37, min_samples=10)
+    rule = VibrationElevated(state="raising", threshold_g=0.37, min_samples=10, trip_g=0.50)
     assert len(rule.detect(window)) == 1
 
 
@@ -56,7 +56,7 @@ def test_hydraulic_leak_triggers_pressure_decline(
         FIXTURES / "devices_with_hydraulic_leak.yaml", max_iterations=120,
     )
     rule = HydraulicPressureDecline(
-        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60
+        state="holding", slope_threshold_bar_per_min=3.0, min_samples=60, trip_slope_bar_per_min=6.0
     )
     anomalies = rule.detect(window)
     assert len(anomalies) == 1
@@ -71,7 +71,7 @@ def test_electrical_fault_triggers_voltage_erratic(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_electrical_fault.yaml", max_iterations=200,
     )
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert len(rule.detect(window)) == 1
 
 

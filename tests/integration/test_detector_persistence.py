@@ -36,7 +36,7 @@ def test_overtemp_seed_produces_persisted_anomaly(tmp_path: Path) -> None:
 
         # Tek tur: pencere kur → detect → persist.
         window = build_window(repo, "device_001", SENSORS, since=None)
-        rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+        rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
         anomalies = rule.detect(window)
         assert len(anomalies) == 1
         repo.insert_anomaly(anomalies[0], created_at="2026-05-30T00:00:03.000Z")
@@ -61,7 +61,7 @@ def test_normal_temp_seed_produces_no_anomaly(tmp_path: Path) -> None:
             repo.insert(_reading("motor_temperature", f"2026-05-30T00:00:0{i}.000Z", temp))
 
         window = build_window(repo, "device_001", SENSORS, since=None)
-        rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+        rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
         for anomaly in rule.detect(window):
             repo.insert_anomaly(anomaly, created_at="2026-05-30T00:00:03.000Z")
 
