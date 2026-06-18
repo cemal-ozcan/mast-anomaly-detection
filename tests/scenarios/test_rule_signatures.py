@@ -71,7 +71,7 @@ def test_electrical_fault_triggers_voltage_erratic(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_electrical_fault.yaml", max_iterations=200,
     )
-    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10)
+    rule = MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0)
     assert len(rule.detect(window)) == 1
 
 
