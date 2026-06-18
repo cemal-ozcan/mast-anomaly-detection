@@ -190,3 +190,26 @@ def test_build_statistical_detectors_includes_iqr() -> None:
     )
     detectors = build_statistical_detectors(config)
     assert [d.name for d in detectors] == ["three_sigma", "iqr"]
+
+
+def test_load_severity_bands_from_yaml(tmp_path: Path) -> None:
+    """severity_bands bloğu high/critical cutoff'larını okur (Faz 8 Iter 8.6 (4))."""
+    p = _write(
+        tmp_path / "d.yaml",
+        "detectors:\n  poll_interval_s: 5.0\n  window_s: 120\n  rules: []\n"
+        "severity_bands:\n  high_cutoff: 0.30\n  critical_cutoff: 0.80\n",
+    )
+    cfg = load_detector_config(p)
+    assert cfg.severity_bands.high_cutoff == 0.30
+    assert cfg.severity_bands.critical_cutoff == 0.80
+
+
+def test_severity_bands_defaults_when_absent(tmp_path: Path) -> None:
+    """severity_bands bloğu yoksa default 0.40/0.75 (geriye-uyumlu)."""
+    p = _write(
+        tmp_path / "d.yaml",
+        "detectors:\n  poll_interval_s: 5.0\n  window_s: 120\n  rules: []\n",
+    )
+    cfg = load_detector_config(p)
+    assert cfg.severity_bands.high_cutoff == 0.40
+    assert cfg.severity_bands.critical_cutoff == 0.75
