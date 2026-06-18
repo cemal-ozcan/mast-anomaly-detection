@@ -38,7 +38,7 @@ def test_mechanical_wear_triggers_vibration_elevated(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_mechanical_wear.yaml", max_iterations=200,
     )
-    rule = VibrationElevated(state="raising", threshold_g=0.37, min_samples=10)
+    rule = VibrationElevated(state="raising", threshold_g=0.37, min_samples=10, trip_g=0.50)
     assert len(rule.detect(window)) == 1
 
 

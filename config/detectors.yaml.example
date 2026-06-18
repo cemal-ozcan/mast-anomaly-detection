@@ -30,6 +30,7 @@ detectors:
       params:
         state: raising
         threshold_g: 0.37
+        trip_g: 0.50
         min_samples: 10
 
     - name: hydraulic_pressure_decline
