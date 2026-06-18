@@ -39,7 +39,7 @@ def test_overtemp_seed_produces_persisted_anomaly(tmp_path: Path) -> None:
         rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
         anomalies = rule.detect(window)
         assert len(anomalies) == 1
-        repo.insert_anomaly(anomalies[0], created_at="2026-05-30T00:00:03.000Z")
+        repo.insert_anomaly(anomalies[0], created_at="2026-05-30T00:00:03.000Z", rule_set=anomalies[0].rule_name)
 
         stored = repo.fetch_recent_anomalies(limit=10)
         assert len(stored) == 1
@@ -63,7 +63,7 @@ def test_normal_temp_seed_produces_no_anomaly(tmp_path: Path) -> None:
         window = build_window(repo, "device_001", SENSORS, since=None)
         rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
         for anomaly in rule.detect(window):
-            repo.insert_anomaly(anomaly, created_at="2026-05-30T00:00:03.000Z")
+            repo.insert_anomaly(anomaly, created_at="2026-05-30T00:00:03.000Z", rule_set=anomaly.rule_name)
 
         assert repo.fetch_recent_anomalies(limit=10) == []
     finally:

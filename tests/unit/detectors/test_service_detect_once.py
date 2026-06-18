@@ -201,6 +201,7 @@ def test_detect_once_no_resolve_when_device_never_active(migrated_engine: Engine
         Anomaly(device_id="device_001", rule_name="x", sensor="s", severity="warning",
                 score=0.1, window_start="a", window_end="b", value=1.0, description="d"),
         "2026-05-30T00:00:00.000Z",
+        "x",
     )
     _detect_once(repo, [(detectors, _BIG_WINDOW_S)], active, _NOW)
     assert [a.status for a in repo.fetch_alerts(None, limit=10)] == ["active"]  # dokunulmadı

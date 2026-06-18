@@ -49,8 +49,8 @@ class TelemetryRepository:
         )
 
     @staticmethod
-    def _anomaly_to_dict(anomaly: Anomaly, created_at: str) -> dict[str, object]:
-        """Anomaly + created_at'i anomalies kolon dict'ine çevirir."""
+    def _anomaly_to_dict(anomaly: Anomaly, created_at: str, rule_set: str) -> dict[str, object]:
+        """Anomaly + created_at + rule_set'i anomalies kolon dict'ine çevirir."""
         # NOT: status/acknowledged_at/resolved_at kasıtlı dışarıda — SQLite DEFAULT 'active' uygular (Faz 7 yaşam döngüsü).
         return {
             "device_id": anomaly.device_id,
@@ -63,6 +63,7 @@ class TelemetryRepository:
             "value": anomaly.value,
             "description": anomaly.description,
             "created_at": created_at,
+            "rule_set": rule_set,
         }
 
     @staticmethod
@@ -223,20 +224,22 @@ class TelemetryRepository:
             rows = conn.execute(stmt).all()
         return [self._row_to_reading(row) for row in rows]
 
-    def insert_anomaly(self, anomaly: Anomaly, created_at: str) -> None:
+    def insert_anomaly(self, anomaly: Anomaly, created_at: str, rule_set: str) -> None:
         """Tek bir Anomaly'i anomalies tablosuna yazar.
 
         Args:
             anomaly: Bir kuralın tetiklediği anomali.
             created_at: Kalıcılık zamanı ISO 8601 ms (çağıran kendi saatinden verir —
                 test edilebilirlik için DI; telemetry insert deseniyle tutarlı).
+            rule_set: Uyarının fingerprint'i — sıralı virgül-bağlı kural adları (reconciliation
+                kimliği, Iter 8.5).
 
         Raises:
             sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
         """
         with self._engine.begin() as conn:
             conn.execute(
-                anomalies.insert().values(**self._anomaly_to_dict(anomaly, created_at))
+                anomalies.insert().values(**self._anomaly_to_dict(anomaly, created_at, rule_set))
             )
 
     def fetch_recent_anomalies(self, limit: int) -> list[Anomaly]:
