@@ -117,6 +117,9 @@ def _detect_once(
                     logger.error("Dedektör '{}' hata verdi, atlandı: {}", detector.name, e)
                     continue
 
+        # Fingerprint = KATKIDA BULUNAN dedektörlerin rule_name'leri (fused(N) DEĞİL).
+        # Yazım `",".join(sorted(rule_set))` (insert_anomaly) ↔ okuma `frozenset(s.split(","))`
+        # (fetch_open_fingerprints) SİMETRİK olmalı; kural adlarında virgül yok (delimiter güvenli).
         rule_set = frozenset(a.rule_name for a in device_anomalies)
         open_fps = open_fingerprints.get(device_id, set())
 
