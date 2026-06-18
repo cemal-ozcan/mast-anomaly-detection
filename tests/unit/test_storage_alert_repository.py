@@ -137,14 +137,15 @@ def test_update_alert_changes_fields(migrated_engine: Engine) -> None:
     alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
 
     ok = repo.update_alert(
-        alert_id, severity="critical", score=0.9, value=12.5,
-        window_end="2026-06-03T10:05:00.000Z", rule_set="motor_current_high,vibration_elevated",
-        description="updated", status="active", acknowledged_at=None,
+        alert_id, rule_name="fused(2)", sensor="motor_voltage", severity="critical", score=0.9,
+        value=12.5, window_end="2026-06-03T10:05:00.000Z",
+        rule_set="motor_current_high,vibration_elevated", description="updated",
+        status="active", acknowledged_at=None,
     )
     assert ok is True
     a = repo.fetch_alerts(None, limit=10)[0]
-    assert (a.severity, a.score, a.value, a.window_end, a.description) == (
-        "critical", 0.9, 12.5, "2026-06-03T10:05:00.000Z", "updated")
+    assert (a.rule_name, a.sensor, a.severity, a.score, a.value, a.window_end, a.description) == (
+        "fused(2)", "motor_voltage", "critical", 0.9, 12.5, "2026-06-03T10:05:00.000Z", "updated")
     assert a.created_at == "2026-06-03T10:00:00.000Z"  # created_at DOKUNULMAZ
 
 
@@ -155,7 +156,8 @@ def test_update_alert_reactivates(migrated_engine: Engine) -> None:
     alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
     repo.acknowledge_alert(alert_id, "2026-06-03T10:01:00.000Z")
 
-    repo.update_alert(alert_id, severity="critical", score=0.9, value=12.5,
+    repo.update_alert(alert_id, rule_name="motor_current_high", sensor="motor_current",
+                      severity="critical", score=0.9, value=12.5,
                       window_end="w", rule_set="motor_current_high", description="d",
                       status="active", acknowledged_at=None)
     a = repo.fetch_alerts(None, limit=10)[0]

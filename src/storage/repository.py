@@ -352,6 +352,8 @@ class TelemetryRepository:
         self,
         alert_id: int,
         *,
+        rule_name: str,
+        sensor: str,
         severity: str,
         score: float,
         value: float,
@@ -364,11 +366,14 @@ class TelemetryRepository:
         """Açık bir uyarıyı yerinde günceller (yaşayan uyarı, Iter 8.6).
 
         `created_at`/`window_start`/`resolved_at` DOKUNULMAZ (olay başlangıcı + çözüm zamanı sabit).
-        Severity/score/value/window_end/rule_set/description + (re-activate için) status/acknowledged_at
-        güncellenir.
+        Temsilciden (fused) türeyen TÜM gösterim alanları birlikte tazelenir — rule_name/sensor dahil —
+        ki satır tek bir tutarlı temsilciyi yansıtsın (8.4 "ödünç alan" tutarsızlığını önler); ayrıca
+        rule_set + (re-activate için) status/acknowledged_at güncellenir.
 
         Args:
             alert_id: Güncellenecek satır id'si.
+            rule_name: En güncel fused temsilci adı (tek kural / "fused(N)").
+            sensor: En güncel fused temsilci sensörü.
             severity: En güncel fused severity.
             score: En güncel fused score.
             value: En güncel fused value.
@@ -386,6 +391,8 @@ class TelemetryRepository:
                 anomalies.update()
                 .where(anomalies.c.id == alert_id)
                 .values(
+                    rule_name=rule_name,
+                    sensor=sensor,
                     severity=severity,
                     score=score,
                     value=value,
