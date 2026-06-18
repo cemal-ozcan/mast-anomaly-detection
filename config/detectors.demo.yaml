@@ -47,6 +47,7 @@ detectors:
       severity: warning
       params:
         std_threshold_v: 1.0
+        trip_std_v: 5.0
         min_samples: 10
 
     - name: sensor_frozen

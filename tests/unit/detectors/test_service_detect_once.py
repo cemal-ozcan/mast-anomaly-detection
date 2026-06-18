@@ -61,7 +61,7 @@ def test_detect_once_fuses_multiple_rules(migrated_engine: Engine) -> None:
         repo.insert(_reading("motor_voltage", f"2026-05-30T00:01:{i:02d}.000Z", v))
     detectors: list[Detector] = [
         MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0),
-        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10),
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0),
     ]
     active: dict[str, frozenset[str]] = {}
 
@@ -118,7 +118,7 @@ def test_detect_once_escalation_writes_new_row(migrated_engine: Engine) -> None:
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
     detectors: list[Detector] = [
         MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0),
-        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10),
+        MotorVoltageErratic(std_threshold_v=1.0, min_samples=10, trip_std_v=5.0),
     ]
     active: dict[str, frozenset[str]] = {}
 
