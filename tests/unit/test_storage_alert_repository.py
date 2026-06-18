@@ -114,3 +114,61 @@ def test_fetch_open_fingerprints_includes_acknowledged_and_null_safe(migrated_en
 
     assert fps["d3"] == {frozenset({"motor_current_high"})}  # acknowledged dahil
     assert fps["d4"] == {frozenset()}  # NULL rule_set → boş frozenset (legacy-güvenli)
+
+
+def test_fetch_open_alerts_groups_by_device(migrated_engine: Engine) -> None:
+    """Açık (active|acknowledged) uyarılar cihaz başına liste; resolved hariç; created_at ASC (Iter 8.6)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(device="d1", rule="motor_current_high"), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    repo.insert_anomaly(_anom(device="d1", rule="fused(2)"), "2026-06-03T10:00:01.000Z", "motor_current_high,vibration_elevated")
+    repo.insert_anomaly(_anom(device="d2"), "2026-06-03T10:00:02.000Z", "motor_current_high")
+    repo.resolve_open_alerts("d2", "2026-06-03T10:01:00.000Z")  # d2 kapanır → görünmez
+
+    open_alerts = repo.fetch_open_alerts()
+    assert set(open_alerts.keys()) == {"d1"}
+    assert len(open_alerts["d1"]) == 2
+    assert [a.created_at for a in open_alerts["d1"]] == sorted(a.created_at for a in open_alerts["d1"])  # ASC
+
+
+def test_update_alert_changes_fields(migrated_engine: Engine) -> None:
+    """update_alert severity/score/value/window_end/rule_set/description/status'u günceller; created_at sabit."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+
+    ok = repo.update_alert(
+        alert_id, severity="critical", score=0.9, value=12.5,
+        window_end="2026-06-03T10:05:00.000Z", rule_set="motor_current_high,vibration_elevated",
+        description="updated", status="active", acknowledged_at=None,
+    )
+    assert ok is True
+    a = repo.fetch_alerts(None, limit=10)[0]
+    assert (a.severity, a.score, a.value, a.window_end, a.description) == (
+        "critical", 0.9, 12.5, "2026-06-03T10:05:00.000Z", "updated")
+    assert a.created_at == "2026-06-03T10:00:00.000Z"  # created_at DOKUNULMAZ
+
+
+def test_update_alert_reactivates(migrated_engine: Engine) -> None:
+    """update_alert status=active + acknowledged_at=None ile ack'lenmiş satırı yeniden aktifleştirir."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+    repo.acknowledge_alert(alert_id, "2026-06-03T10:01:00.000Z")
+
+    repo.update_alert(alert_id, severity="critical", score=0.9, value=12.5,
+                      window_end="w", rule_set="motor_current_high", description="d",
+                      status="active", acknowledged_at=None)
+    a = repo.fetch_alerts(None, limit=10)[0]
+    assert a.status == "active" and a.acknowledged_at is None
+
+
+def test_resolve_alert_by_id(migrated_engine: Engine) -> None:
+    """resolve_alert_by_id tek satırı resolved yapar; zaten resolved → False (idempotent)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+
+    assert repo.resolve_alert_by_id(alert_id, "2026-06-03T10:02:00.000Z") is True
+    a = repo.fetch_alerts(None, limit=10)[0]
+    assert a.status == "resolved" and a.resolved_at == "2026-06-03T10:02:00.000Z"
+    assert repo.resolve_alert_by_id(alert_id, "2026-06-03T10:03:00.000Z") is False  # zaten resolved

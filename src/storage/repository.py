@@ -323,6 +323,99 @@ class TelemetryRepository:
                 result.setdefault(str(device_id), set()).add(fingerprint)
         return result
 
+    def fetch_open_alerts(self) -> dict[str, list[Alert]]:
+        """Açık (active|acknowledged) uyarıları cihaz başına liste olarak döndürür (Iter 8.6).
+
+        Reconciliation kaynağı: detector her poll bunu okur, cihaz-seviyesi tek-incident kararı
+        verir (DB tek hakikat). Her liste created_at ASC; resolved hariç. Karar cihaz-seviyesi
+        olduğu için `rule_set` PARSE EDİLMEZ → legacy NULL-rule_set açık satırlar da doğru
+        ("açık uyarı var") sayılır (Iter 8.5 fingerprint-NULL özel-durumu artık gereksiz).
+
+        Returns:
+            device_id → o cihazın açık Alert'leri (created_at ASC).
+
+        Raises:
+            sqlalchemy.exc.OperationalError: SQLite IO/lock hatası (çağıran yakalar).
+        """
+        stmt = (
+            select(anomalies)
+            .where(anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED)))
+            .order_by(anomalies.c.created_at.asc())
+        )
+        result: dict[str, list[Alert]] = {}
+        with self._engine.connect() as conn:
+            for row in conn.execute(stmt).all():
+                result.setdefault(row.device_id, []).append(self._row_to_alert(row))
+        return result
+
+    def update_alert(
+        self,
+        alert_id: int,
+        *,
+        severity: str,
+        score: float,
+        value: float,
+        window_end: str,
+        rule_set: str,
+        description: str,
+        status: str,
+        acknowledged_at: str | None,
+    ) -> bool:
+        """Açık bir uyarıyı yerinde günceller (yaşayan uyarı, Iter 8.6).
+
+        `created_at`/`window_start`/`resolved_at` DOKUNULMAZ (olay başlangıcı + çözüm zamanı sabit).
+        Severity/score/value/window_end/rule_set/description + (re-activate için) status/acknowledged_at
+        güncellenir.
+
+        Args:
+            alert_id: Güncellenecek satır id'si.
+            severity: En güncel fused severity.
+            score: En güncel fused score.
+            value: En güncel fused value.
+            window_end: En güncel pencere bitişi.
+            rule_set: En güncel fingerprint (sıralı virgül-bağlı kural adları).
+            description: En güncel fused açıklama.
+            status: Yeni durum (active veya korunan acknowledged).
+            acknowledged_at: Re-activate'te None; aksi halde korunan değer.
+
+        Returns:
+            Satır güncellendiyse True; id bulunamazsa False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id)
+                .values(
+                    severity=severity,
+                    score=score,
+                    value=value,
+                    window_end=window_end,
+                    rule_set=rule_set,
+                    description=description,
+                    status=status,
+                    acknowledged_at=acknowledged_at,
+                )
+            )
+        return result.rowcount > 0
+
+    def resolve_alert_by_id(self, alert_id: int, resolved_at: str) -> bool:
+        """Tek bir açık uyarıyı resolved yapar (legacy çoklu-açık yakınsaması, Iter 8.6).
+
+        Args:
+            alert_id: Kapatılacak satır id'si.
+            resolved_at: ISO 8601 ms zaman damgası.
+
+        Returns:
+            Kapatıldıysa True; zaten resolved / yoksa False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update()
+                .where(anomalies.c.id == alert_id, anomalies.c.status != RESOLVED)
+                .values(status=RESOLVED, resolved_at=resolved_at)
+            )
+        return result.rowcount > 0
+
     def fetch_alerts(self, statuses: tuple[str, ...] | None, limit: int) -> list[Alert]:
         """Uyarıları (opsiyonel status filtresiyle) created_at DESC döndürür (dashboard, spec § 7/§ 8).
 
