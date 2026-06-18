@@ -135,7 +135,7 @@ def _detect_once(
         if fused is None:  # pragma: no cover - rule_set boş değilse fused None olamaz
             continue
         try:
-            repository.insert_anomaly(fused, created_at)
+            repository.insert_anomaly(fused, created_at, ",".join(sorted(rule_set)))
         except OperationalError as e:
             logger.error("Anomali yazılamadı (atlandı): {}", e)
             continue
