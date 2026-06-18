@@ -26,7 +26,7 @@ def test_mechanical_wear_triggers_motor_current_high(
         monkeypatch, patched_engine_clock,
         FIXTURES / "devices_with_mechanical_wear.yaml", max_iterations=200,
     )
-    rule = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10)
+    rule = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10, trip_a=11.0)
     assert len(rule.detect(window)) == 1
 
 

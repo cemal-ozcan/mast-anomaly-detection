@@ -10,6 +10,7 @@ from __future__ import annotations
 import pandas as pd
 
 from detectors.base import Anomaly, Detector
+from detectors.scoring import band_position_score
 
 SENSOR = "motor_current"
 
@@ -22,13 +23,18 @@ class MotorCurrentHigh(Detector):
         state: str,
         threshold_a: float,
         min_samples: int,
+        trip_a: float,
         severity: str = "warning",
     ) -> None:
-        """Args: state — aktif state ("raising"); threshold_a — akım eşiği (A);
-        min_samples — minimum örnek (süre koşulu); severity — anomali şiddeti."""
+        """Args: state — aktif state ("raising"); threshold_a — akım (warn) eşiği (A);
+        min_samples — minimum örnek (süre koşulu); trip_a — band-pozisyon kritik referansı
+        (A, skor 1.0; trip_a > threshold_a olmalı); severity — anomali şiddeti."""
+        if trip_a <= threshold_a:
+            raise ValueError(f"MotorCurrentHigh: trip_a ({trip_a}) > threshold_a ({threshold_a}) olmalı")
         self._state = state
         self._threshold = threshold_a
         self._min_samples = min_samples
+        self._trip_a = trip_a
         self._severity = severity
 
     @property
@@ -44,7 +50,7 @@ class MotorCurrentHigh(Detector):
         mean_a = float(rows["value"].mean())
         if mean_a <= self._threshold:
             return []
-        score = min(1.0, (mean_a - self._threshold) / self._threshold)
+        score = band_position_score(mean_a, self._threshold, self._trip_a)
         return [
             Anomaly(
                 device_id=str(rows["device_id"].iloc[0]),

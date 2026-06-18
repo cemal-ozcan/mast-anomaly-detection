@@ -37,6 +37,7 @@ detectors:
       params:
         state: raising
         threshold_a: 9.0
+        trip_a: 11.0
         min_samples: 10
 """
 
