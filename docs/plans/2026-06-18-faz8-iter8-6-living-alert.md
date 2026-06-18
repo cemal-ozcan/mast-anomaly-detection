@@ -86,6 +86,8 @@ def severity_from_band(score: float, high_cutoff: float, critical_cutoff: float)
 
     `0` = alarm bölgesine yeni girdi (en az "warning"), `1` = kritik (trip). Eşikler ISO 20816
     zone mantığı + sim kalibrasyonu (config-driven, hand-picked sabit yok — spec § 6).
+    Band-türetilmiş severity tabanı "warning"dir → "info" asla dönmez (tasarım; "info" yalnız
+    validity-rule'ların config severity'sinde teorik olarak mümkün).
 
     Args:
         score: Band-pozisyon skoru `[0, 1]`.
@@ -208,7 +210,9 @@ Expected: FAIL (`AttributeError: ... 'fetch_open_alerts'`).
         """Açık (active|acknowledged) uyarıları cihaz başına liste olarak döndürür (Iter 8.6).
 
         Reconciliation kaynağı: detector her poll bunu okur, cihaz-seviyesi tek-incident kararı
-        verir (DB tek hakikat). Her liste created_at ASC; resolved hariç.
+        verir (DB tek hakikat). Her liste created_at ASC; resolved hariç. Karar cihaz-seviyesi
+        olduğu için `rule_set` PARSE EDİLMEZ → legacy NULL-rule_set açık satırlar da doğru
+        ("açık uyarı var") sayılır (Iter 8.5 fingerprint-NULL özel-durumu artık gereksiz).
 
         Returns:
             device_id → o cihazın açık Alert'leri (created_at ASC).
@@ -825,7 +829,8 @@ def _detect_once(
             continue
 
         # firing + açık VAR → in-place UPDATE (skor refresh + eskalasyon + re-activate)
-        primary = max(open_list, key=lambda a: a.created_at)
+        # tiebreak (a.created_at, a.id): eşit created_at'te bile deterministik birincil seçimi.
+        primary = max(open_list, key=lambda a: (a.created_at, a.id))
         try:
             for extra in open_list:  # legacy çoklu-açık → fazlalıkları kapat (yakınsama)
                 if extra.id != primary.id:
@@ -890,7 +895,7 @@ git commit -m "feat(detectors): _detect_once cihaz-seviyesi in-place reconciliat
 - [ ] **Step 1: Grep ile son kullanım kontrolü**
 
 Run: `grep -rn "fetch_open_fingerprints" src tests | grep -v __pycache__`
-Expected: yalnız `src/storage/repository.py` tanımı + `tests/unit/test_storage_alert_repository.py` 2 test. (service.py + service testleri Task 5'te temizlendi.)
+Expected (**yalnız Task 5 commit'lendikten SONRA geçerli**): yalnız `src/storage/repository.py` tanımı + `tests/unit/test_storage_alert_repository.py` 2 test. service.py'deki kullanım + docstring/yorum referansları (eski satır ~94/~120-122) Task 5'in `_detect_once` tam-yeniden-yazımıyla zaten kalkmış olmalı; grep stray yorum eşleşmesi dönerse Task 5'e geri dön ve temizle (yoksa "ölü kod kaldırıldı" iddiası eksik kalır).
 
 - [ ] **Step 2: Sil**
 
