@@ -37,7 +37,7 @@ def test_mechanical_wear_rule_and_statistical_overlap_fused(
 
     # Kural katmanı (kısa pencere: yalnız arıza verisi, servisteki window_s gibi)
     rule_window = build_detector_window(monkeypatch, patched_engine_clock, mech, max_iterations=181)
-    rule_anoms = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10).detect(rule_window)
+    rule_anoms = MotorCurrentHigh(state="raising", threshold_a=9.0, min_samples=10, trip_a=11.0).detect(rule_window)
 
     # Her iki katman da motor_current'ı bağımsız işaretledi (tutarlılık / overlap)
     assert any(a.sensor == "motor_current" for a in rule_anoms), "kural motor_current'ı yakalamadı"
