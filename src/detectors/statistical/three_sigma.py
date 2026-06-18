@@ -69,6 +69,8 @@ class ThreeSigma(Detector):
             if deviation <= fence:
                 continue
             # Band-pozisyon: sapma fence (sigma_k·σ) → kritik fence (sigma_k_critical·σ) bandında (Iter 8.4).
+            # Band orijini: burada q=μ'den SAPMA & warn=fence; IQR'da q=fence-DIŞI mesafe & warn=0 —
+            # iki konvansiyon da "iç-fence → 0" verir (iqr.py ile çapraz-ref; yeni stat dedektörde dikkat).
             score = band_position_score(deviation, fence, self._sigma_k_critical * sigma)
             anomalies.append(
                 Anomaly(
