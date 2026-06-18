@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
 from detectors.base import Anomaly
 from detectors.statistical.three_sigma import ThreeSigma
@@ -82,3 +83,20 @@ def test_empty_window_returns_empty() -> None:
     rule = ThreeSigma(current_window_s=60, sigma_k=3.0, min_baseline=30, min_current=5)
     empty = pd.DataFrame(columns=["device_id", "timestamp", "sensor", "state", "value"])
     assert rule.detect(empty) == []
+
+
+def test_sigma_k_critical_not_greater_raises() -> None:
+    """sigma_k_critical <= sigma_k → ValueError (band tanımsız, Iter 8.4)."""
+    with pytest.raises(ValueError):
+        ThreeSigma(current_window_s=60, sigma_k=6.0, sigma_k_critical=6.0)
+
+
+def test_score_is_band_position() -> None:
+    """z=4.5 sapma, sigma_k=3, sigma_k_critical=6 → band (4.5−3)/(6−3)=0.5 (Iter 8.4 spec § 3)."""
+    # baseline [-1,1]×15 + [0]: μ=0, sapma kareler toplamı 30, n=31 → örnek σ (ddof=1) = √(30/30) = 1.0.
+    baseline = [-1.0, 1.0] * 15 + [0.0]
+    rule = ThreeSigma(
+        current_window_s=60, sigma_k=3.0, sigma_k_critical=6.0, min_baseline=30, min_current=5
+    )
+    window = _window(baseline, [4.5] * 6)  # güncel ort 4.5 → μ'dan 4.5σ sapma
+    assert rule.detect(window)[0].score == pytest.approx(0.5)
