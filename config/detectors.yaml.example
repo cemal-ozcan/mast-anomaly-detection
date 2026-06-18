@@ -86,3 +86,9 @@ statistical:
       enabled: true
       severity: warning
       params: {iqr_multiplier: 1.5, iqr_multiplier_critical: 3.0, min_baseline: 30, min_current: 5}
+
+# Severity band eşikleri (Faz 8 Iter 8.6): band skoru (0..1) → severity.
+# 0..high_cutoff = warning, ..critical_cutoff = high, .. = critical. ISO 20816 zone mantığı.
+severity_bands:
+  high_cutoff: 0.40
+  critical_cutoff: 0.75
