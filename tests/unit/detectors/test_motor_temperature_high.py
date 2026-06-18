@@ -22,12 +22,12 @@ def _window(values: list[float], sensor: str = "motor_temperature") -> pd.DataFr
 
 def test_name_is_rule_key() -> None:
     """name property registry anahtarıyla aynı."""
-    assert MotorTemperatureHigh(critical_threshold_c=80.0).name == "motor_temperature_high"
+    assert MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0).name == "motor_temperature_high"
 
 
 def test_triggers_when_peak_exceeds_threshold() -> None:
     """Tepe sıcaklık eşiği aşınca tek Anomaly döner; alanları doğru."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
     window = _window([70.0, 85.0, 92.0, 60.0])
 
     anomalies = rule.detect(window)
@@ -47,33 +47,33 @@ def test_triggers_when_peak_exceeds_threshold() -> None:
 
 def test_no_trigger_when_below_threshold() -> None:
     """Tüm değerler eşik altındaysa boş liste."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
     assert rule.detect(_window([60.0, 70.0, 79.9])) == []
 
 
 def test_boundary_equal_threshold_does_not_trigger() -> None:
     """Eşiğe eşit değer tetiklemez (strict >)."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
     assert rule.detect(_window([80.0, 80.0])) == []
 
 
 def test_ignores_other_sensors() -> None:
     """Yalnız motor_temperature satırlarına bakar; başka sensör eşiği geçse bile yok sayar."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
     window = _window([200.0, 300.0], sensor="motor_current")
     assert rule.detect(window) == []
 
 
 def test_empty_window_returns_empty() -> None:
     """Boş pencere → boş liste (KeyError yok)."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0)
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0)
     empty = pd.DataFrame(columns=["device_id", "timestamp", "sensor", "state", "value"])
     assert rule.detect(empty) == []
 
 
 def test_severity_is_configurable() -> None:
     """severity constructor ile override edilebilir (config-driven, spec § 5)."""
-    rule = MotorTemperatureHigh(critical_threshold_c=80.0, severity="warning")
+    rule = MotorTemperatureHigh(critical_threshold_c=80.0, trip_c=130.0, severity="warning")
     window = pd.DataFrame(
         {
             "device_id": ["device_001"],
@@ -84,3 +84,17 @@ def test_severity_is_configurable() -> None:
         }
     )
     assert rule.detect(window)[0].severity == "warning"
+
+
+def test_trip_not_greater_than_warn_raises() -> None:
+    """trip_c <= critical_threshold_c → ValueError (band tanımsız, Iter 8.4)."""
+    import pytest
+
+    with pytest.raises(ValueError):
+        MotorTemperatureHigh(critical_threshold_c=95.0, trip_c=95.0)
+
+
+def test_score_is_band_position() -> None:
+    """peak=112.5, warn=95, trip=130 → band-pozisyon 0.5 (Iter 8.4 spec § 3)."""
+    rule = MotorTemperatureHigh(critical_threshold_c=95.0, trip_c=130.0)
+    assert rule.detect(_window([112.5]))[0].score == 0.5
