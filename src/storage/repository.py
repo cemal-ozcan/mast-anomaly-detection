@@ -281,27 +281,6 @@ class TelemetryRepository:
             )
         return result.rowcount > 0
 
-    def resolve_alert(self, alert_id: int, resolved_at: str) -> bool:
-        """active|acknowledged bir uyarıyı resolved yapar (spec § 7).
-
-        Args:
-            alert_id: Güncellenecek anomalies satırının id'si.
-            resolved_at: ISO 8601 ms zaman damgası.
-
-        Returns:
-            Satır güncellendiyse True; 0 satır → False (zaten resolved).
-        """
-        with self._engine.begin() as conn:
-            result = conn.execute(
-                anomalies.update()
-                .where(
-                    anomalies.c.id == alert_id,
-                    anomalies.c.status.in_((ACTIVE, ACKNOWLEDGED)),
-                )
-                .values(status=RESOLVED, resolved_at=resolved_at)
-            )
-        return result.rowcount > 0
-
     def resolve_open_alerts(self, device_id: str, resolved_at: str) -> int:
         """Bir cihazın TÜM açık (resolved olmayan) uyarılarını resolved yapar (detector auto-resolve, spec § 6).
 
