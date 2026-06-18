@@ -40,9 +40,10 @@ limit 3 (eskalasyon) bilinçli korunur** (Iter 8.6'da update-in-place ele alın�
 
 ## 3. Mimari Değişiklik — In-Memory'den Reconciliation'a
 
-**Çıkan:** `_detect_once(..., active: dict[str, frozenset[str]], ...)` ve `run()`'ın poll'lar arası
-`active` taşıması. **Giren:** her poll başında DB'den açık-uyarı fingerprint'lerini okuma + level-triggered
-diff. Detector durum tutmaz → restart, normal poll yolundan kendiliğinden uzlaşır (limit 2 inşaat gereği).
+**Çıkan:** `_detect_once`'tan **`active: dict[str, frozenset[str]]` parametresi düşer** (imza değişir);
+`run()` (service.py ~188) `active = {}` kurulumunu + poll döngüsünde (~207) `active` geçirmeyi BIRAKIR.
+**Giren:** her poll başında DB'den açık-uyarı fingerprint'lerini okuma + level-triggered diff. Detector durum
+tutmaz → restart, normal poll yolundan kendiliğinden uzlaşır (limit 2 inşaat gereği).
 
 **Tek hakikat kaynağı = `anomalies` tablosu.** Reconciliation idempotenttir (aynı poll iki kez koşsa
 sonuç aynı): retry/overlap güvenli.
@@ -58,7 +59,14 @@ sonuç aynı): retry/overlap güvenli.
   rule_set ayrı kolon, repository parametresi).
 - **Okuma:** parse `frozenset(s.split(",")) if s else frozenset()` — **NULL/boş güvenli** (legacy satır → boş
   frozenset; eşleşmez → en kötü bir kerelik 1 fazla uyarı, demo DB arşivlendiğinden pratikte yok).
-- İndeks: yeni indeks GEREKMEZ (`idx_anomalies_status` migration 003'ten reconciliation sorgusunu kapsar).
+- **İKİ-KAYNAK (kritik, migration 003 deseni):** `anomalies` tablosu hem SQL migration'da hem
+  `src/storage/schema.py`'deki Core `Table` nesnesinde tanımlı. `rule_set` **HER İKİSİNE** eklenir:
+  migration 004 `ALTER TABLE anomalies ADD COLUMN rule_set TEXT` + `schema.py` `anomalies` Table'a
+  `Column("rule_set", Text)`. Aksi halde repository'nin Core sorguları (`insert_anomaly` yazımı /
+  `fetch_open_fingerprints` okuması) `anomalies.c.rule_set` bulamaz → kırılır. (003 `status`/`acknowledged_at`/
+  `resolved_at`'i ikisine birden eklemişti — aynı disiplin.)
+- İndeks: yeni indeks GEREKMEZ (`idx_anomalies_status` `(status, created_at)` reconciliation `WHERE status IN
+  (...)` filtresini kullanır — covering değil ama POC'ta birkaç açık uyarı için yeterli).
 
 ## 5. Reconciliation (per-poll, per-cihaz)
 
@@ -80,6 +88,14 @@ else:                                          # firing ama bu fingerprint açı
     insert_anomaly(fuse(...), now, rule_set=",".join(sorted(current)))   # YENİ uyarı
 ```
 
+**KORUNAN İSKELE (kritik — yukarıdaki pseudocode yalnız DEĞİŞEN iç dalı gösterir):** `current` kümesini
+ÜRETEN mevcut makine **aynen korunur** — `detector_groups` çok-grup döngüsü (kural 120s + istatistik 3600s),
+per-cihaz `window_cache` (service.py ~101-108), per-dedektör `try/except (KeyError, ValueError)` yutma
+(~112-116), `fuse_anomalies`, ve `insert_anomaly`/`resolve_open_alerts` etrafındaki `OperationalError`
+yakalama (~128-129/139-140). Yani `_detect_once`'ın `rule_set` hesabına (service.py ~118) kadar olan kısmı
+korunur; YALNIZ `if not rule_set / debounce / yeni-satır` karar bloğu (in-memory `active`) yukarıdaki
+DB-fingerprint diff'iyle değiştirilir.
+
 **Davranış sonuçları:**
 - **Debounce** = aynı fingerprint açık (active **veya** acknowledged) → no-op. Ack'lenmiş uyarı yeniden açılmaz.
 - **Eskalasyon** = `current` farklı (yeni/farklı küme) → yeni satır; eski açık uyarılar **resolve EDİLMEZ**
@@ -94,8 +110,10 @@ else:                                          # firing ama bu fingerprint açı
 **Yeni:**
 - `insert_anomaly(anomaly, created_at, rule_set: str)` — `rule_set` parametresi eklenir (zorunlu; çağrı
   yerleri güncellenir — § 8 regresyon).
-- `fetch_open_fingerprints() -> dict[str, set[frozenset[str]]]` — `SELECT device_id, rule_set FROM
-  anomalies WHERE status IN ('active','acknowledged')`; rule_set parse edilip cihaz başına kümelenir.
+- `fetch_open_fingerprints() -> dict[str, set[frozenset[str]]]` — **Core `select` ile** (raw SQL değil,
+  proje deseni): `select(anomalies.c.device_id, anomalies.c.rule_set).where(anomalies.c.status.in_(("active",
+  "acknowledged")))`; her satırın `rule_set`'i parse edilip (`frozenset(s.split(",")) if s else frozenset()`)
+  cihaz başına kümelenir.
 
 **Korunan:** `acknowledge_alert` (active→acknowledged), `resolve_open_alerts(device, at)` (detector
 auto-resolve; `status != 'resolved'` → active+acknowledged kapatır), `fetch_alerts(statuses, limit)`.
@@ -115,9 +133,17 @@ detector `resolve_open_alerts` üzerinden tetiklenir.
 ## 8. Mevcut Davranışla Uyum (Regresyon Kapsamı)
 
 - **Eskalasyon (limit 3) korunur** (§ 5): mevcut "küme değişince yeni satır, eski açık kalır" davranışı.
-- **`insert_anomaly`'ye zorunlu `rule_set` TÜM çağrı yerlerini kırar** (Iter 8.4 `trip_*` dersi):
-  `_detect_once` + integration/unit testleri → migration 004 + `insert_anomaly` + tüm çağrı yerleri +
-  `_detect_once` yeniden yazımı **atomik** iner.
+- **`insert_anomaly`'ye zorunlu `rule_set` + `_detect_once`'tan `active` düşmesi TÜM çağrı yerlerini kırar**
+  (Iter 8.4 `trip_*` dersi). **Atomik iniş seti:** migration 004 SQL + **`schema.py` Table `Column`** (C1) +
+  `insert_anomaly` imza + `fetch_open_fingerprints` + `_detect_once` yeniden yazımı + `run()` (active kaldır) +
+  dashboard resolve butonu + `resolve_alert` silme + AŞAĞIDAKİ test çağrı yerleri.
+- **Kırılan mevcut test çağrı yerleri (~20+, plan bütçelemeli):**
+  - `_detect_once(..., active, ...)` (active pozisyonel arg): `tests/unit/detectors/test_service_detect_once.py`
+    (~11 çağrı), `tests/integration/test_statistical_detector.py` (2), `tests/integration/test_detector_config_driven.py` (1).
+  - `insert_anomaly(anomaly, created_at)` (rule_set'siz): `test_service_detect_once.py` helper, `tests/integration/
+    test_detector_persistence.py` (2), `tests/unit/test_storage_anomaly_repository.py` (2), `tests/unit/
+    test_storage_alert_repository.py` (~7).
+  - `resolve_alert` kaldırma: `tests/unit/test_storage_alert_repository.py` (~3 çağrı, ör. `test_acknowledge_then_resolve_alert`).
 - **Auto-resolve davranışı korunur** (cihaz temiz → açık uyarılar resolve); yalnız tetikleyici in-memory
   `active` yerine DB fingerprint okuması.
 - **`Detector` ABC + `Anomaly` + `fuse_anomalies` DEĞİŞMEZ.** Gözlem modu korunur (detector kendi çıktı
