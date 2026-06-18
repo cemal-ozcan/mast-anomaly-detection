@@ -11,6 +11,7 @@ from __future__ import annotations
 import signal
 import sys
 import threading
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import FrameType
@@ -19,9 +20,17 @@ import pandas as pd
 from loguru import logger
 from sqlalchemy.exc import OperationalError
 
+from alerts.lifecycle import ACKNOWLEDGED, ACTIVE
+from alerts.models import Alert
 from detectors.base import Anomaly, Detector
-from detectors.config import build_detectors, build_statistical_detectors, load_detector_config
-from detectors.fusion import fuse_anomalies
+from detectors.config import (
+    SeverityBands,
+    build_detectors,
+    build_statistical_detectors,
+    load_detector_config,
+)
+from detectors.fusion import SEVERITY_RANK, fuse_anomalies
+from detectors.scoring import severity_from_band
 from ingestion.config import load_ingestion_config
 from storage.engine import create_sqlite_engine
 from storage.migrator import MIGRATIONS_DIR, apply_migrations
@@ -79,6 +88,52 @@ def _since_cutoff(now: datetime, window_s: int) -> str:
     """now - window_s'i publisher formatında ISO ms cutoff'a çevirir (lexicographic karşılaştırma)."""
     cutoff = now - timedelta(seconds=window_s)
     return cutoff.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+# Sensör-sağlığı (veri-kalitesi) kuralları: skoru ikili validity bayrağı (1.0), band konumu DEĞİL
+# → severity banttan türetilmez, config severity'leri korunur (spec § 6; ayrı eksen Iter 8.7).
+VALIDITY_RULES: frozenset[str] = frozenset({"sensor_out_of_range", "sensor_frozen"})
+
+
+def apply_band_severity(anomaly: Anomaly, severity_bands: SeverityBands) -> Anomaly:
+    """Band-skorlu bir anomaliye severity'sini band'dan türeterek atar (Iter 8.6 (4)).
+
+    Validity-rule (`VALIDITY_RULES`) anomalileri değişmeden döner (config severity korunur).
+    `Anomaly` frozen → türetme gerektiğinde `replace` ile YENİ nesne döner.
+
+    Args:
+        anomaly: Bir dedektörün ürettiği anomali.
+        severity_bands: high/critical eşikleri.
+
+    Returns:
+        Severity'si türetilmiş yeni Anomaly; validity-rule ise aynı nesne.
+    """
+    if anomaly.rule_name in VALIDITY_RULES:
+        return anomaly
+    new_sev = severity_from_band(
+        anomaly.score, severity_bands.high_cutoff, severity_bands.critical_cutoff
+    )
+    return replace(anomaly, severity=new_sev)
+
+
+def _reconcile_status(primary: Alert, new_severity: str) -> tuple[str, str | None]:
+    """Açık bir uyarının yeni severity karşısında durumunu/ack zamanını belirler (Iter 8.6).
+
+    Ack'lenmiş bir uyarı severity bir ÜST banda geçerse re-activate olur (acknowledged_at temizlenir);
+    aksi halde durum/ack korunur (active zaten active kalır, aynı/düşük band ack korur).
+
+    Args:
+        primary: Cihazın mevcut açık uyarısı (birincil).
+        new_severity: Bu poll'da türetilen fused severity.
+
+    Returns:
+        (yeni_status, yeni_acknowledged_at).
+    """
+    if primary.status == ACKNOWLEDGED and SEVERITY_RANK.get(new_severity, 0) > SEVERITY_RANK.get(
+        primary.severity, 0
+    ):
+        return (ACTIVE, None)
+    return (primary.status, primary.acknowledged_at)
 
 
 def _detect_once(
