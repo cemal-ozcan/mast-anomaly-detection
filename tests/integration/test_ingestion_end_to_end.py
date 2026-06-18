@@ -86,10 +86,10 @@ def test_restart_reapplies_no_migration_and_appends(tmp_path: Path) -> None:
     apply_migrations(engine2, MIGRATIONS_DIR)
     repo2 = TelemetryRepository(engine2)
     try:
-        # Migration idempotent: schema_version hâlâ migration başına 1 satır (şu an 3).
+        # Migration idempotent: schema_version hâlâ migration başına 1 satır (şu an 4).
         with engine2.connect() as conn:
             sv = conn.execute(text("SELECT COUNT(*) FROM schema_version")).scalar_one()
-        assert sv == 3
+        assert sv == 4
 
         # Eski veri duruyor + yeni veri eklenir.
         assert repo2.count() == 1

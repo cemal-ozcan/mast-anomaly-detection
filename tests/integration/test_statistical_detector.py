@@ -51,8 +51,7 @@ def test_three_sigma_detects_and_fuses_with_rule(tmp_path: Path) -> None:
             (rule_detectors, _BIG_WINDOW_S),
             (stat_detectors, _BIG_WINDOW_S),
         ]
-        active: dict[str, frozenset[str]] = {}
-        _detect_once(repo, groups, active, datetime(2026, 5, 30, 12, 0, 10, tzinfo=UTC))
+        _detect_once(repo, groups, datetime(2026, 5, 30, 12, 0, 10, tzinfo=UTC))
 
         stored = repo.fetch_recent_anomalies(limit=10)
         assert len(stored) == 1
@@ -78,8 +77,7 @@ def test_three_sigma_no_fire_on_normal_current(tmp_path: Path) -> None:
         stat_detectors: list[Detector] = [
             ThreeSigma(current_window_s=60, sigma_k=3.0, min_baseline=30, min_current=5)
         ]
-        active: dict[str, frozenset[str]] = {}
-        _detect_once(repo, [(stat_detectors, _BIG_WINDOW_S)], active, datetime(2026, 5, 30, 12, 0, 10, tzinfo=UTC))
+        _detect_once(repo, [(stat_detectors, _BIG_WINDOW_S)], datetime(2026, 5, 30, 12, 0, 10, tzinfo=UTC))
 
         assert repo.fetch_recent_anomalies(limit=10) == []
     finally:

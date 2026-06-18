@@ -48,6 +48,7 @@ anomalies = Table(
     Column("status", Text, nullable=False),  # active | acknowledged | resolved (migration 003)
     Column("acknowledged_at", Text),  # nullable
     Column("resolved_at", Text),  # nullable
+    Column("rule_set", Text),  # nullable — fingerprint (sıralı virgül-bağlı kural adları, Iter 8.5)
 )
 
 # Dashboard (Iter 4.3) + doğrulama "son anomaliler" sorgular (spec § 5).
