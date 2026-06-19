@@ -159,3 +159,31 @@ def test_resolve_alert_by_id(migrated_engine: Engine) -> None:
     a = repo.fetch_alerts(None, limit=10)[0]
     assert a.status == "resolved" and a.resolved_at == "2026-06-03T10:02:00.000Z"
     assert repo.resolve_alert_by_id(alert_id, "2026-06-03T10:03:00.000Z") is False  # zaten resolved
+
+
+def test_set_clean_streak(migrated_engine: Engine) -> None:
+    """set_clean_streak sayacı yazar; fetch_open_alerts onu taşır (Iter 8.7)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+    assert repo.set_clean_streak(alert_id, 2) is True
+    assert repo.fetch_open_alerts()["device_001"][0].clean_streak == 2
+
+
+def test_insert_anomaly_defaults_clean_streak_zero(migrated_engine: Engine) -> None:
+    """insert_anomaly clean_streak set etmez → DB DEFAULT 0 (Iter 8.7)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    assert repo.fetch_open_alerts()["device_001"][0].clean_streak == 0
+
+
+def test_update_alert_resets_clean_streak(migrated_engine: Engine) -> None:
+    """update_alert (firing refresh) clean_streak'i 0'a çeker (Iter 8.7 anti-flap reset)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(), "2026-06-03T10:00:00.000Z", "motor_current_high")
+    alert_id = repo.fetch_alerts(("active",), limit=10)[0].id
+    repo.set_clean_streak(alert_id, 2)
+    repo.update_alert(alert_id, rule_name="motor_current_high", sensor="motor_current",
+                      severity="critical", score=0.9, value=12.5, window_end="w",
+                      rule_set="motor_current_high", description="d")
+    assert repo.fetch_open_alerts()["device_001"][0].clean_streak == 0
