@@ -41,7 +41,7 @@
 **Files:**
 - Create: `src/storage/migrations/005_clean_streak.sql`
 - Modify: `src/storage/schema.py:51` (rule_set Column'undan sonra)
-- Test: `tests/unit/test_storage_migrator.py:24,49`
+- Test: `tests/unit/test_storage_migrator.py:24,49` + `tests/integration/test_ingestion_end_to_end.py:89,92` (üçüncü schema_version count assertion'ı — plan-review BLOCKER)
 
 **Interfaces:**
 - Produces: `anomalies.clean_streak` kolonu (Integer, NOT NULL, DEFAULT 0); migration version 5.
@@ -50,6 +50,8 @@
 
 `tests/unit/test_storage_migrator.py` satır 24: `assert versions == [1, 2, 3, 4]` → `assert versions == [1, 2, 3, 4, 5]`
 satır 49: `assert count == 4` → `assert count == 5`
+
+`tests/integration/test_ingestion_end_to_end.py` satır 89 yorum `(şu an 4)` → `(şu an 5)`; satır 92 `assert sv == 4` → `assert sv == 5` (migration 005 → schema_version satır sayısı 5).
 
 - [ ] **Step 2: Run to verify FAIL**
 
@@ -73,13 +75,13 @@ ALTER TABLE anomalies ADD COLUMN clean_streak INTEGER NOT NULL DEFAULT 0;
 
 - [ ] **Step 4: Run to verify PASS**
 
-Run: `.venv/bin/python -m pytest tests/unit/test_storage_migrator.py tests/unit/test_storage_schema.py -q -p no:cacheprovider --no-cov`
-Expected: PASS (migrator version/count 5; schema testi index-only, etkilenmez).
+Run: `.venv/bin/python -m pytest -q -p no:cacheprovider --no-cov` (TAM suite — migration count tüm suite'i etkiler; CLAUDE.md "full suite per task")
+Expected: PASS (migrator version/count 5; integration sv==5; schema testi index-only, etkilenmez).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/storage/migrations/005_clean_streak.sql src/storage/schema.py tests/unit/test_storage_migrator.py
+git add src/storage/migrations/005_clean_streak.sql src/storage/schema.py tests/unit/test_storage_migrator.py tests/integration/test_ingestion_end_to_end.py
 git commit -m "feat(storage): migration 005 anomalies.clean_streak kolonu (Faz 8 Iter 8.7 deadband)"
 ```
 
