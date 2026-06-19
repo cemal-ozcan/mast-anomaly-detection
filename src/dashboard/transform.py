@@ -9,6 +9,7 @@ import pandas as pd
 
 from alerts.lifecycle import ACKNOWLEDGED, ACTIVE
 from alerts.models import Alert
+from detectors.base import VALIDITY_RULES
 from ingestion.message_parser import IngestedReading
 
 WINDOW_OPTIONS: dict[str, timedelta | None] = {
@@ -136,6 +137,38 @@ def latest_alert_per_device(alerts: list[Alert]) -> list[Alert]:
         seen.add(alert.device_id)
         result.append(alert)
     return result
+
+
+def is_data_quality_alert(alert: Alert) -> bool:
+    """Uyarı veri-kalitesi ekseninde mi (yalnız validity kurallarından mı oluşuyor)? (Iter 8.8).
+
+    rule_set'teki TÜM kurallar VALIDITY_RULES'taysa True (sensör bütünlüğü); en az bir kestirimci
+    kural varsa False (arıza ekseni). rule_set boş/None → False (kestirimci varsay).
+
+    Args:
+        alert: Sınıflandırılacak uyarı (rule_set fingerprint'i taşımalı).
+
+    Returns:
+        Veri-kalitesi (sensör-sağlığı) ekseninde mi.
+    """
+    if not alert.rule_set:
+        return False
+    rules = {r for r in alert.rule_set.split(",") if r}
+    return bool(rules) and rules <= VALIDITY_RULES
+
+
+def split_alerts_by_axis(alerts: list[Alert]) -> tuple[list[Alert], list[Alert]]:
+    """Uyarıları (kestirimci_arızalar, veri_kalitesi) olarak ikiye böler; sıra korunur (Iter 8.8).
+
+    Args:
+        alerts: Bölünecek uyarılar.
+
+    Returns:
+        (faults, data_quality) — sırasıyla kestirimci arıza ve sensör-sağlığı uyarıları.
+    """
+    faults = [a for a in alerts if not is_data_quality_alert(a)]
+    data_quality = [a for a in alerts if is_data_quality_alert(a)]
+    return faults, data_quality
 
 
 _ALERT_COLUMNS = ["zaman", "ne zaman", "cihaz", "severity", "sensör", "kural", "skor", "durum", "açıklama"]
