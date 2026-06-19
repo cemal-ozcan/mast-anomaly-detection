@@ -161,6 +161,7 @@ git commit -m "feat(storage): Alert.rule_set okuma alanı (Faz 8 Iter 8.8 eksen 
 - [ ] **Step 1: Write failing tests** (append to `tests/unit/test_dashboard_alerts_transform.py`)
 
 ```python
+from alerts.models import Alert  # mevcut dosya Alert'i fonksiyon-içi import ediyor; modül-seviyesi gerek
 from dashboard.transform import is_data_quality_alert, split_alerts_by_axis
 
 
