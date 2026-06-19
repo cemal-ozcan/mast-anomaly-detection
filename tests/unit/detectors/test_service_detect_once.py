@@ -94,7 +94,7 @@ def test_auto_resolves_on_clear(migrated_engine: Engine) -> None:
     _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS)
     with migrated_engine.begin() as conn:
         conn.execute(text("UPDATE telemetry SET value = 25.0 WHERE sensor='motor_temperature'"))
-    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS)
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 1)  # deadband=1 → anlık resolve
     assert _active(repo) == []
     assert len(repo.fetch_alerts(("resolved",), limit=10)) == 1
 
@@ -106,7 +106,7 @@ def test_resolves_preexisting_open_on_clean_device(migrated_engine: Engine) -> N
         Anomaly(device_id="device_001", rule_name="x", sensor="s", severity="warning", score=0.1,
                 window_start="a", window_end="b", value=1.0, description="d"),
         "2026-05-30T00:00:00.000Z", "x")
-    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS)
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 1)  # deadband=1 → anlık resolve
     assert _active(repo) == []
 
 
@@ -171,3 +171,39 @@ def test_failing_rule_does_not_block_others(migrated_engine: Engine) -> None:
     _detect_once(repo, [([_FailingDetector(), *_temp_detectors()], _BIG_WINDOW_S)], _NOW, _BANDS)
     stored = repo.fetch_recent_anomalies(limit=10)
     assert len(stored) == 1 and stored[0].rule_name == "motor_temperature_high"
+
+
+def test_deadband_holds_open_until_threshold(migrated_engine: Engine) -> None:
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # firing → açık
+    assert len(_active(repo)) == 1
+    # Arıza temizlenir; deadband=3 → 2 temiz poll açık tutar, 3.'de resolve.
+    with migrated_engine.begin() as conn:
+        conn.execute(text("UPDATE telemetry SET value = 25.0 WHERE sensor='motor_temperature'"))
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # temiz #1
+    assert len(_active(repo)) == 1 and _active(repo)[0].clean_streak == 1
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # temiz #2
+    assert len(_active(repo)) == 1 and _active(repo)[0].clean_streak == 2
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # temiz #3 → resolve
+    assert _active(repo) == []
+    assert len(repo.fetch_alerts(("resolved",), limit=10)) == 1
+
+
+def test_deadband_firing_resets_streak_no_flap(migrated_engine: Engine) -> None:
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # firing → açık
+    first_id = _active(repo)[0].id
+    with migrated_engine.begin() as conn:
+        conn.execute(text("UPDATE telemetry SET value = 25.0 WHERE sensor='motor_temperature'"))
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # temiz #1
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)  # temiz #2
+    assert _active(repo)[0].clean_streak == 2
+    # Arıza geri döner (flap): firing → streak 0, AYNI satır (yeni incident yok).
+    with migrated_engine.begin() as conn:
+        conn.execute(text("UPDATE telemetry SET value = 95.0 WHERE sensor='motor_temperature'"))
+    _detect_once(repo, [(_temp_detectors(), _BIG_WINDOW_S)], _NOW, _BANDS, 3)
+    open_now = _active(repo)
+    assert len(open_now) == 1 and open_now[0].id == first_id and open_now[0].clean_streak == 0
+    assert len(repo.fetch_recent_anomalies(limit=10)) == 1  # tek satır, flap-reopen yok

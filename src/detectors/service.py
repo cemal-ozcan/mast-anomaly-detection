@@ -143,12 +143,14 @@ def _detect_once(
     detector_groups: list[tuple[list[Detector], int]],
     now: datetime,
     severity_bands: SeverityBands = _DEFAULT_SEVERITY_BANDS,
+    deadband_clean_polls: int = 3,
 ) -> None:
     """Tek poll turu: her cihaz × dedektör-grubu → severity türet → fusion → cihaz-seviyesi reconciliation.
 
     Kimlik CİHAZ seviyesidir (Iter 8.6): bir cihazın açık en fazla TEK uyarısı olur ("olay"). Diff:
-    cihaz temiz + açık → auto-resolve; firing + açık VAR → o satırı in-place UPDATE (skor/severity refresh
-    + eskalasyon birleşik; ack→band-yukarı ise re-activate); firing + açık YOK → yeni uyarı. Severity
+    cihaz temiz + açık → deadband (Iter 8.7: clean_streak++ → `deadband_clean_polls`'da resolve, anti-flap);
+    firing + açık VAR → o satırı in-place UPDATE (skor/severity refresh + eskalasyon birleşik; ack→band-yukarı
+    ise re-activate; `update_alert` clean_streak'i 0'a sıfırlar); firing + açık YOK → yeni uyarı. Severity
     fusion'dan ÖNCE band'dan türetilir (validity-rule muaf, `apply_band_severity`). DB tek hakikat
     (in-memory yok); restart = normal yol. Legacy çoklu-açık → en yeni güncellenir, fazlalık resolve
     (yakınsama). `detector_groups`: (dedektörler, window_s) çiftleri; cihaz başına window_cache.
@@ -181,13 +183,22 @@ def _detect_once(
         open_list = open_alerts.get(device_id, [])
 
         if not rule_set:  # cihaz temiz
-            if open_list:  # açık uyarısı varsa auto-resolve (restart'ta da DB'den okunur → orphan yok)
+            if open_list:
+                # Deadband (Iter 8.7): hemen resolve etme; N ardışık temiz poll'dan sonra kapat (anti-flap).
+                primary = max(open_list, key=lambda a: (a.created_at, a.id))
+                new_streak = primary.clean_streak + 1
                 try:
-                    closed = repository.resolve_open_alerts(device_id, created_at)
-                    if closed:
-                        logger.info("Auto-resolve: device={} kapatılan={}", device_id, closed)
+                    if new_streak >= deadband_clean_polls:
+                        closed = repository.resolve_open_alerts(device_id, created_at)
+                        if closed:
+                            logger.info(
+                                "Auto-resolve: device={} kapatılan={} (deadband {}p)",
+                                device_id, closed, deadband_clean_polls,
+                            )
+                    else:
+                        repository.set_clean_streak(primary.id, new_streak)
                 except OperationalError as e:
-                    logger.error("Auto-resolve yazılamadı (atlandı): {}", e)
+                    logger.error("Deadband/auto-resolve yazılamadı (atlandı): {}", e)
             continue
 
         fused = fuse_anomalies(device_anomalies)
@@ -287,7 +298,11 @@ def run(
         while not shutdown.is_set():
             try:
                 _detect_once(
-                    repository, detector_groups, datetime.now(UTC), detector_config.severity_bands
+                    repository,
+                    detector_groups,
+                    datetime.now(UTC),
+                    detector_config.severity_bands,
+                    detector_config.deadband_clean_polls,
                 )
             except OperationalError as e:
                 logger.error("Poll turu DB hatası (devam): {}", e)
