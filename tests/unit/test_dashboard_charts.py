@@ -61,3 +61,15 @@ def test_overlay_frame_label_format() -> None:
     frame = alerts_to_overlay_frame([_alert()])
     assert frame.iloc[0]["label"] == "⚠ motor_current_high (0.86)"
     assert list(frame.columns) == ["window_start", "window_end", "severity", "label"]
+
+
+def test_build_sensor_chart_has_fixed_height() -> None:
+    """build_sensor_chart okunabilirlik için sabit yükseklik taşır (2×3 ızgara eşit hizalama)."""
+    import pandas as pd
+
+    from dashboard.charts import build_sensor_chart
+
+    frame = pd.DataFrame({"timestamp": pd.to_datetime(["2026-06-19T12:00:00Z"], utc=True),
+                          "value": [1.0], "state": ["holding"]})
+    d = build_sensor_chart(frame, [], "motor_current", "A").to_dict()
+    assert d.get("height") == 200 or d.get("spec", {}).get("height") == 200

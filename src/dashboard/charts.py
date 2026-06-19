@@ -7,6 +7,8 @@ import pandas as pd
 from alerts.models import Alert
 
 LINE_COLOR = "#1d4ed8"  # tema B lacivert (spec § 4)
+CHART_HEIGHT = 200  # 2×3 ızgarada eşit-yükseklik okunabilirlik (Clean Corporate yeniden tasarım)
+_GRID_COLOR = "#eef2f7"
 
 # Severity → bant/çizgi/etiket rengi (tema B paleti, spec § 4)
 SEVERITY_COLORS = {"critical": "#b91c1c", "high": "#ea580c", "warning": "#a16207"}
@@ -69,10 +71,17 @@ def build_sensor_chart(
     y_title = f"{sensor} ({unit})" if unit else sensor
     line: alt.Chart = (
         alt.Chart(frame)
-        .mark_line(color=LINE_COLOR)
+        .mark_line(color=LINE_COLOR, strokeWidth=1.5)
         .encode(
-            x=alt.X("timestamp:T", title=None),
-            y=alt.Y("value:Q", title=y_title, scale=alt.Scale(zero=False)),
+            x=alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10)),
+            y=alt.Y(
+                "value:Q",
+                title=y_title,
+                scale=alt.Scale(zero=False),
+                axis=alt.Axis(
+                    grid=True, gridColor=_GRID_COLOR, labelFontSize=11, titleFontSize=11
+                ),
+            ),
             tooltip=[
                 alt.Tooltip("timestamp:T", format="%H:%M:%S", title="zaman"),
                 alt.Tooltip("value:Q", title="değer", format=".3f"),
@@ -82,11 +91,18 @@ def build_sensor_chart(
     )
     relevant = [a for a in alerts if a.sensor == sensor]
     if frame.empty or not relevant:
-        return line.interactive()
+        return line.interactive().properties(height=CHART_HEIGHT)
 
     # x-domain telemetri verisinden sabitlenir — bant domain'i esnetmesin (spec § 5).
     domain = [frame["timestamp"].min(), frame["timestamp"].max()]
-    line = line.encode(x=alt.X("timestamp:T", title=None, scale=alt.Scale(domain=domain)))
+    line = line.encode(
+        x=alt.X(
+            "timestamp:T",
+            title=None,
+            scale=alt.Scale(domain=domain),
+            axis=alt.Axis(labelFontSize=10),
+        )
+    )
     overlay = alerts_to_overlay_frame(relevant)
     band = (
         alt.Chart(overlay)
@@ -103,4 +119,4 @@ def build_sensor_chart(
         .mark_text(align="left", baseline="top", dx=4, clip=True)
         .encode(x="window_start:T", y=alt.value(8), text="label:N", color=_severity_color())
     )
-    return alt.layer(band, rule, text, line).interactive()
+    return alt.layer(band, rule, text, line).interactive().properties(height=CHART_HEIGHT)

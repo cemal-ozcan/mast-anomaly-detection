@@ -201,19 +201,21 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
     if since is not None:
         # Uyarı penceresi ∩ grafik zaman penceresi (lexicographic ISO karşılaştırma, spec § 6)
         device_alerts = [a for a in device_alerts if a.window_end >= since]
-    cols = st.columns(2)
+    cols = st.columns(3)
     for i, sensor in enumerate(SIX_SENSORS):
         try:
             readings = repository.fetch_window(device_id, sensor, since)
         except OperationalError as e:
             logger.error("Okuma hatası device={} sensor={}: {}", device_id, sensor, e)
-            with cols[i % 2]:
+            with cols[i % 3]:
                 st.error(f"{sensor}: okuma hatası")
             continue
         frame = downsample_frame(readings_to_chart_frame(readings))
         unit = readings[-1].unit if readings else ""
-        with cols[i % 2]:
-            st.subheader(sensor)
+        sensor_has_alert = any(a.sensor == sensor for a in device_alerts)
+        with cols[i % 3]:
+            title_cls = "mg-chart-title mg-chart-title--alert" if sensor_has_alert else "mg-chart-title"
+            st.markdown(f'<div class="{title_cls}">{sensor}</div>', unsafe_allow_html=True)
             # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
             # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
             st.altair_chart(
