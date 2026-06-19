@@ -27,3 +27,4 @@ class Alert:
     status: str
     acknowledged_at: str | None
     resolved_at: str | None
+    clean_streak: int = 0  # Iter 8.7 deadband sayacı (default'lu → mevcut constructor'lar kırılmaz)

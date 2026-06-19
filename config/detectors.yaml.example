@@ -92,3 +92,6 @@ statistical:
 severity_bands:
   high_cutoff: 0.40
   critical_cutoff: 0.75
+
+# Deadband hysteresis (Faz 8 Iter 8.7): arıza N ardışık temiz poll yoksa resolve (anti-flap).
+deadband_clean_polls: 3
