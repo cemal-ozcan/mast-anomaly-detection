@@ -66,28 +66,26 @@ def _health(
     )
 
 
-def test_device_card_badge_and_strip() -> None:
+def test_device_card_problem_plain_turkish() -> None:
     from dashboard.styles import device_card_html
 
     h = device_card_html(_health(badge="critical", n=1, top_rule="motor_voltage_erratic"))
     assert "mg-card--critical" in h and "mg-badge--critical" in h
-    assert "device_004" in h and "holding" in h
-    assert "motor_voltage" in h and "22.79" in h  # metrik değer, kelime bölünmesi yok
-    assert "motor_voltage_erratic" in h  # top rule
-    assert "1 açık" in h
+    assert "Cihaz 004" in h  # device_id → insan adı
+    assert "Sabit" in h  # state "holding" → Türkçe
+    assert "KRİTİK" in h  # badge label
+    assert "Motor voltajı dengesiz" in h  # top_rule → düz Türkçe sorun
+    assert "mg-problem" in h
+    # Ham sensör sayıları KART'ta YOK (sade, yönetici-dostu).
+    assert "22.79" not in h and "motor_voltage_erratic" not in h
 
 
-def test_device_card_highlighted_value_class() -> None:
-    from dashboard.styles import device_card_html
-
-    assert "mg-v--hot" in device_card_html(_health(badge="critical", highlighted=True))
-
-
-def test_device_card_ok_no_toprule() -> None:
+def test_device_card_ok_shows_no_problem() -> None:
     from dashboard.styles import device_card_html
 
     h = device_card_html(_health(badge="ok", n=0, top_rule=None))
-    assert "mg-badge--ok" in h and "mg-toprule" not in h
+    assert "mg-badge--ok" in h and "SAĞLIKLI" in h
+    assert "mg-problem" not in h and "Sorun yok" in h
 
 
 def test_fleet_html_wraps_grid() -> None:
@@ -112,8 +110,9 @@ def test_alert_card_pill_and_escape() -> None:
     now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
     h = alert_card_html(_alert(severity="critical"), now)
     assert "mg-pill--critical" in h and "mg-alert--critical" in h
-    assert "device_004" in h and "motor_voltage_erratic" in h
-    assert "&lt;x&gt;" in h  # açıklama html.escape'lendi
+    assert "Cihaz 004" in h  # device_id → insan adı
+    assert "Motor voltajı dengesiz" in h  # rule → düz Türkçe başlık
+    assert "&lt;x&gt;" in h  # ham açıklama (soluk detay) html.escape'lendi
     assert "<x>" not in h
 
 
@@ -135,4 +134,15 @@ def test_alerts_section_lists_alerts() -> None:
 
     now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
     h = alerts_section_html("Arıza Uyarıları", [_alert()], now, "yok")
-    assert "device_004" in h and "mg-alert" in h
+    assert "Cihaz 004" in h and "mg-alert" in h
+
+
+def test_fleet_summary_counts_and_tone() -> None:
+    from dashboard.styles import fleet_summary_html
+
+    fleet = [_health(badge="ok"), _health(badge="ok"), _health(badge="warning"),
+             _health(badge="critical")]
+    h = fleet_summary_html(fleet)
+    assert "4 masttan" in h and "2'i sağlıklı" in h
+    assert "1'i dikkat gerektiriyor" in h and "1'i KRİTİK" in h
+    assert "mg-summary--critical" in h  # en kötü ton

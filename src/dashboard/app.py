@@ -37,10 +37,12 @@ from dashboard.fleet import (  # noqa: E402
     compute_kpis,
     derive_fleet,
 )
+from dashboard.labels import sensor_label  # noqa: E402
 from dashboard.styles import (  # noqa: E402
     APP_CSS,
     alerts_section_html,
     fleet_html,
+    fleet_summary_html,
     header_html,
     kpis_html,
 )
@@ -151,7 +153,9 @@ def _render_overview(repository: TelemetryRepository) -> None:
     if not alerts_available:
         st.caption("Detector henüz çalışmadı — uyarı verisi yok (`python -m detectors`).")
 
-    _render_fleet_cards(derive_fleet(devices, latest, alerts))
+    fleet = derive_fleet(devices, latest, alerts)
+    st.markdown(fleet_summary_html(fleet), unsafe_allow_html=True)
+    _render_fleet_cards(fleet)
 
     st.markdown('<div class="mg-section">🚨 Uyarılar</div>', unsafe_allow_html=True)
     choice = st.selectbox(
@@ -215,7 +219,9 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
         sensor_has_alert = any(a.sensor == sensor for a in device_alerts)
         with cols[i % 3]:
             title_cls = "mg-chart-title mg-chart-title--alert" if sensor_has_alert else "mg-chart-title"
-            st.markdown(f'<div class="{title_cls}">{sensor}</div>', unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="{title_cls}">{sensor_label(sensor)}</div>', unsafe_allow_html=True
+            )
             # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
             # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
             st.altair_chart(

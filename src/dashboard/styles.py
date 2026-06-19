@@ -12,11 +12,10 @@ from datetime import datetime
 
 from alerts.models import Alert
 from dashboard.fleet import DeviceHealth, FleetKpis
+from dashboard.labels import badge_label, device_label, rule_label, state_label
 from dashboard.transform import relative_time
 
 _SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
-
-_BADGE_LABEL = {"ok": "OK", "warning": "UYARI", "critical": "KRİTİK"}
 
 # Tema paleti (spec § 1/§ 2)
 _BG = "#f4f6fb"
@@ -61,45 +60,55 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: "Inter","Segoe
 .mg-kpi--warning .mg-kpi-val {{color:{_WARN};}}
 .mg-kpi .mg-kpi-lbl {{font-size:12px; color:{_MUTED}; text-transform:uppercase; letter-spacing:.04em;}}
 
-/* Filo kartları */
-.mg-fleet {{display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:18px;}}
-.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:12px; overflow:hidden;}}
-.mg-card .mg-strip {{height:5px; background:{_OK};}}
+/* Bir-bakışta filo özeti */
+.mg-summary {{display:flex; align-items:center; gap:10px; background:{_SURFACE};
+  border:1px solid {_BORDER}; border-left:6px solid {_OK}; border-radius:12px;
+  padding:12px 18px; margin-bottom:14px; font-size:18px; color:{_TEXT};}}
+.mg-summary--warning {{border-left-color:{_WARN};}}
+.mg-summary--critical {{border-left-color:{_CRIT};}}
+.mg-summary .mg-summary-dot {{width:12px; height:12px; border-radius:50%; background:{_OK};}}
+.mg-summary--warning .mg-summary-dot {{background:{_WARN};}}
+.mg-summary--critical .mg-summary-dot {{background:{_CRIT};}}
+
+/* Filo kartları (sade: durum + sorun) */
+.mg-fleet {{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px;}}
+.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:14px; overflow:hidden;}}
+.mg-card .mg-strip {{height:6px; background:{_OK};}}
 .mg-card--warning .mg-strip {{background:{_WARN};}}
 .mg-card--critical .mg-strip {{background:{_CRIT};}}
-.mg-card .mg-body {{padding:10px 12px;}}
-.mg-card .mg-dev {{font-weight:700; font-size:14px; color:{_TEXT};}}
-.mg-card .mg-badge {{font-size:11px; font-weight:700; padding:1px 7px; border-radius:999px;}}
+.mg-card .mg-body {{padding:16px 18px;}}
+.mg-cardhead {{display:flex; align-items:center; justify-content:space-between;}}
+.mg-card .mg-dev {{font-weight:800; font-size:20px; color:{_TEXT};}}
+.mg-card .mg-badge {{font-size:13px; font-weight:800; padding:3px 12px; border-radius:999px;
+  letter-spacing:.03em;}}
 .mg-badge--ok {{background:#dcfce7; color:{_OK};}}
 .mg-badge--warning {{background:#fef3c7; color:{_WARN};}}
 .mg-badge--critical {{background:#fee2e2; color:{_CRIT};}}
-.mg-card .mg-state {{font-size:11px; color:{_MUTED}; margin:2px 0 8px;}}
-.mg-metrics {{display:grid; grid-template-columns:1fr auto; gap:2px 8px; font-size:11.5px;}}
-.mg-metrics .mg-k {{color:{_MUTED};}}
-.mg-metrics .mg-v {{text-align:right; font-variant-numeric:tabular-nums; color:{_TEXT};}}
-.mg-metrics .mg-v--hot {{color:{_CRIT}; font-weight:700;}}
-.mg-card .mg-toprule {{margin-top:8px; font-size:11px; color:{_CRIT};}}
+.mg-card .mg-state {{font-size:14px; color:{_MUTED}; margin:6px 0 12px;}}
+.mg-card .mg-problem {{font-size:16px; font-weight:700; color:{_CRIT};}}
+.mg-card--warning .mg-problem {{color:{_WARN};}}
+.mg-card .mg-okline {{font-size:15px; color:{_OK}; font-weight:600;}}
 
-/* Uyarı satır-kartları */
-.mg-alert {{display:flex; align-items:center; gap:10px; background:{_SURFACE};
-  border:1px solid {_BORDER}; border-left:4px solid {_MUTED}; border-radius:10px;
-  padding:8px 12px; margin-bottom:6px; font-size:13px;}}
+/* Uyarı satır-kartları (düz Türkçe başlık + soluk teknik detay) */
+.mg-alert {{display:flex; align-items:center; gap:12px; background:{_SURFACE};
+  border:1px solid {_BORDER}; border-left:5px solid {_MUTED}; border-radius:10px;
+  padding:11px 14px; margin-bottom:8px; font-size:15px; color:{_TEXT};}}
 .mg-alert--critical {{border-left-color:{_CRIT};}}
 .mg-alert--high {{border-left-color:{_WARN};}}
 .mg-alert--warning {{border-left-color:{_WARN};}}
-.mg-pill {{font-size:11px; font-weight:700; padding:1px 8px; border-radius:999px; white-space:nowrap;}}
+.mg-pill {{font-size:12px; font-weight:800; padding:2px 10px; border-radius:999px; white-space:nowrap;}}
 .mg-pill--critical {{background:#fee2e2; color:{_CRIT};}}
 .mg-pill--high {{background:#ffedd5; color:{_WARN};}}
 .mg-pill--warning {{background:#fef9c3; color:{_WARN};}}
-.mg-alert .mg-when {{color:{_MUTED}; min-width:64px;}}
-.mg-alert .mg-dev2 {{font-weight:600; min-width:90px;}}
+.mg-alert .mg-when {{color:{_MUTED}; min-width:72px; font-size:13px;}}
 .mg-alert .mg-desc {{color:{_TEXT}; flex:1;}}
-.mg-empty {{color:{_MUTED}; font-size:13px; padding:6px 2px;}}
+.mg-alert .mg-detail {{display:block; color:{_MUTED}; font-size:12px; margin-top:2px;}}
+.mg-empty {{color:{_MUTED}; font-size:14px; padding:8px 2px;}}
 
 /* Grafik başlığı (arızalı sensör vurgusu) */
-.mg-chart-title {{font-weight:700; font-size:14px; color:{_TEXT}; margin:4px 0 0;}}
+.mg-chart-title {{font-weight:700; font-size:15px; color:{_TEXT}; margin:6px 0 2px;}}
 .mg-chart-title--alert {{color:{_CRIT};}}
-.mg-section {{font-weight:700; font-size:15px; color:{_TEXT}; margin:10px 0 6px;}}
+.mg-section {{font-weight:800; font-size:18px; color:{_TEXT}; margin:16px 0 8px;}}
 </style>
 """
 
@@ -148,34 +157,31 @@ def kpis_html(kpis: FleetKpis) -> str:
 
 
 def device_card_html(health: DeviceHealth) -> str:
-    """Tek filo kartı: severity strip + badge + state + hizalı 2-kolon metrik ızgarası + top rule.
+    """Sade filo kartı: cihaz adı + durum rozeti + state + (sorun varsa) düz-Türkçe arıza ifadesi.
+
+    Yönetici-dostu: ham sensör sayıları KART'ta yok (alttaki grafiklerde) — bir bakışta "ne durumda,
+    sorun ne" anlaşılır. Ham kod adları labels.py ile Türkçeye çevrilir.
 
     Args:
-        health: DeviceHealth (badge ∈ {ok,warning,critical}; snapshots; top_rule).
+        health: DeviceHealth (badge ∈ {ok,warning,critical}; state; open_alert_count; top_rule).
 
     Returns:
-        `.mg-card` HTML'i (cihaz/sensör/kural html.escape'li; vurgulu sensör değeri `mg-v--hot`).
+        `.mg-card` HTML'i (tüm metin html.escape'li).
     """
-    badge = health.badge if health.badge in _BADGE_LABEL else "ok"
-    rows = ""
-    for s in health.snapshots:
-        v_cls = "mg-v mg-v--hot" if s.highlighted else "mg-v"
-        rows += (
-            f'<span class="mg-k">{_html.escape(s.sensor)}</span>'
-            f'<span class="{v_cls}">{s.value:.2f} {_html.escape(s.unit)}</span>'
-        )
-    toprule = ""
+    badge = health.badge if health.badge in ("ok", "warning", "critical") else "ok"
+    problem = ""
     if health.open_alert_count and health.top_rule:
-        toprule = (
-            f'<div class="mg-toprule">⚠ {health.open_alert_count} açık · '
-            f"{_html.escape(health.top_rule)}</div>"
-        )
+        problem = f'<div class="mg-problem">⚠ {_html.escape(rule_label(health.top_rule))}</div>'
+    else:
+        problem = '<div class="mg-okline">✓ Sorun yok</div>'
     return (
         f'<div class="mg-card mg-card--{badge}"><div class="mg-strip"></div><div class="mg-body">'
-        f'<span class="mg-dev">{_html.escape(health.device_id)}</span> '
-        f'<span class="mg-badge mg-badge--{badge}">{_BADGE_LABEL[badge]}</span>'
-        f'<div class="mg-state">state: {_html.escape(health.state)}</div>'
-        f'<div class="mg-metrics">{rows}</div>{toprule}'
+        f'<div class="mg-cardhead">'
+        f'<span class="mg-dev">{_html.escape(device_label(health.device_id))}</span>'
+        f'<span class="mg-badge mg-badge--{badge}">{_html.escape(badge_label(badge))}</span>'
+        "</div>"
+        f'<div class="mg-state">{_html.escape(state_label(health.state))}</div>'
+        f"{problem}"
         "</div></div>"
     )
 
@@ -183,6 +189,30 @@ def device_card_html(health: DeviceHealth) -> str:
 def fleet_html(fleet: list[DeviceHealth]) -> str:
     """Filo kartları ızgarası (`.mg-fleet`)."""
     return f'<div class="mg-fleet">{"".join(device_card_html(h) for h in fleet)}</div>'
+
+
+def fleet_summary_html(fleet: list[DeviceHealth]) -> str:
+    """Bir-bakışta filo özeti cümlesi: "N masttan X'i sağlıklı, Y'si dikkat, Z'si kritik".
+
+    Tonu en kötü duruma göre (kritik>dikkat>sağlıklı); bilmeyen biri için anında anlaşılır.
+    """
+    total = len(fleet)
+    ok = sum(1 for h in fleet if h.badge == "ok")
+    warn = sum(1 for h in fleet if h.badge == "warning")
+    crit = sum(1 for h in fleet if h.badge == "critical")
+    tone = "critical" if crit else ("warning" if warn else "ok")
+    parts = [f"{ok}'i sağlıklı"]
+    if warn:
+        parts.append(f"{warn}'i dikkat gerektiriyor")
+    if crit:
+        parts.append(f"{crit}'i KRİTİK")
+    detail = ", ".join(parts)  # tamamen iç-üretim (sayı + sabit metin) → escape gereksiz
+    return (
+        f'<div class="mg-summary mg-summary--{tone}">'
+        f'<span class="mg-summary-dot"></span>'
+        f"<span><b>{total} masttan</b> {detail}</span>"
+        "</div>"
+    )
 
 
 def alert_card_html(alert: Alert, now: datetime) -> str:
@@ -197,13 +227,16 @@ def alert_card_html(alert: Alert, now: datetime) -> str:
     """
     sev = alert.severity if alert.severity in ("critical", "high", "warning") else "warning"
     when = relative_time(now, alert.created_at)
+    # Başlık düz Türkçe (kim · ne); ham teknik açıklama soluk ikincil satır (IT lead için).
     return (
         f'<div class="mg-alert mg-alert--{sev}">'
-        f'<span class="mg-pill mg-pill--{sev}">{_html.escape(alert.severity)}</span>'
+        f'<span class="mg-pill mg-pill--{sev}">{_html.escape(badge_label(sev))}</span>'
         f'<span class="mg-when">{_html.escape(when)}</span>'
-        f'<span class="mg-dev2">{_html.escape(alert.device_id)}</span>'
-        f'<span class="mg-desc">{_html.escape(alert.sensor)} · '
-        f"{_html.escape(alert.rule_name)} — {_html.escape(alert.description)}</span>"
+        '<span class="mg-desc">'
+        f'<b>{_html.escape(device_label(alert.device_id))}</b> · '
+        f"{_html.escape(rule_label(alert.rule_name))}"
+        f'<span class="mg-detail">{_html.escape(alert.description)}</span>'
+        "</span>"
         "</div>"
     )
 
