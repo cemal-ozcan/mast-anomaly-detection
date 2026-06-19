@@ -433,7 +433,7 @@ def _render_fleet_cards(fleet_health: list[DeviceHealth]) -> None:
         return
     st.markdown(fleet_html(fleet_health), unsafe_allow_html=True)
 ```
-Import'a `fleet_html` ekle. (`BADGE_*`/`_BADGE_LABELS`/`zip`/`st.container` artık kullanılmıyorsa temizle — ruff unused yakalar.)
+Import'a `fleet_html` ekle. **Plan-review MINOR — kesin temizlik:** `_BADGE_LABELS` dict'ini (app.py) + `BADGE_OK/BADGE_WARNING/BADGE_CRITICAL` importlarını (dashboard.fleet'ten) SİL (artık kullanılmıyor → ruff F401). `compute_kpis`/`derive_fleet`/`DeviceHealth` importları KALIR.
 
 - [ ] **Step 6: Full suite + mypy + ruff + canlı bak + commit**
 ```bash
@@ -550,7 +550,10 @@ def alerts_section_html(title: str, alerts: list[Alert], now: datetime, empty_ms
 ```
 `_render_alert_table` fonksiyonunu SİL (artık kullanılmıyor). Import: `from dashboard.styles import ... alerts_section_html`; `alerts_to_frame`/`severity_row_style` importlarını app.py'den KALDIR.
 
-- [ ] **Step 6: Ölü kod temizliği** — `transform.py`'den `alerts_to_frame` + `severity_row_style` + ilgili `_ALERT_COLUMNS`/`_SEVERITY_*` sabitlerini SİL (artık yalnız HTML kullanıyoruz). `tests/unit/test_dashboard_alerts_transform.py`'den `alerts_to_frame`/`severity_row_style` testlerini SİL (is_data_quality/split testleri KALIR). `grep -rn "alerts_to_frame\|severity_row_style" src tests` → yalnızca kalmaması gereken yerde 0 sonuç.
+- [ ] **Step 6: Ölü kod temizliği (plan-review BLOCKER+MAJOR — tam liste)** —
+  `src/dashboard/transform.py`'den SİL: `alerts_to_frame` fonksiyonu + `severity_row_style` fonksiyonu + `_ALERT_COLUMNS` + `_SEVERITY_EMOJI` + `_SEVERITY_ROW_CSS` sabitleri + artık-kullanılmayan `from typing import Any` importu (yalnız `severity_row_style` imzasında kullanılıyordu → kalırsa ruff F401). `relative_time`/`split_alerts_by_axis`/`latest_alert_per_device`/`is_data_quality_alert` KALIR.
+  `tests/unit/test_dashboard_alerts_transform.py`'den **4 testi adıyla SİL**: `test_alerts_to_frame_columns_and_status`, `test_alerts_to_frame_empty_correct_schema`, `test_severity_emoji_fallback`, `test_severity_row_style_colors_by_severity` (hepsi `alerts_to_frame`/`severity_row_style` çağırır). **KALIR:** `test_latest_alert_per_device_*` (2) + `test_is_data_quality_*` (4) + `test_split_alerts_by_axis_partitions_preserving_order` + modül-seviyesi `from dashboard.transform import is_data_quality_alert, split_alerts_by_axis`.
+  Doğrula: `grep -rn "alerts_to_frame\|severity_row_style\|_SEVERITY_EMOJI\|_SEVERITY_ROW_CSS\|_ALERT_COLUMNS" src tests` → 0 sonuç. `ruff check src/dashboard tests/unit` → Any/F401 temiz.
 
 - [ ] **Step 7: Full suite + mypy + ruff + commit**
 ```bash
