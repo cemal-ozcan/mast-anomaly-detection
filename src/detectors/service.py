@@ -22,7 +22,7 @@ from sqlalchemy.exc import OperationalError
 
 from alerts.lifecycle import ACKNOWLEDGED
 from alerts.models import Alert
-from detectors.base import Anomaly, Detector
+from detectors.base import VALIDITY_RULES, Anomaly, Detector
 from detectors.config import (
     SeverityBands,
     build_detectors,
@@ -89,10 +89,6 @@ def _since_cutoff(now: datetime, window_s: int) -> str:
     cutoff = now - timedelta(seconds=window_s)
     return cutoff.isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
-
-# Sensör-sağlığı (veri-kalitesi) kuralları: skoru ikili validity bayrağı (1.0), band konumu DEĞİL
-# → severity banttan türetilmez, config severity'leri korunur (spec § 6; ayrı eksen Iter 8.7).
-VALIDITY_RULES: frozenset[str] = frozenset({"sensor_out_of_range", "sensor_frozen"})
 
 # _detect_once default'u için module-level singleton (frozen → paylaşımı güvenli; ruff B008).
 _DEFAULT_SEVERITY_BANDS = SeverityBands()
