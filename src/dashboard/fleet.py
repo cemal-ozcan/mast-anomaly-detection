@@ -6,13 +6,12 @@ from datetime import datetime
 
 from alerts.models import Alert
 from dashboard.transform import OPEN_STATUSES, relative_time
+from detectors.fusion import SEVERITY_RANK
 from ingestion.message_parser import IngestedReading
 
 BADGE_OK = "ok"
 BADGE_WARNING = "warning"
 BADGE_CRITICAL = "critical"
-
-_SEVERITY_RANK = {"warning": 1, "high": 2, "critical": 3}
 
 
 @dataclass(frozen=True)
@@ -79,7 +78,7 @@ def derive_device_health(
         badge = BADGE_OK
     top_rule: str | None = None
     if open_alerts:
-        top = max(open_alerts, key=lambda a: (_SEVERITY_RANK.get(a.severity, 0), a.created_at))
+        top = max(open_alerts, key=lambda a: (SEVERITY_RANK.get(a.severity, 0), a.created_at))
         top_rule = top.rule_name
     return DeviceHealth(device_id, badge, state, snapshots, len(open_alerts), top_rule)
 
