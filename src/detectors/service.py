@@ -18,6 +18,7 @@ from types import FrameType
 
 import pandas as pd
 from loguru import logger
+from numpy.linalg import LinAlgError
 from sqlalchemy.exc import OperationalError
 
 from alerts.lifecycle import ACKNOWLEDGED
@@ -169,7 +170,9 @@ def _detect_once(
             for detector in detectors:
                 try:
                     device_anomalies.extend(detector.detect(window))
-                except (KeyError, ValueError) as e:
+                except (KeyError, ValueError, LinAlgError) as e:
+                    # LinAlgError: np.polyfit (hydraulic slope) kötü-koşullu pencerede fırlatabilir —
+                    # ValueError alt sınıfı DEĞİL → açıkça yakala, yoksa tüm poll turu çöker.
                     logger.error("Dedektör '{}' hata verdi, atlandı: {}", detector.name, e)
                     continue
 

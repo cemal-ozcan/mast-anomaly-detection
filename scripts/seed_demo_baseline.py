@@ -96,7 +96,9 @@ if __name__ == "__main__":  # pragma: no cover
     cfg = load_ingestion_config(Path("config/ingestion.yaml"))
     written = seed_baseline(
         db_path=Path(cfg.db_path),
-        device_ids=["device_001", "device_002", "device_003", "device_004"],
+        # 6-cihaz demo (Iter 8.3+): 005 (sıcaklık aşımı, kural-tabanlı) + 006 (sensör arızası, izole)
+        # istatistik baseline'a bağlı değil ama tutarlılık + tam temiz-geçmiş için hepsi seed'lenir.
+        device_ids=[f"device_{i:03d}" for i in range(1, 7)],
         window_s=300,
         samples_per_state=80,
     )

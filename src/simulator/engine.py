@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import random
 import signal
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -204,7 +205,10 @@ def run(
     mqtt_config = load_mqtt_config(mqtt_config_path)
     devices = load_devices(devices_path)
     engine_config = load_engine_config(engine_config_path)
-    logger.level(engine_config.log_level)
+    # Loguru: logger.level(name) yalnız seviye TANIMINI okur, sink filtresini değiştirmez.
+    # Varsayılan stderr sink'i kaldırıp config seviyesiyle yeniden ekle (ingestion __main__ deseni).
+    logger.remove()
+    logger.add(sys.stderr, level=engine_config.log_level)
 
     _validate_devices(devices)
 
