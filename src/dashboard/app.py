@@ -40,6 +40,7 @@ from dashboard.fleet import (  # noqa: E402
     compute_kpis,
     derive_fleet,
 )
+from dashboard.styles import APP_CSS, header_html  # noqa: E402
 from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
@@ -257,9 +258,9 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
 
 def main() -> None:
     """Dashboard ana akışı (spec § 3 sayfa yapısı)."""
-    st.set_page_config(page_title="Mast Filo İzleme", layout="wide")
-    st.title("Mast Filo İzleme")
-    st.caption("Teleskopik mast filosu — gerçek zamanlı telemetri ve erken uyarı (gözlem modu)")
+    st.set_page_config(page_title="MastGuard · Mast İzleme", layout="wide")
+    st.markdown(APP_CSS, unsafe_allow_html=True)
+    st.markdown(header_html(datetime.now(UTC).strftime("%H:%M:%S")), unsafe_allow_html=True)
 
     try:
         repository = _get_repository()
