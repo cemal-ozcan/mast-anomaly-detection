@@ -43,6 +43,19 @@ class _FailingDetector(Detector):
         raise ValueError("kasıtlı test hatası")
 
 
+class _LinAlgFailingDetector(Detector):
+    """detect() numpy.linalg.LinAlgError fırlatır (polyfit kötü-koşullu pencere benzeri)."""
+
+    @property
+    def name(self) -> str:
+        return "linalg_fails"
+
+    def detect(self, window: pd.DataFrame) -> list[Anomaly]:
+        from numpy.linalg import LinAlgError
+
+        raise LinAlgError("SVD did not converge")
+
+
 def test_first_detection_inserts_one(migrated_engine: Engine) -> None:
     repo = TelemetryRepository(migrated_engine)
     repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
@@ -207,3 +220,12 @@ def test_deadband_firing_resets_streak_no_flap(migrated_engine: Engine) -> None:
     open_now = _active(repo)
     assert len(open_now) == 1 and open_now[0].id == first_id and open_now[0].clean_streak == 0
     assert len(repo.fetch_recent_anomalies(limit=10)) == 1  # tek satır, flap-reopen yok
+
+
+def test_linalg_error_does_not_crash_poll(migrated_engine: Engine) -> None:
+    """polyfit benzeri LinAlgError (ValueError alt sınıfı DEĞİL) yutulur; diğer kurallar çalışır."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert(_reading("motor_temperature", "2026-05-30T00:00:00.000Z", 95.0))
+    _detect_once(repo, [([_LinAlgFailingDetector(), *_temp_detectors()], _BIG_WINDOW_S)], _NOW, _BANDS)
+    stored = repo.fetch_recent_anomalies(limit=10)
+    assert len(stored) == 1 and stored[0].rule_name == "motor_temperature_high"

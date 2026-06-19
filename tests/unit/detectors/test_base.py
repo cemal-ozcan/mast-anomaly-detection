@@ -63,3 +63,10 @@ def test_detector_subclass_contract() -> None:
     det = _Noop()
     assert det.name == "noop"
     assert det.detect(pd.DataFrame()) == []
+
+
+def test_validity_rules_constant() -> None:
+    """VALIDITY_RULES base.py'de tek-kaynak; sensör-sağlığı kurallarını içerir (Iter 8.8)."""
+    from detectors.base import VALIDITY_RULES
+
+    assert frozenset({"sensor_out_of_range", "sensor_frozen"}) == VALIDITY_RULES

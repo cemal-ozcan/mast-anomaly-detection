@@ -11,6 +11,10 @@ from dataclasses import dataclass
 
 import pandas as pd
 
+# Sensör-sağlığı (veri-kalitesi) kuralları: skoru ikili validity bayrağı (1.0), band konumu DEĞİL
+# (severity banttan türetilmez — Iter 8.4/8.6). Tek-kaynak burada (detector + dashboard paylaşır, Iter 8.8).
+VALIDITY_RULES: frozenset[str] = frozenset({"sensor_out_of_range", "sensor_frozen"})
+
 
 @dataclass(frozen=True)
 class Anomaly:

@@ -187,3 +187,11 @@ def test_update_alert_resets_clean_streak(migrated_engine: Engine) -> None:
                       severity="critical", score=0.9, value=12.5, window_end="w",
                       rule_set="motor_current_high", description="d")
     assert repo.fetch_open_alerts()["device_001"][0].clean_streak == 0
+
+
+def test_fetch_alerts_carries_rule_set(migrated_engine: Engine) -> None:
+    """_row_to_alert rule_set kolonunu Alert'e taşır (Iter 8.8 eksen sınıflandırma için)."""
+    repo = TelemetryRepository(migrated_engine)
+    repo.insert_anomaly(_anom(rule="fused(2)"), "2026-06-03T10:00:00.000Z",
+                        "motor_current_high,sensor_out_of_range")
+    assert repo.fetch_alerts(None, limit=10)[0].rule_set == "motor_current_high,sensor_out_of_range"
