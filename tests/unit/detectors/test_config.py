@@ -213,3 +213,22 @@ def test_severity_bands_defaults_when_absent(tmp_path: Path) -> None:
     cfg = load_detector_config(p)
     assert cfg.severity_bands.high_cutoff == 0.40
     assert cfg.severity_bands.critical_cutoff == 0.75
+
+
+def test_load_deadband_clean_polls_from_yaml(tmp_path: Path) -> None:
+    """deadband_clean_polls top-level okunur (Faz 8 Iter 8.7)."""
+    p = _write(
+        tmp_path / "d.yaml",
+        "detectors:\n  poll_interval_s: 5.0\n  window_s: 120\n  rules: []\n"
+        "deadband_clean_polls: 5\n",
+    )
+    assert load_detector_config(p).deadband_clean_polls == 5
+
+
+def test_deadband_clean_polls_default_when_absent(tmp_path: Path) -> None:
+    """deadband_clean_polls yoksa default 3."""
+    p = _write(
+        tmp_path / "d.yaml",
+        "detectors:\n  poll_interval_s: 5.0\n  window_s: 120\n  rules: []\n",
+    )
+    assert load_detector_config(p).deadband_clean_polls == 3

@@ -55,6 +55,7 @@ class DetectorConfig:
     rules: tuple[RuleConfig, ...]
     statistical: StatisticalConfig | None = None
     severity_bands: SeverityBands = SeverityBands()
+    deadband_clean_polls: int = 3
 
 
 def _read_yaml(path: Path) -> dict[str, Any]:
@@ -124,12 +125,14 @@ def load_detector_config(path: Path) -> DetectorConfig:
             high_cutoff=float(sb.get("high_cutoff", 0.40)),
             critical_cutoff=float(sb.get("critical_cutoff", 0.75)),
         )
+        deadband_clean_polls = int(data.get("deadband_clean_polls", 3))
         return DetectorConfig(
             poll_interval_s=float(det["poll_interval_s"]),
             window_s=int(det["window_s"]),
             rules=rules,
             statistical=statistical,
             severity_bands=severity_bands,
+            deadband_clean_polls=deadband_clean_polls,
         )
     except (KeyError, TypeError, ValueError) as e:
         raise ValueError(f"detectors config geçersiz ({path}): {e}") from e
