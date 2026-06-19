@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import html as _html
 
-from dashboard.fleet import FleetKpis
+from dashboard.fleet import DeviceHealth, FleetKpis
+
+_BADGE_LABEL = {"ok": "OK", "warning": "UYARI", "critical": "KRİTİK"}
 
 # Tema paleti (spec § 1/§ 2)
 _BG = "#f4f6fb"
@@ -138,6 +140,44 @@ def kpis_html(kpis: FleetKpis) -> str:
         + kpi_card_html("Son Tespit", last, "neutral")
     )
     return f'<div class="mg-kpis">{cards}</div>'
+
+
+def device_card_html(health: DeviceHealth) -> str:
+    """Tek filo kartı: severity strip + badge + state + hizalı 2-kolon metrik ızgarası + top rule.
+
+    Args:
+        health: DeviceHealth (badge ∈ {ok,warning,critical}; snapshots; top_rule).
+
+    Returns:
+        `.mg-card` HTML'i (cihaz/sensör/kural html.escape'li; vurgulu sensör değeri `mg-v--hot`).
+    """
+    badge = health.badge if health.badge in _BADGE_LABEL else "ok"
+    rows = ""
+    for s in health.snapshots:
+        v_cls = "mg-v mg-v--hot" if s.highlighted else "mg-v"
+        rows += (
+            f'<span class="mg-k">{_html.escape(s.sensor)}</span>'
+            f'<span class="{v_cls}">{s.value:.2f} {_html.escape(s.unit)}</span>'
+        )
+    toprule = ""
+    if health.open_alert_count and health.top_rule:
+        toprule = (
+            f'<div class="mg-toprule">⚠ {health.open_alert_count} açık · '
+            f"{_html.escape(health.top_rule)}</div>"
+        )
+    return (
+        f'<div class="mg-card mg-card--{badge}"><div class="mg-strip"></div><div class="mg-body">'
+        f'<span class="mg-dev">{_html.escape(health.device_id)}</span> '
+        f'<span class="mg-badge mg-badge--{badge}">{_BADGE_LABEL[badge]}</span>'
+        f'<div class="mg-state">state: {_html.escape(health.state)}</div>'
+        f'<div class="mg-metrics">{rows}</div>{toprule}'
+        "</div></div>"
+    )
+
+
+def fleet_html(fleet: list[DeviceHealth]) -> str:
+    """Filo kartları ızgarası (`.mg-fleet`)."""
+    return f'<div class="mg-fleet">{"".join(device_card_html(h) for h in fleet)}</div>'
 
 
 def header_html(now_str: str) -> str:

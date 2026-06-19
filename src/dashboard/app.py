@@ -33,14 +33,16 @@ from alerts.lifecycle import ACKNOWLEDGED, can_transition  # noqa: E402
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
 from dashboard.fleet import (  # noqa: E402
-    BADGE_CRITICAL,
-    BADGE_OK,
-    BADGE_WARNING,
     DeviceHealth,
     compute_kpis,
     derive_fleet,
 )
-from dashboard.styles import APP_CSS, header_html, kpis_html  # noqa: E402
+from dashboard.styles import (  # noqa: E402
+    APP_CSS,
+    fleet_html,
+    header_html,
+    kpis_html,
+)
 from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
@@ -66,12 +68,6 @@ SIX_SENSORS = [
 ]
 
 ALERTS_FETCH_LIMIT = 200  # spec § 6 — tek fetch, client-side türetim
-
-_BADGE_LABELS = {
-    BADGE_OK: "🟢 OK",
-    BADGE_WARNING: "🟡 UYARI",
-    BADGE_CRITICAL: "🔴 KRİTİK",
-}
 
 # Uyarı akışı görünümleri (spec § 3): cihaz özeti varsayılan; gerisi durum filtresi.
 _VIEW_OPTIONS = ["Cihaz özeti", "Açık", "Tümü", "active", "acknowledged", "resolved"]
@@ -129,23 +125,10 @@ def _filter_view(alerts: list[Alert], view: str) -> list[Alert]:
 
 
 def _render_fleet_cards(fleet_health: list[DeviceHealth]) -> None:
-    """Filo sağlık kartlarını çizer (spec § 3 madde 3)."""
+    """Filo sağlık kartlarını kurumsal HTML ızgarasıyla çizer (Clean Corporate)."""
     if not fleet_health:
         return
-    cols = st.columns(len(fleet_health))
-    for col, health in zip(cols, fleet_health, strict=True):
-        with col, st.container(border=True):
-            st.markdown(f"**{health.device_id}** · {_BADGE_LABELS[health.badge]}")
-            st.caption(f"state: {health.state}")
-            lines = []
-            for snap in health.snapshots:
-                text = f"{snap.sensor}: {snap.value:.2f} {snap.unit}"
-                # Bold renk köşeli parantezinin İÇİNDE — Streamlit'in dokümante deseni
-                # (":red[**...**]"); dışarıda iç içe markdown 1.36'da kırılgan (plan review S2).
-                lines.append(f":red[**{text}**]" if snap.highlighted else text)
-            st.markdown("  \n".join(lines))
-            if health.open_alert_count:
-                st.caption(f"⚠ {health.open_alert_count} açık uyarı · {health.top_rule}")
+    st.markdown(fleet_html(fleet_health), unsafe_allow_html=True)
 
 
 def _render_alert_table(title: str, alerts: list[Alert], now: datetime, empty_msg: str) -> None:
