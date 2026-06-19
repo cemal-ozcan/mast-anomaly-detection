@@ -99,6 +99,7 @@ class TelemetryRepository:
             status=row.status,
             acknowledged_at=row.acknowledged_at,
             resolved_at=row.resolved_at,
+            clean_streak=row.clean_streak,
         )
 
     def insert(self, reading: IngestedReading) -> None:
@@ -371,6 +372,7 @@ class TelemetryRepository:
                     window_end=window_end,
                     rule_set=rule_set,
                     description=description,
+                    clean_streak=0,
                 )
             )
         return result.rowcount > 0
@@ -411,6 +413,25 @@ class TelemetryRepository:
                 anomalies.update()
                 .where(anomalies.c.id == alert_id, anomalies.c.status != RESOLVED)
                 .values(status=RESOLVED, resolved_at=resolved_at)
+            )
+        return result.rowcount > 0
+
+    def set_clean_streak(self, alert_id: int, streak: int) -> bool:
+        """Açık bir uyarının deadband sayacını yazar (Iter 8.7).
+
+        clean+open poll'da arıza yoksa sayaç artırılır; `deadband_clean_polls`'a ulaşınca resolve edilir
+        (anti-flap). Firing → `update_alert` 0'a sıfırlar.
+
+        Args:
+            alert_id: Güncellenecek satır id'si.
+            streak: Yeni clean_streak değeri.
+
+        Returns:
+            Satır güncellendiyse True; id yoksa False.
+        """
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                anomalies.update().where(anomalies.c.id == alert_id).values(clean_streak=streak)
             )
         return result.rowcount > 0
 
