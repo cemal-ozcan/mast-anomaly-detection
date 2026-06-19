@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -169,59 +168,3 @@ def split_alerts_by_axis(alerts: list[Alert]) -> tuple[list[Alert], list[Alert]]
     faults = [a for a in alerts if not is_data_quality_alert(a)]
     data_quality = [a for a in alerts if is_data_quality_alert(a)]
     return faults, data_quality
-
-
-_ALERT_COLUMNS = ["zaman", "ne zaman", "cihaz", "severity", "sensör", "kural", "skor", "durum", "açıklama"]
-
-_SEVERITY_EMOJI: dict[str, str] = {"critical": "🔴", "high": "🟠", "warning": "🟡"}
-
-# Tema B severity paleti (spec § 4) — satır zemin + metin rengi
-_SEVERITY_ROW_CSS: dict[str, str] = {
-    "critical": "background-color: #fef2f2; color: #b91c1c",
-    "high": "background-color: #fff7ed; color: #c2410c",
-    "warning": "background-color: #fefce8; color: #a16207",
-}
-
-
-def alerts_to_frame(alerts: list[Alert], now: datetime) -> pd.DataFrame:
-    """Alert listesini severity-emoji'li + göreli zamanlı "Uyarılar" tablosuna çevirir (spec § 3).
-
-    Args:
-        alerts: fetch_alerts çıktısı (created_at DESC sıralı; boş olabilir).
-        now: Göreli zaman hesabı için şimdiki UTC-aware datetime (enjekte edilir).
-
-    Returns:
-        [zaman, ne zaman, cihaz, severity, sensör, kural, skor, durum, açıklama] kolonlu
-        DataFrame; girdi sırasını korur. `zaman` = window_end, `ne zaman` = created_at'ten
-        göreli, `severity` emoji önekli. Boş girdi → 0 satırlı doğru-şemalı DataFrame.
-    """
-    return pd.DataFrame(
-        {
-            "zaman": [a.window_end for a in alerts],
-            "ne zaman": [relative_time(now, a.created_at) for a in alerts],
-            "cihaz": [a.device_id for a in alerts],
-            "severity": [f"{_SEVERITY_EMOJI.get(a.severity, '⚪')} {a.severity}" for a in alerts],
-            "sensör": [a.sensor for a in alerts],
-            "kural": [a.rule_name for a in alerts],
-            "skor": [round(a.score, 2) for a in alerts],
-            "durum": [a.status for a in alerts],
-            "açıklama": [a.description for a in alerts],
-        },
-        columns=_ALERT_COLUMNS,
-    )
-
-
-def severity_row_style(row: pd.Series[Any]) -> list[str]:
-    """pandas Styler.apply(axis=1) için satır-bazlı severity CSS'i üretir (spec § 3/§ 4).
-
-    Args:
-        row: alerts_to_frame çıktısının bir satırı ("severity" kolonu emoji önekli).
-
-    Returns:
-        Satırdaki her hücre için aynı CSS string'i; eşleşme yoksa boş string'ler.
-    """
-    severity = str(row.get("severity", ""))
-    for key, css in _SEVERITY_ROW_CSS.items():
-        if key in severity:
-            return [css] * len(row)
-    return [""] * len(row)

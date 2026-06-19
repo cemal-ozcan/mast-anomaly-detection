@@ -8,8 +8,13 @@ CSS Streamlit 1.36.0 DOM'una göre yazıldı (requirements pinli); canlı smoke 
 from __future__ import annotations
 
 import html as _html
+from datetime import datetime
 
+from alerts.models import Alert
 from dashboard.fleet import DeviceHealth, FleetKpis
+from dashboard.transform import relative_time
+
+_SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 
 _BADGE_LABEL = {"ok": "OK", "warning": "UYARI", "critical": "KRİTİK"}
 
@@ -178,6 +183,50 @@ def device_card_html(health: DeviceHealth) -> str:
 def fleet_html(fleet: list[DeviceHealth]) -> str:
     """Filo kartları ızgarası (`.mg-fleet`)."""
     return f'<div class="mg-fleet">{"".join(device_card_html(h) for h in fleet)}</div>'
+
+
+def alert_card_html(alert: Alert, now: datetime) -> str:
+    """Tek uyarı satır-kartı: severity pill + göreli zaman + cihaz + sensör·kural + açıklama (escape).
+
+    Args:
+        alert: Gösterilecek uyarı.
+        now: Göreli zaman ("1 dk önce") referansı.
+
+    Returns:
+        `.mg-alert` satır-kartı HTML'i (serbest-metin html.escape'li).
+    """
+    sev = alert.severity if alert.severity in ("critical", "high", "warning") else "warning"
+    when = relative_time(now, alert.created_at)
+    return (
+        f'<div class="mg-alert mg-alert--{sev}">'
+        f'<span class="mg-pill mg-pill--{sev}">{_html.escape(alert.severity)}</span>'
+        f'<span class="mg-when">{_html.escape(when)}</span>'
+        f'<span class="mg-dev2">{_html.escape(alert.device_id)}</span>'
+        f'<span class="mg-desc">{_html.escape(alert.sensor)} · '
+        f"{_html.escape(alert.rule_name)} — {_html.escape(alert.description)}</span>"
+        "</div>"
+    )
+
+
+def alerts_section_html(title: str, alerts: list[Alert], now: datetime, empty_msg: str) -> str:
+    """Bir uyarı ekseni: başlık + satır-kartları (kritik üstte) veya boş-durum mesajı.
+
+    Args:
+        title: Bölüm başlığı (örn. "Arıza Uyarıları").
+        alerts: Bu eksenin uyarıları.
+        now: Göreli zaman referansı.
+        empty_msg: Liste boşsa gösterilecek mesaj.
+
+    Returns:
+        Başlık + satır-kartları (veya boş-durum) HTML'i.
+    """
+    head = f'<div class="mg-section">{_html.escape(title)}</div>'
+    if not alerts:
+        return head + f'<div class="mg-empty">{_html.escape(empty_msg)}</div>'
+    ordered = sorted(
+        alerts, key=lambda a: _SEVERITY_RANK_DISPLAY.get(a.severity, 0), reverse=True
+    )
+    return head + "".join(alert_card_html(a, now) for a in ordered)
 
 
 def header_html(now_str: str) -> str:

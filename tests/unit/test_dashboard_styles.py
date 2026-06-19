@@ -1,6 +1,7 @@
 """dashboard.styles saf CSS + HTML-builder testleri (Clean Corporate yeniden tasarım)."""
 from __future__ import annotations
 
+from alerts.models import Alert
 from dashboard.fleet import DeviceHealth
 from dashboard.styles import APP_CSS, header_html
 
@@ -93,3 +94,45 @@ def test_fleet_html_wraps_grid() -> None:
     from dashboard.styles import fleet_html
 
     assert 'class="mg-fleet"' in fleet_html([_health(), _health()])
+
+
+def _alert(severity: str = "critical", desc: str = "motor_voltage std 4.77V eşik <x>") -> Alert:
+    return Alert(id=1, device_id="device_004", rule_name="motor_voltage_erratic", sensor="motor_voltage",
+                 severity=severity, score=0.94, window_start="2026-06-19T12:55:00.000Z",
+                 window_end="2026-06-19T12:57:29.854Z", value=4.77, description=desc,
+                 created_at="2026-06-19T12:57:29.854Z", status="active", acknowledged_at=None,
+                 resolved_at=None, clean_streak=0, rule_set="motor_voltage_erratic")
+
+
+def test_alert_card_pill_and_escape() -> None:
+    from datetime import UTC, datetime
+
+    from dashboard.styles import alert_card_html
+
+    now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
+    h = alert_card_html(_alert(severity="critical"), now)
+    assert "mg-pill--critical" in h and "mg-alert--critical" in h
+    assert "device_004" in h and "motor_voltage_erratic" in h
+    assert "&lt;x&gt;" in h  # açıklama html.escape'lendi
+    assert "<x>" not in h
+
+
+def test_alerts_section_empty() -> None:
+    from datetime import UTC, datetime
+
+    from dashboard.styles import alerts_section_html
+
+    now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
+    h = alerts_section_html("Arıza Uyarıları", [], now, "Açık arıza uyarısı yok.")
+    assert "Açık arıza uyarısı yok." in h and "mg-empty" in h
+    assert "Arıza Uyarıları" in h
+
+
+def test_alerts_section_lists_alerts() -> None:
+    from datetime import UTC, datetime
+
+    from dashboard.styles import alerts_section_html
+
+    now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
+    h = alerts_section_html("Arıza Uyarıları", [_alert()], now, "yok")
+    assert "device_004" in h and "mg-alert" in h

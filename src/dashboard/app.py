@@ -39,6 +39,7 @@ from dashboard.fleet import (  # noqa: E402
 )
 from dashboard.styles import (  # noqa: E402
     APP_CSS,
+    alerts_section_html,
     fleet_html,
     header_html,
     kpis_html,
@@ -46,11 +47,9 @@ from dashboard.styles import (  # noqa: E402
 from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
-    alerts_to_frame,
     downsample_frame,
     latest_alert_per_device,
     readings_to_chart_frame,
-    severity_row_style,
     split_alerts_by_axis,
     window_to_since,
 )
@@ -131,27 +130,6 @@ def _render_fleet_cards(fleet_health: list[DeviceHealth]) -> None:
     st.markdown(fleet_html(fleet_health), unsafe_allow_html=True)
 
 
-def _render_alert_table(title: str, alerts: list[Alert], now: datetime, empty_msg: str) -> None:
-    """Tek bir uyarı eksenini başlık + severity-stilli tablo olarak render eder (Iter 8.8).
-
-    Args:
-        title: Panel başlığı.
-        alerts: Bu eksenin uyarıları.
-        now: Göreli zaman için referans.
-        empty_msg: Liste boşsa gösterilecek mesaj.
-    """
-    st.markdown(f"**{title}**")
-    if not alerts:
-        st.caption(empty_msg)
-        return
-    frame = alerts_to_frame(alerts, now)
-    st.dataframe(
-        frame.style.apply(severity_row_style, axis=1),
-        use_container_width=True,
-        hide_index=True,
-    )
-
-
 @st.experimental_fragment(run_every="5s")
 def _render_overview(repository: TelemetryRepository) -> None:
     """Üst blok: KPI satırı + filo kartları + uyarı akışı; 5s'de bir yenilenir (spec § 3).
@@ -175,12 +153,22 @@ def _render_overview(repository: TelemetryRepository) -> None:
 
     _render_fleet_cards(derive_fleet(devices, latest, alerts))
 
-    st.subheader("🚨 Uyarılar")
-    choice = st.selectbox("Görünüm", _VIEW_OPTIONS, index=0, key="alert_view")
+    st.markdown('<div class="mg-section">🚨 Uyarılar</div>', unsafe_allow_html=True)
+    choice = st.selectbox(
+        "Görünüm", _VIEW_OPTIONS, index=0, key="alert_view", label_visibility="collapsed"
+    )
     visible = _filter_view(alerts, choice or "Cihaz özeti")
     faults, data_quality = split_alerts_by_axis(visible)
-    _render_alert_table("🚨 Arıza Uyarıları", faults, now, "Açık arıza uyarısı yok.")
-    _render_alert_table("🔌 Veri Kalitesi / Sensör Sağlığı", data_quality, now, "Tüm sensörler sağlıklı.")
+    st.markdown(
+        alerts_section_html("🚨 Arıza Uyarıları", faults, now, "Açık arıza uyarısı yok."),
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        alerts_section_html(
+            "🔌 Veri Kalitesi / Sensör Sağlığı", data_quality, now, "Tüm sensörler sağlıklı."
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def _render_alert_management(repository: TelemetryRepository) -> None:
