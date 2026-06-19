@@ -1,0 +1,41 @@
+name: CI
+
+# Her push (main) ve her PR'da otomatik kalite kapısı: ruff (lint) + mypy (strict) + pytest.
+# Smoke testleri (RUN_SMOKE) hariç — gerçek broker gerektirir (CI dışı, pytest marker ile zaten skip).
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -e .
+          pip install ruff==0.15.14   # ruff pip dep değil (lokalde homebrew); CI'da lokal sürüme pinli
+
+      - name: Ruff (lint)
+        run: ruff check src tests
+
+      - name: Mypy (strict)
+        run: >
+          mypy
+          src/simulator src/ingestion src/storage src/detectors src/dashboard src/alerts
+          tests/unit tests/integration tests/scenarios
+
+      - name: Pytest
+        env:
+          PYTHONPATH: src   # editable .pth bazı runner'larda silent-skip olursa import güvencesi
+        run: pytest
