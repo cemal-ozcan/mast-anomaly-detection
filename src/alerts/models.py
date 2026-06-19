@@ -28,3 +28,4 @@ class Alert:
     acknowledged_at: str | None
     resolved_at: str | None
     clean_streak: int = 0  # Iter 8.7 deadband sayacı (default'lu → mevcut constructor'lar kırılmaz)
+    rule_set: str | None = None  # Iter 8.8: fingerprint (eksen sınıflandırması için; nullable)
