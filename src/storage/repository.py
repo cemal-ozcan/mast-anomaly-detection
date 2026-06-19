@@ -100,6 +100,7 @@ class TelemetryRepository:
             acknowledged_at=row.acknowledged_at,
             resolved_at=row.resolved_at,
             clean_streak=row.clean_streak,
+            rule_set=row.rule_set,
         )
 
     def insert(self, reading: IngestedReading) -> None:
