@@ -98,3 +98,43 @@ def test_severity_row_style_colors_by_severity() -> None:
     assert len(crit_styles) == len(frame.columns)
     assert all("#fef2f2" in s for s in crit_styles)
     assert all("#fefce8" in s for s in warn_styles)
+
+
+from alerts.models import Alert  # noqa: E402  (modül-seviyesi: appended Iter 8.8 helper'ı için)
+from dashboard.transform import is_data_quality_alert, split_alerts_by_axis  # noqa: E402
+
+
+def _alert_rs(rule_set: str | None, device: str = "d1") -> Alert:
+    return Alert(id=1, device_id=device, rule_name="r", sensor="s", severity="high", score=1.0,
+                 window_start="a", window_end="b", value=1.0, description="d", created_at="c",
+                 status="active", acknowledged_at=None, resolved_at=None, rule_set=rule_set)
+
+
+def test_is_data_quality_single_validity_rule() -> None:
+    assert is_data_quality_alert(_alert_rs("sensor_out_of_range")) is True
+    assert is_data_quality_alert(_alert_rs("sensor_frozen")) is True
+
+
+def test_is_data_quality_predictive_rule() -> None:
+    assert is_data_quality_alert(_alert_rs("motor_current_high")) is False
+
+
+def test_is_data_quality_mixed_fused_is_fault() -> None:
+    assert is_data_quality_alert(_alert_rs("motor_current_high,sensor_out_of_range")) is False
+
+
+def test_is_data_quality_multi_validity_is_dq() -> None:
+    assert is_data_quality_alert(_alert_rs("sensor_frozen,sensor_out_of_range")) is True
+
+
+def test_is_data_quality_empty_rule_set_is_fault() -> None:
+    assert is_data_quality_alert(_alert_rs(None)) is False
+    assert is_data_quality_alert(_alert_rs("")) is False
+
+
+def test_split_alerts_by_axis_partitions_preserving_order() -> None:
+    alerts = [_alert_rs("motor_current_high", "d1"), _alert_rs("sensor_out_of_range", "d2"),
+              _alert_rs("vibration_elevated", "d3")]
+    faults, dq = split_alerts_by_axis(alerts)
+    assert [a.device_id for a in faults] == ["d1", "d3"]
+    assert [a.device_id for a in dq] == ["d2"]
