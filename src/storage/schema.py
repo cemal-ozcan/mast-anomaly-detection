@@ -49,6 +49,7 @@ anomalies = Table(
     Column("acknowledged_at", Text),  # nullable
     Column("resolved_at", Text),  # nullable
     Column("rule_set", Text),  # nullable — fingerprint (sıralı virgül-bağlı kural adları, Iter 8.5)
+    Column("clean_streak", Integer, nullable=False),  # Iter 8.7 deadband sayacı (DB DEFAULT 0, migration 005)
 )
 
 # Dashboard (Iter 4.3) + doğrulama "son anomaliler" sorgular (spec § 5).
