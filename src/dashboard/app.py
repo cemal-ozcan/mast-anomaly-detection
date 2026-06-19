@@ -40,7 +40,7 @@ from dashboard.fleet import (  # noqa: E402
     compute_kpis,
     derive_fleet,
 )
-from dashboard.styles import APP_CSS, header_html  # noqa: E402
+from dashboard.styles import APP_CSS, header_html, kpis_html  # noqa: E402
 from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
@@ -186,11 +186,7 @@ def _render_overview(repository: TelemetryRepository) -> None:
     now = datetime.now(UTC)
 
     kpis = compute_kpis(devices, alerts, now)
-    kpi_cols = st.columns(4)
-    kpi_cols[0].metric("Cihaz", kpis.device_count)
-    kpi_cols[1].metric("Açık uyarı", kpis.open_alert_count)
-    kpi_cols[2].metric("Kritik", kpis.critical_alert_count)
-    kpi_cols[3].metric("Son tespit", kpis.last_detection)
+    st.markdown(kpis_html(kpis), unsafe_allow_html=True)
     if not alerts_available:
         st.caption("Detector henüz çalışmadı — uyarı verisi yok (`python -m detectors`).")
 

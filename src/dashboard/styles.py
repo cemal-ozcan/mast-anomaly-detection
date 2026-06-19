@@ -7,6 +7,10 @@ CSS Streamlit 1.36.0 DOM'una göre yazıldı (requirements pinli); canlı smoke 
 """
 from __future__ import annotations
 
+import html as _html
+
+from dashboard.fleet import FleetKpis
+
 # Tema paleti (spec § 1/§ 2)
 _BG = "#f4f6fb"
 _SURFACE = "#ffffff"
@@ -91,6 +95,49 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: "Inter","Segoe
 .mg-section {{font-weight:700; font-size:15px; color:{_TEXT}; margin:10px 0 6px;}}
 </style>
 """
+
+
+def kpi_card_html(label: str, value: str, tone: str) -> str:
+    """Tek KPI kartı (tone: neutral|warning|critical → üst-çizgi + değer rengi).
+
+    Args:
+        label: KPI etiketi (örn. "Kritik").
+        value: Gösterilecek değer (string).
+        tone: "neutral" | "warning" | "critical".
+
+    Returns:
+        `.mg-kpi` kartı HTML'i (değer/etiket html.escape'li).
+    """
+    cls = "mg-kpi" if tone == "neutral" else f"mg-kpi mg-kpi--{tone}"
+    return (
+        f'<div class="{cls}"><div class="mg-kpi-val">{_html.escape(value)}</div>'
+        f'<div class="mg-kpi-lbl">{_html.escape(label)}</div></div>'
+    )
+
+
+def kpis_html(kpis: FleetKpis) -> str:
+    """4 KPI kartı ızgarası; tone sayımlardan türetilir (Kritik>0→critical, Açık>0→warning).
+
+    Args:
+        kpis: FleetKpis (device/open/critical sayıları + son tespit).
+
+    Returns:
+        `.mg-kpis` ızgara HTML'i. Boş "—" son-tespit → "Henüz yok".
+    """
+    crit_tone = "critical" if kpis.critical_alert_count > 0 else "neutral"
+    open_tone = "warning" if kpis.open_alert_count > 0 else "neutral"
+    last = (
+        kpis.last_detection
+        if kpis.last_detection and kpis.last_detection != "—"
+        else "Henüz yok"
+    )
+    cards = (
+        kpi_card_html("Cihaz", str(kpis.device_count), "neutral")
+        + kpi_card_html("Açık Uyarı", str(kpis.open_alert_count), open_tone)
+        + kpi_card_html("Kritik", str(kpis.critical_alert_count), crit_tone)
+        + kpi_card_html("Son Tespit", last, "neutral")
+    )
+    return f'<div class="mg-kpis">{cards}</div>'
 
 
 def header_html(now_str: str) -> str:
