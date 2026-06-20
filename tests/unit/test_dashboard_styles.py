@@ -15,6 +15,13 @@ def test_app_css_nonempty_and_hides_chrome() -> None:
     assert "#ffffff" in APP_CSS or "#f8fafc" in APP_CSS
 
 
+def test_app_css_has_operations_center_classes() -> None:
+    from dashboard.styles import APP_CSS
+
+    for cls in (".mg-hero", ".mg-stats", ".mg-info", ".mg-tl", ".mg-ev", ".mg-ring"):
+        assert cls in APP_CSS
+
+
 def test_header_html_contains_brand_and_clock() -> None:
     html = header_html("14:32:05")
     assert "MAST İZLEME" in html  # nötr açıklayıcı başlık (marka adı yok)

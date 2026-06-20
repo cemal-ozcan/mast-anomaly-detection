@@ -162,6 +162,65 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 .mg-lamp--critical {{background:{_CRIT};}}
 .mg-pmeta {{display:block; font-size:11.5px; color:{_MUTED}; margin-top:1px; font-family:{_MONO};}}
 
+/* Operasyon Merkezi — hero */
+.mg-hero {{display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:24px;
+  background:{_SURFACE}; border:1px solid {_BORDER}; border-left:4px solid {_OK};
+  border-radius:8px; padding:18px 24px; margin:6px 0 14px;}}
+.mg-hero--warning {{border-left-color:{_WARN};}}
+.mg-hero--critical {{border-left-color:{_CRIT};}}
+.mg-ring {{width:92px; height:92px; flex:0 0 auto;}}
+.mg-hero-ey {{font-family:{_MONO}; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  color:{_MUTED}; margin-bottom:4px;}}
+.mg-hero-big {{font-size:27px; font-weight:700; color:{_TEXT}; letter-spacing:-.01em;}}
+.mg-hero-sub {{color:{_MUTED}; font-size:14px; margin-top:8px;}}
+.mg-hero-sub b {{color:{_TEXT}; font-family:{_MONO};}}
+.mg-hero-right {{text-align:right;}}
+.mg-hero-u {{font-family:{_MONO}; font-size:21px; font-weight:600; color:{_TEXT};}}
+.mg-hero-ul {{font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:{_MUTED}; margin-top:3px;}}
+
+/* Kapsam şeridi + info tooltip */
+.mg-stats {{display:grid; grid-template-columns:repeat(5,1fr); background:{_SURFACE};
+  border:1px solid {_BORDER}; border-radius:6px; overflow:hidden; margin-bottom:6px;}}
+.mg-stat {{padding:13px 18px; border-left:1px solid {_BORDER};}}
+.mg-stat:first-child {{border-left:0;}}
+.mg-stat-v {{font-family:{_MONO}; font-size:21px; font-weight:600; display:flex;
+  align-items:center; gap:6px;}}
+.mg-stat-l {{font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:{_MUTED};
+  margin-top:5px;}}
+.mg-info {{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+  border:1px solid {_BORDER}; border-radius:50%; font-family:{_MONO}; font-size:10px; font-weight:400;
+  color:{_MUTED}; cursor:help; position:relative;}}
+.mg-info::after {{content:attr(data-tip); position:absolute; bottom:150%; left:50%;
+  transform:translateX(-50%); background:{_GRAPHITE}; color:#eef0f2; font-family:{_FONT}; font-size:12px;
+  letter-spacing:0; text-transform:none; padding:7px 10px; border-radius:5px; width:max-content;
+  max-width:230px; white-space:normal; opacity:0; pointer-events:none; transition:opacity .12s;
+  z-index:60; box-shadow:0 4px 14px rgba(0,0,0,.18);}}
+.mg-info:hover::after {{opacity:1;}}
+
+/* Filo kartı — tıklanır link + sparkline ayağı */
+a.mg-card {{text-decoration:none; color:inherit; display:block;}}
+.mg-card .mg-cprob {{font-size:13px; color:{_MUTED}; margin:7px 0 0;}}
+.mg-card .mg-cprob.bad {{color:{_TEXT}; font-weight:500;}}
+.mg-card .mg-cfoot {{display:flex; align-items:flex-end; justify-content:space-between; gap:10px;
+  margin-top:9px;}}
+.mg-card .mg-spark {{flex:1; min-width:0; height:30px;}}
+.mg-card .mg-go {{font-family:{_MONO}; font-size:11px; color:{_MUTED};}}
+.mg-card .mg-cval {{font-family:{_MONO}; font-size:13px; color:{_MUTED};}}
+.mg-card .mg-cval b {{color:{_TEXT};}}
+
+/* Son-24s olay akışı (timeline) */
+.mg-tl {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:6px; padding:4px 18px;
+  margin-bottom:6px;}}
+.mg-ev {{display:grid; grid-template-columns:78px 12px 1fr; align-items:center; gap:12px;
+  padding:11px 0; border-top:1px solid {_BORDER};}}
+.mg-ev:first-child {{border-top:0;}}
+.mg-ev-t {{font-family:{_MONO}; font-size:12px; color:{_MUTED};}}
+.mg-ev-d {{width:9px; height:9px; border-radius:50%; background:{_OK};}}
+.mg-ev-d--warning {{background:{_WARN};}}
+.mg-ev-d--critical {{background:{_CRIT};}}
+.mg-ev-d--ack {{background:{_MUTED};}}
+.mg-ev-x {{font-size:14px; color:{_TEXT};}}
+
 /* Bölüm başlığı — eyebrow (mono, letterspaced, sessiz) */
 .mg-section {{font-family:{_MONO}; font-weight:500; font-size:12px; color:{_MUTED};
   letter-spacing:.14em; text-transform:uppercase; margin:22px 0 9px;}}
