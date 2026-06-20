@@ -83,6 +83,13 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
   border-radius:5px; font-weight:600; font-family:{_FONT};}}
 .stButton > button:hover {{border-color:{_GRAPHITE}; color:{_GRAPHITE};}}
 .stButton > button:active {{transform: translateY(1px);}}
+/* Sidebar widget metinleri (radio seçenekleri + etiketler) okunur koyu — soluk varsayılanı ez */
+section[data-testid="stSidebar"] p,
+section[data-testid="stSidebar"] label,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label,
+[data-testid="stRadio"] label p,
+div[role="radiogroup"] label p {{color:{_TEXT} !important;}}
 
 /* Başlık şeridi — kontrol-odası grafit */
 .mg-header {{display:flex; align-items:center; justify-content:space-between;
