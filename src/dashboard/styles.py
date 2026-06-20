@@ -48,9 +48,11 @@ footer {{visibility: hidden;}}
 /* Enstrüman-sınıfı açık zemin (tarayıcı tema-seçici ezmesine karşı) */
 .stApp {{background: {_BG} !important;}}
 .block-container {{padding-top: 1.1rem; max-width: 1340px;}}
-/* Sidebar kullanılmıyor (gezinme üst barda) → tamamen gizle, sol boşluğu geri al */
-section[data-testid="stSidebar"] {{display: none !important;}}
-[data-testid="stSidebarCollapsedControl"] {{display: none !important;}}
+/* Sidebar — daraltılmış (küçük yer kaplasın), açık tema */
+section[data-testid="stSidebar"] {{background:{_SURFACE} !important;
+  border-right:1px solid {_BORDER}; width:240px !important; min-width:240px !important;}}
+section[data-testid="stSidebar"] > div {{width:240px !important; min-width:240px !important;}}
+[data-testid="stSidebarContent"] {{padding-top:0.6rem;}}
 html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 .mono, .mg-kpi-val, .mg-pval, .mg-when, .mg-summary b, .mg-pill {{
   font-family: {_MONO}; font-variant-numeric: tabular-nums;}}

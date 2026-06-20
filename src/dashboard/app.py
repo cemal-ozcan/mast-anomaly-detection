@@ -288,7 +288,7 @@ def _render_device_detail(
 def main() -> None:
     """Dashboard ana akışı (spec § 3 sayfa yapısı)."""
     st.set_page_config(
-        page_title="Mast İzleme", layout="wide", initial_sidebar_state="collapsed"
+        page_title="Mast İzleme", layout="wide", initial_sidebar_state="expanded"
     )
     st.markdown(APP_CSS, unsafe_allow_html=True)
     st.markdown(header_html(datetime.now(UTC).strftime("%H:%M:%S")), unsafe_allow_html=True)
@@ -317,9 +317,8 @@ def main() -> None:
     config = _get_detector_config()
     nav_options = [FLEET_LABEL] + [device_label(d) for d in devices]
     label_to_device = {device_label(d): d for d in devices}
-    # Gezinme üst barda (sidebar kaldırıldı — sol boşluk geri alındı), sola dayalı kompakt.
-    with st.columns([1, 3])[0]:
-        choice = st.selectbox("Sayfa", nav_options, key="nav", label_visibility="collapsed")
+    # Gezinme dar sidebar'da (cihaz erişimi solda kalır).
+    choice = st.sidebar.selectbox("Sayfa", nav_options, key="nav")
 
     if not choice or choice == FLEET_LABEL:
         _render_overview(repository)
@@ -327,17 +326,11 @@ def main() -> None:
         return
 
     device_id = label_to_device.get(choice, devices[0])
-    back_col, win_col, _ = st.columns([1, 1, 2])
-    with back_col:
-        st.button("← Filoya dön", on_click=_go_fleet, key="back_btn")
-    with win_col:
-        window = (
-            st.selectbox(
-                "Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1, key="win",
-                label_visibility="collapsed",
-            )
-            or list(WINDOW_OPTIONS.keys())[1]
-        )
+    st.sidebar.button("← Filoya dön", on_click=_go_fleet, key="back_btn")
+    window = (
+        st.sidebar.selectbox("Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1, key="win")
+        or list(WINDOW_OPTIONS.keys())[1]
+    )
     st.markdown(
         f'<div class="mg-section">{device_label(device_id)} · Sensör Durumu</div>',
         unsafe_allow_html=True,
