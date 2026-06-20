@@ -24,25 +24,26 @@ def _alert(sensor: str = "motor_current") -> Alert:
 
 
 def test_chart_without_alerts_single_line_layer() -> None:
-    """Uyarı yoksa katmansız tek çizgi chart döner (spec § 5 boş overlay)."""
+    """Uyarı/band yoksa katmansız tek çizgi chart döner; y-başlığı YOK (ham kod adı kalktı)."""
     from dashboard.charts import build_sensor_chart
 
     chart = build_sensor_chart(readings_to_chart_frame(_readings()), [], "motor_current", "A")
     spec = chart.to_dict()
     assert "layer" not in spec
     assert spec["mark"]["type"] == "line"
-    assert spec["encoding"]["y"]["title"] == "motor_current (A)"
+    assert spec["encoding"]["y"].get("title") in (None, "")  # ham kod adı yok
 
 
-def test_chart_with_alert_has_four_layers() -> None:
-    """Uyarılı chart 4 katman: bant(rect) + çizgi(rule) + etiket(text) + telemetri(line)."""
+def test_chart_with_alert_has_overlay_layers_no_text() -> None:
+    """Uyarılı (band'sız) chart: bant(rect) + telemetri(line) + başlangıç(rule); etiket(text) YOK."""
     from dashboard.charts import build_sensor_chart
 
     chart = build_sensor_chart(
         readings_to_chart_frame(_readings()), [_alert()], "motor_current", "A")
     spec = chart.to_dict()
     marks = [layer["mark"]["type"] for layer in spec["layer"]]
-    assert marks == ["rect", "rule", "text", "line"]
+    assert "text" not in marks  # üst üste binen ham etiket kaldırıldı
+    assert marks == ["rect", "line", "rule"]  # bant → çizgi → başlangıç
 
 
 def test_chart_ignores_other_sensor_alerts() -> None:
@@ -89,14 +90,14 @@ def test_chart_band_adds_zone_and_threshold_layers() -> None:
              if ly["mark"]["type"] == "rect" and "y2" in ly.get("encoding", {})]
     assert zones
     assert "x" in zones[0]["encoding"] and "x2" in zones[0]["encoding"]  # tam-genişlik
-    # eşik çizgileri: y encoding'li mark_rule (anomali rule x encoding kullanır)
+    # eşik çizgileri: y encoding'li, clip'li mark_rule (anomali rule x encoding kullanır)
     thresh = [ly for ly in spec["layer"]
               if ly["mark"]["type"] == "rule" and "y" in ly.get("encoding", {})]
     assert thresh
-    # y-domain trip'i (11) kapsar → çizginin sınıra uzaklığı görünür
+    # Hibrit: y-domain VERİ-temelli (trip'i zorla kapsamaz); sonlu bir aralık taşır.
     line = [ly for ly in spec["layer"] if ly["mark"]["type"] == "line"][0]
     domain = line["encoding"]["y"]["scale"]["domain"]
-    assert domain[1] >= 11.0
+    assert len(domain) == 2 and domain[0] < domain[1]
 
 
 def test_chart_band_with_alert_keeps_overlay() -> None:

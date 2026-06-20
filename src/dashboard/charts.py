@@ -62,19 +62,38 @@ def _severity_color() -> alt.Color:
     )
 
 
-def _band_layers(
-    lo: float, hi: float, band: LevelBand, y_scale: alt.Scale, x_domain: list[Any]
-) -> list[alt.Chart]:
-    """Seviye-bandı için bölge rect'leri + uyarı/kritik kesikli eşik çizgileri (paylaşılan y_scale).
+def _hybrid_y_bounds(dmin: float, dmax: float, band: LevelBand) -> tuple[float, float]:
+    """Hibrit y-aralığı: sinyalin gerçek hareketine ölçekle ama gürültüyü şişirme (taban).
 
-    BÖLGE rect'i tam-genişlik için açık x-span taşır (x_domain = [tmin, tmax]); yalnız y/y2
-    veren bir rect Vega-Lite'ta tam genişliğe yayılmaz. Eşik çizgileri (mark_rule, yalnız y)
-    doğal olarak tam-genişlik yatay çizgidir.
+    Görünür aralık ≥ %10·kritik (sakin sinyal yumuşak doku gösterir, dipte düz kalmaz);
+    sinyal eşiğe tırmanınca aralık yükselir → uyarı/kritik bölgesi doğal olarak girer.
+    Negatif olmayan veride alt sınır 0'a kırpılır.
+    """
+    min_span = 0.10 * band.trip
+    span = max(dmax - dmin, min_span)
+    center = (dmin + dmax) / 2
+    half = span / 2 * 1.25
+    ylo, yhi = center - half, center + half
+    if dmin >= 0:
+        ylo = max(ylo, 0.0)
+    return ylo, yhi
+
+
+def _band_layers(
+    ylo: float, yhi: float, band: LevelBand, y_scale: alt.Scale, x_domain: list[Any]
+) -> list[alt.Chart]:
+    """Seviye-bandı arka plan bölgeleri + uyarı/kritik eşik çizgileri (görünür aralığa KIRPILI).
+
+    Bölgeler mutlak eşik sınırlarında çizilir (yeşil: uyarı altı, sarı: uyarı–kritik, kırmızı:
+    kritik üstü) ve y-ölçeği veri-temelli olduğundan `clip=True` ile görünür pencereye kırpılır:
+    sinyal sakinken tüm arka plan yeşil; eşiğe tırmanınca sarı/kırmızı girer. Eşik çizgileri de
+    yalnız görünür aralıktaysa görünür.
     """
     x0, x1 = x_domain[0], x_domain[1]
+    big = (yhi - ylo) + abs(band.trip) + 1.0  # bölgeleri pencere dışına taşır → kırpma temiz
     zones = pd.DataFrame(
         {"x0": [x0, x0, x0], "x1": [x1, x1, x1],
-         "y0": [lo, band.warn, band.trip], "y1": [band.warn, band.trip, hi],
+         "y0": [ylo - big, band.warn, band.trip], "y1": [band.warn, band.trip, yhi + big],
          "zone": ["ok", "warn", "crit"]}
     )
     zone_color = alt.Color(
@@ -84,11 +103,11 @@ def _band_layers(
     )
     zone_layer = (
         alt.Chart(zones)
-        .mark_rect(opacity=ZONE_OPACITY)
+        .mark_rect(opacity=ZONE_OPACITY, clip=True)
         .encode(
             x=alt.X("x0:T", title=None, axis=alt.Axis(labelFontSize=10)),
             x2="x1:T",
-            y=alt.Y("y0:Q", scale=y_scale, title=None),
+            y=alt.Y("y0:Q", scale=y_scale, title=None, axis=None),
             y2="y1:Q",
             color=zone_color,
         )
@@ -101,7 +120,7 @@ def _band_layers(
     )
     thresh_layer = (
         alt.Chart(lines)
-        .mark_rule(strokeDash=[6, 3], strokeWidth=1.5)
+        .mark_rule(strokeDash=[6, 3], strokeWidth=1.5, clip=True)
         .encode(y=alt.Y("y:Q", scale=y_scale), color=line_color)
     )
     return [zone_layer, thresh_layer]
@@ -148,24 +167,20 @@ def build_sensor_chart(
     Returns:
         İnteraktif Altair chart'ı (band/uyarı yoksa tek çizgi; varsa katmanlı).
     """
-    y_title = f"{sensor} ({unit})" if unit else sensor
     frame_empty = bool(frame.empty)
     x_domain: list[Any] | None = (
         None if frame_empty else [frame["timestamp"].min(), frame["timestamp"].max()]
     )
 
-    # y-ölçeği: band varsa eşikleri kapsa (çizginin sınıra uzaklığı görünür). Boş frame'de band yok.
+    # Hibrit y-ölçeği: sinyalin gerçek hareketine ölçekle (taban'lı); bölge/eşik clip ile girer.
     y_scale = alt.Scale(zero=False)
     band_bounds: tuple[float, float] | None = None
     if band is not None and not frame_empty:
-        dmin = float(frame["value"].min())
-        dmax = float(frame["value"].max())
-        lo = min(dmin, band.warn)
-        hi = max(dmax, band.trip)
-        pad = (hi - lo) * 0.05 or 1.0
-        lo, hi = lo - pad, hi + pad
-        y_scale = alt.Scale(domain=[lo, hi], zero=False)
-        band_bounds = (lo, hi)
+        ylo, yhi = _hybrid_y_bounds(
+            float(frame["value"].min()), float(frame["value"].max()), band
+        )
+        y_scale = alt.Scale(domain=[ylo, yhi], zero=False)
+        band_bounds = (ylo, yhi)
 
     # Katman eklenecekse (band/overlay) x-domain'i sabitle ki bölge + çizgi + overlay hizalansın.
     relevant = [a for a in alerts if a.sensor == sensor]
@@ -175,6 +190,7 @@ def build_sensor_chart(
                       axis=alt.Axis(labelFontSize=10))
     else:
         x_enc = alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10))
+    # y-başlığı YOK (ham kod adı yerine panel başlığı sensörü adlandırır); yalnız değer eksenleri.
     line: alt.Chart = (
         alt.Chart(frame)
         .mark_line(color=LINE_COLOR, strokeWidth=1.5)
@@ -182,9 +198,9 @@ def build_sensor_chart(
             x=x_enc,
             y=alt.Y(
                 "value:Q",
-                title=y_title,
+                title=None,
                 scale=y_scale,
-                axis=alt.Axis(grid=True, gridColor=_GRID_COLOR, labelFontSize=11, titleFontSize=11),
+                axis=alt.Axis(grid=True, gridColor=_GRID_COLOR, labelFontSize=11),
             ),
             tooltip=[
                 alt.Tooltip("timestamp:T", format="%H:%M:%S", title="zaman"),
@@ -194,26 +210,25 @@ def build_sensor_chart(
         )
     )
 
-    layers: list[alt.Chart] = []
+    zone_layers: list[alt.Chart] = []
     if band is not None and band_bounds is not None and x_domain is not None:
-        layers.extend(_band_layers(band_bounds[0], band_bounds[1], band, y_scale, x_domain))
+        zone_layers = _band_layers(band_bounds[0], band_bounds[1], band, y_scale, x_domain)
 
+    overlay_layers: list[alt.Chart] = []
     if relevant and not frame_empty:
         overlay = alerts_to_overlay_frame(relevant)
-        layers.append(
+        overlay_layers.append(
             alt.Chart(overlay).mark_rect(opacity=BAND_OPACITY, clip=True)
             .encode(x="window_start:T", x2="window_end:T", color=_severity_color())
         )
-        layers.append(
+        overlay_layers.append(
             alt.Chart(overlay).mark_rule(strokeDash=[4, 2], clip=True)
             .encode(x="window_start:T", color=_severity_color())
         )
-        layers.append(
-            alt.Chart(overlay).mark_text(align="left", baseline="top", dx=4, clip=True)
-            .encode(x="window_start:T", y=alt.value(8), text="label:N", color=_severity_color())
-        )
 
-    if not layers:
+    if not zone_layers and not overlay_layers:
         return _finalize(line)
-    layers.append(line)
-    return _finalize(alt.layer(*layers))
+    # Katman sırası (alttan üste): bölge arka plan → uyarı penceresi → telemetri çizgisi → başlangıç.
+    band_overlay = overlay_layers[:1]
+    start_overlay = overlay_layers[1:]
+    return _finalize(alt.layer(*zone_layers, *band_overlay, line, *start_overlay))
