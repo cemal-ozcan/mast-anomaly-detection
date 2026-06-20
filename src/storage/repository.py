@@ -137,6 +137,18 @@ class TelemetryRepository:
         with self._engine.connect() as conn:
             return int(conn.execute(select(func.count()).select_from(telemetry)).scalar_one())
 
+    def earliest_telemetry_timestamp(self) -> str | None:
+        """En eski telemetri timestamp'i (izleme süresi için); veri yoksa None."""
+        with self._engine.connect() as conn:
+            result: str | None = conn.execute(select(func.min(telemetry.c.timestamp))).scalar()
+        return result
+
+    def count_anomalies_since(self, since: str) -> int:
+        """created_at >= since olan anomali sayısı (son-24s tespit KPI'si)."""
+        stmt = select(func.count()).select_from(anomalies).where(anomalies.c.created_at >= since)
+        with self._engine.connect() as conn:
+            return int(conn.execute(stmt).scalar_one())
+
     def fetch_recent(self, device_id: str, sensor: str, limit: int) -> list[IngestedReading]:
         """Bir cihaz+sensör için en yeni `limit` okumayı timestamp DESC döndürür.
 
