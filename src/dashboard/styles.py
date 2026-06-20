@@ -12,7 +12,13 @@ from datetime import datetime
 
 from alerts.models import Alert
 from dashboard.fleet import DeviceHealth, FleetKpis
-from dashboard.labels import badge_label, device_label, rule_label, state_label
+from dashboard.labels import (
+    badge_label,
+    device_label,
+    rule_explanation,
+    rule_label,
+    state_label,
+)
 from dashboard.transform import relative_time
 
 _SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
@@ -380,7 +386,7 @@ def alert_card_html(alert: Alert, now: datetime) -> str:
     """
     sev = alert.severity if alert.severity in ("critical", "high", "warning") else "warning"
     when = relative_time(now, alert.created_at)
-    # Başlık düz Türkçe (kim · ne); ham teknik açıklama soluk ikincil satır (IT lead için).
+    # Başlık düz Türkçe (kim · ne); ikincil satır da DÜZ-DİL açıklama (ham kod adı değil).
     return (
         f'<div class="mg-alert mg-alert--{sev}">'
         f'<span class="mg-pill mg-pill--{sev}">{_html.escape(badge_label(sev))}</span>'
@@ -388,7 +394,7 @@ def alert_card_html(alert: Alert, now: datetime) -> str:
         '<span class="mg-desc">'
         f'<b>{_html.escape(device_label(alert.device_id))}</b> · '
         f"{_html.escape(rule_label(alert.rule_name))}"
-        f'<span class="mg-detail">{_html.escape(alert.description)}</span>'
+        f'<span class="mg-detail">{_html.escape(rule_explanation(alert.rule_name))}</span>'
         "</span>"
         "</div>"
     )

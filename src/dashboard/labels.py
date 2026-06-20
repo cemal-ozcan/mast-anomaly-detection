@@ -34,7 +34,9 @@ RULE_LABELS: dict[str, str] = {
     "sensor_frozen": "Sensör donmuş",
 }
 
-BADGE_LABELS: dict[str, str] = {"ok": "SAĞLIKLI", "warning": "DİKKAT", "critical": "KRİTİK"}
+BADGE_LABELS: dict[str, str] = {
+    "ok": "SAĞLIKLI", "warning": "DİKKAT", "high": "YÜKSEK", "critical": "KRİTİK"
+}
 
 # Sensör OKUMASI durumu (mast "SAĞLIKLI", sensör "NORMAL" daha doğal). DİKKAT/KRİTİK ortak.
 SENSOR_STATUS_LABELS: dict[str, str] = {"ok": "NORMAL", "warning": "DİKKAT", "critical": "KRİTİK"}

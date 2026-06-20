@@ -153,7 +153,7 @@ def _alert(severity: str = "critical", desc: str = "motor_voltage std 4.77V eşi
                  resolved_at=None, clean_streak=0, rule_set="motor_voltage_erratic")
 
 
-def test_alert_card_pill_and_escape() -> None:
+def test_alert_card_pill_and_plain_explanation() -> None:
     from datetime import UTC, datetime
 
     from dashboard.styles import alert_card_html
@@ -163,8 +163,20 @@ def test_alert_card_pill_and_escape() -> None:
     assert "mg-pill--critical" in h and "mg-alert--critical" in h
     assert "Cihaz 4" in h  # device_id → insan adı
     assert "Motor voltajı dengesiz" in h  # rule → düz Türkçe başlık
-    assert "&lt;x&gt;" in h  # ham açıklama (soluk detay) html.escape'lendi
-    assert "<x>" not in h
+    assert "besleme" in h.lower()  # ikincil satır düz-dil açıklama (rule_explanation)
+    assert "std 4.77" not in h  # ham teknik açıklama (kod adı/değer) ARTIK gösterilmiyor
+
+
+def test_alert_card_high_severity_label() -> None:
+    from datetime import UTC, datetime
+
+    from dashboard.styles import alert_card_html
+
+    now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
+    h = alert_card_html(_alert(severity="high"), now)
+    assert "YÜKSEK" in h and "high" not in h.replace("mg-pill--high", "").replace(
+        "mg-alert--high", ""
+    )
 
 
 def test_alerts_section_empty() -> None:
