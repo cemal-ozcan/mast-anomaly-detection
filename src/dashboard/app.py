@@ -223,10 +223,16 @@ def _render_alert_management(repository: TelemetryRepository) -> None:
 
 
 def _value_str(value: float | None, unit: str) -> str:
-    """Güncel değeri okunur biçimde formatlar (yoksa '—')."""
+    """Güncel değeri okunur biçimde formatlar (yoksa '—'); küçük değerlerde basamak kaybetme.
+
+    Büyüklüğe uyarlı: ≥100 → 0 basamak (mast_position 6000), ≥10 → 1 (sıcaklık/voltaj),
+    <10 → 2 (titreşim 0.12 g, akım 8.30 A).
+    """
     if value is None:
         return "—"
-    return f"{value:.1f} {unit}".strip()
+    mag = abs(value)
+    decimals = 0 if mag >= 100 else (1 if mag >= 10 else 2)
+    return f"{value:.{decimals}f} {unit}".strip()
 
 
 def _meta_str(band: LevelBand | None, unit: str) -> str:
