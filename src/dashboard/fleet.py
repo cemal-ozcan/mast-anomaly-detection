@@ -110,6 +110,20 @@ def derive_fleet(
     return [derive_device_health(d, latest_readings, alerts) for d in devices]
 
 
+def sort_fleet_by_severity(fleet: list[DeviceHealth]) -> list[DeviceHealth]:
+    """Filoyu duruma göre sıralar: critical > warning > ok, eşitlikte device_id (management by exception)."""
+    rank = {BADGE_CRITICAL: 0, BADGE_WARNING: 1, BADGE_OK: 2}
+    return sorted(fleet, key=lambda h: (rank.get(h.badge, 3), h.device_id))
+
+
+def representative_sensor(health: DeviceHealth) -> str:
+    """Kart sparkline'ı için temsilci sensör: açık-uyarılı (vurgulu) sensör; yoksa motor_current."""
+    for snap in health.snapshots:
+        if snap.highlighted:
+            return snap.sensor
+    return "motor_current"
+
+
 def compute_kpis(devices: list[str], alerts: list[Alert], now: datetime) -> FleetKpis:
     """KPI satırını tek fetch_alerts sonucundan client-side türetir (spec § 6/§ 7).
 

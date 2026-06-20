@@ -134,3 +134,26 @@ def test_sensor_badge_ignores_closed_alerts() -> None:
     closed = [_alert(1, "dev", status="resolved", severity="critical",
                      sensor="motor_temperature")]
     assert sensor_badge(closed, "motor_temperature") == BADGE_OK
+
+
+def _health(device: str, badge: str, highlighted_sensor: str | None = None):  # type: ignore[no-untyped-def]
+    from dashboard.fleet import DeviceHealth, SensorSnapshot
+    snaps = (SensorSnapshot("motor_current", 1.0, "A", highlighted_sensor == "motor_current"),
+             SensorSnapshot("vibration", 0.1, "g", highlighted_sensor == "vibration"))
+    return DeviceHealth(device, badge, "idle", snaps, 1 if highlighted_sensor else 0, None)
+
+
+def test_sort_fleet_by_severity() -> None:
+    from dashboard.fleet import sort_fleet_by_severity
+
+    fleet = [_health("device_002", "ok"), _health("device_001", "critical"),
+             _health("device_003", "warning"), _health("device_004", "critical")]
+    order = [h.device_id for h in sort_fleet_by_severity(fleet)]
+    assert order == ["device_001", "device_004", "device_003", "device_002"]
+
+
+def test_representative_sensor() -> None:
+    from dashboard.fleet import representative_sensor
+
+    assert representative_sensor(_health("d", "warning", "vibration")) == "vibration"
+    assert representative_sensor(_health("d", "ok")) == "motor_current"
