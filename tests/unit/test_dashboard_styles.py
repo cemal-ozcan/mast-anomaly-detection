@@ -146,3 +146,23 @@ def test_fleet_summary_counts_and_tone() -> None:
     assert "4 masttan" in h and "2'i sağlıklı" in h
     assert "1'i dikkat gerektiriyor" in h and "1'i KRİTİK" in h
     assert "mg-summary--critical" in h  # en kötü ton
+
+
+def test_panel_header_html_status_and_escape() -> None:
+    from dashboard.styles import panel_header_html
+
+    h = panel_header_html("Motor Sıcaklığı", "KRİTİK", "critical", "76 °C",
+                          "Uyarı 95 · Kritik 130 <x>")
+    assert "mg-panel" in h
+    assert "Motor Sıcaklığı" in h
+    assert "KRİTİK" in h
+    assert "mg-badge--critical" in h  # mevcut pill renk sınıfı yeniden kullanılır
+    assert "76 °C" in h
+    assert "&lt;x&gt;" in h and "<x>" not in h  # meta html.escape'li
+
+
+def test_panel_header_html_ok_uses_ok_class() -> None:
+    from dashboard.styles import panel_header_html
+
+    h = panel_header_html("Titreşim", "NORMAL", "ok", "0.12 g", "Uyarı 0.37 · Kritik 0.5")
+    assert "mg-badge--ok" in h and "NORMAL" in h

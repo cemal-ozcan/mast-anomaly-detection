@@ -108,6 +108,14 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: "Inter","Segoe
 /* Grafik başlığı (arızalı sensör vurgusu) */
 .mg-chart-title {{font-weight:700; font-size:15px; color:{_TEXT}; margin:6px 0 2px;}}
 .mg-chart-title--alert {{color:{_CRIT};}}
+
+/* Cihaz Detayı sensör paneli */
+.mg-panel {{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
+  margin:4px 0 2px;}}
+.mg-panel .mg-pname {{font-weight:700; font-size:15px; color:{_TEXT};}}
+.mg-panel .mg-pval {{font-size:13px; color:{_MUTED};}}
+.mg-pmeta {{display:block; font-size:12px; color:{_MUTED}; margin-top:1px;}}
+
 .mg-section {{font-weight:800; font-size:18px; color:{_TEXT}; margin:16px 0 8px;}}
 </style>
 """
@@ -260,6 +268,32 @@ def alerts_section_html(title: str, alerts: list[Alert], now: datetime, empty_ms
         alerts, key=lambda a: _SEVERITY_RANK_DISPLAY.get(a.severity, 0), reverse=True
     )
     return head + "".join(alert_card_html(a, now) for a in ordered)
+
+
+def panel_header_html(
+    sensor_label: str, status_label: str, badge: str, value_str: str, meta_str: str
+) -> str:
+    """Cihaz Detayı sensör paneli üst bloğu: ad + renkli durum pill'i + değer + meta.
+
+    Args:
+        sensor_label: Türkçe sensör adı.
+        status_label: Durum metni (NORMAL/DİKKAT/KRİTİK).
+        badge: ok|warning|critical → pill renk sınıfı.
+        value_str: Güncel değer (örn. "76 °C").
+        meta_str: Eşik/açıklama satırı (serbest metin → escape).
+
+    Returns:
+        `.mg-panel` HTML'i (tüm metin html.escape'li).
+    """
+    b = badge if badge in ("ok", "warning", "critical") else "ok"
+    return (
+        '<div class="mg-panel">'
+        f'<span class="mg-pname">{_html.escape(sensor_label)} '
+        f'<span class="mg-badge mg-badge--{b}">{_html.escape(status_label)}</span></span>'
+        f'<span class="mg-pval">{_html.escape(value_str)}</span>'
+        "</div>"
+        f'<span class="mg-pmeta">{_html.escape(meta_str)}</span>'
+    )
 
 
 def header_html(now_str: str) -> str:
