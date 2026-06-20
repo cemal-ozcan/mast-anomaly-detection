@@ -344,7 +344,7 @@ def panel_header_html(
 
 
 def header_html(now_str: str) -> str:
-    """MastGuard başlık şeridi (sektör-nötr ürün adı + canlı durum + saat).
+    """Başlık şeridi (nötr açıklayıcı başlık — marka adı yok + canlı durum + saat).
 
     Args:
         now_str: Gösterilecek saat (örn. "14:32:05").
@@ -354,8 +354,8 @@ def header_html(now_str: str) -> str:
     """
     return (
         '<div class="mg-header">'
-        '<span class="mg-brand">MastGuard'
-        "<small>Teleskopik Mast · Durum İzleme · gözlem modu</small></span>"
+        '<span class="mg-brand">MAST İZLEME'
+        "<small>TELESKOPİK MAST · DURUM İZLEME · GÖZLEM MODU</small></span>"
         f'<span class="mg-live"><span class="mg-livedot"></span>CANLI · {now_str}</span>'
         "</div>"
     )

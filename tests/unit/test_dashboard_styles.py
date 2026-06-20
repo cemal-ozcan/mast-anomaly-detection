@@ -17,7 +17,7 @@ def test_app_css_nonempty_and_hides_chrome() -> None:
 
 def test_header_html_contains_brand_and_clock() -> None:
     html = header_html("14:32:05")
-    assert "MastGuard" in html
+    assert "MAST İZLEME" in html  # nötr açıklayıcı başlık (marka adı yok)
     assert "14:32:05" in html
     assert "mg-header" in html
 
