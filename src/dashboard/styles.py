@@ -180,7 +180,7 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 
 /* Kapsam şeridi + info tooltip */
 .mg-stats {{display:grid; grid-template-columns:repeat(5,1fr); background:{_SURFACE};
-  border:1px solid {_BORDER}; border-radius:6px; overflow:hidden; margin-bottom:6px;}}
+  border:1px solid {_BORDER}; border-radius:6px; margin-bottom:6px;}}
 .mg-stat {{padding:13px 18px; border-left:1px solid {_BORDER};}}
 .mg-stat:first-child {{border-left:0;}}
 .mg-stat-v {{font-family:{_MONO}; font-size:21px; font-weight:600; display:flex;
@@ -190,11 +190,12 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 .mg-info {{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
   border:1px solid {_BORDER}; border-radius:50%; font-family:{_MONO}; font-size:10px; font-weight:400;
   color:{_MUTED}; cursor:help; position:relative;}}
-.mg-info::after {{content:attr(data-tip); position:absolute; bottom:150%; left:50%;
-  transform:translateX(-50%); background:{_GRAPHITE}; color:#eef0f2; font-family:{_FONT}; font-size:12px;
-  letter-spacing:0; text-transform:none; padding:7px 10px; border-radius:5px; width:max-content;
+.mg-info::after {{content:attr(data-tip); position:absolute; bottom:160%; left:50%;
+  transform:translateX(-50%); background:{_SURFACE}; color:{_TEXT}; border:1px solid {_BORDER};
+  font-family:{_FONT}; font-size:12px; line-height:1.4; font-weight:400;
+  letter-spacing:0; text-transform:none; padding:8px 11px; border-radius:6px; width:max-content;
   max-width:230px; white-space:normal; opacity:0; pointer-events:none; transition:opacity .12s;
-  z-index:60; box-shadow:0 4px 14px rgba(0,0,0,.18);}}
+  z-index:1000; box-shadow:0 8px 22px rgba(15,23,42,.16);}}
 .mg-info:hover::after {{opacity:1;}}
 
 /* Filo kartı — tıklanır link + sparkline ayağı */
