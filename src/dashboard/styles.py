@@ -31,6 +31,8 @@ _CRIT = "#bd3a2c"
 _OKBG = "#e8f3ec"
 _WARNBG = "#f7efe0"
 _CRITBG = "#f7e6e3"
+_ICE = "#eaf2fb"        # buz mavisi — yalnız hover/etkileşim geri bildirimi (marka değil)
+_ICE_BORDER = "#bcd4ef"
 _FONT = '"IBM Plex Sans", system-ui, -apple-system, sans-serif'
 _MONO = '"IBM Plex Mono", ui-monospace, "SF Mono", monospace'
 
@@ -45,17 +47,25 @@ div[data-testid="stToolbar"] {{display: none;}}
 footer {{visibility: hidden;}}
 /* Enstrüman-sınıfı açık zemin (tarayıcı tema-seçici ezmesine karşı) */
 .stApp {{background: {_BG} !important;}}
-.block-container {{padding-top: 1.1rem; max-width: 1320px;}}
-section[data-testid="stSidebar"] {{background: {_SURFACE} !important; border-right: 1px solid {_BORDER};}}
+.block-container {{padding-top: 1.1rem; max-width: 1340px;}}
+/* Sidebar kullanılmıyor (gezinme üst barda) → tamamen gizle, sol boşluğu geri al */
+section[data-testid="stSidebar"] {{display: none !important;}}
+[data-testid="stSidebarCollapsedControl"] {{display: none !important;}}
 html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 .mono, .mg-kpi-val, .mg-pval, .mg-when, .mg-summary b, .mg-pill {{
   font-family: {_MONO}; font-variant-numeric: tabular-nums;}}
 
-/* Light selectbox/input/button (Streamlit BaseWeb karanlık varsayılanını ez) */
+/* Light selectbox kapalı kontrol (Streamlit BaseWeb karanlık varsayılanını ez) */
 [data-baseweb="select"] > div {{background:{_SURFACE} !important; border-color:{_BORDER} !important;
   color:{_TEXT} !important; border-radius:5px !important;}}
 [data-baseweb="select"] span, [data-baseweb="select"] svg {{color:{_TEXT} !important; fill:{_TEXT} !important;}}
-[data-baseweb="popover"] li {{font-family:{_FONT};}}
+/* Açılan menü (popover) — beyaz zemin, siyah yazı, buz-mavisi hover */
+[data-baseweb="popover"] [role="listbox"], [data-baseweb="menu"], ul[role="listbox"] {{
+  background:{_SURFACE} !important; border:1px solid {_BORDER} !important;}}
+[data-baseweb="popover"] li, [role="option"] {{background:{_SURFACE} !important;
+  color:{_TEXT} !important; font-family:{_FONT} !important;}}
+[data-baseweb="popover"] li:hover, [role="option"]:hover,
+[role="option"][aria-selected="true"] {{background:{_ICE} !important; color:{_TEXT} !important;}}
 .stButton > button {{background:{_SURFACE}; color:{_TEXT}; border:1px solid {_BORDER};
   border-radius:5px; font-weight:600; font-family:{_FONT};}}
 .stButton > button:hover {{border-color:{_GRAPHITE}; color:{_GRAPHITE};}}
@@ -96,7 +106,9 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 
 /* Filo kartları — hairline + ince durum şeridi (düşük radius, gölge yok) */
 .mg-fleet {{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;}}
-.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:6px; overflow:hidden;}}
+.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:6px; overflow:hidden;
+  transition:background .12s, border-color .12s;}}
+.mg-card:hover {{background:{_ICE}; border-color:{_ICE_BORDER};}}
 .mg-card .mg-strip {{height:3px; background:{_OK};}}
 .mg-card--warning .mg-strip {{background:{_WARN};}}
 .mg-card--critical .mg-strip {{background:{_CRIT};}}
@@ -116,7 +128,9 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 /* Uyarı satır-kartları (düz Türkçe başlık + soluk teknik detay) */
 .mg-alert {{display:flex; align-items:center; gap:12px; background:{_SURFACE};
   border:1px solid {_BORDER}; border-left:3px solid {_MUTED}; border-radius:5px;
-  padding:11px 14px; margin-bottom:7px; font-size:15px; color:{_TEXT};}}
+  padding:11px 14px; margin-bottom:7px; font-size:15px; color:{_TEXT};
+  transition:background .12s;}}
+.mg-alert:hover {{background:{_ICE};}}
 .mg-alert--critical {{border-left-color:{_CRIT};}}
 .mg-alert--high {{border-left-color:{_WARN};}}
 .mg-alert--warning {{border-left-color:{_WARN};}}

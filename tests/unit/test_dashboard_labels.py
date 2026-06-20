@@ -23,8 +23,9 @@ def test_state_label() -> None:
 
 
 def test_device_label() -> None:
-    assert device_label("device_001") == "Cihaz 001"
-    assert device_label("device_006") == "Cihaz 006"
+    assert device_label("device_001") == "Cihaz 1"
+    assert device_label("device_006") == "Cihaz 6"
+    assert device_label("device_012") == "Cihaz 12"
     assert device_label("baska") == "baska"
 
 

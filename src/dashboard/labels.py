@@ -51,10 +51,11 @@ def state_label(state: str) -> str:
 
 
 def device_label(device_id: str) -> str:
-    """`device_001` → `Cihaz 001` (eşleşmezse ham id)."""
+    """`device_001` → `Cihaz 1` (baştaki sıfırlar atılır; eşleşmezse ham id)."""
     prefix = "device_"
     if device_id.startswith(prefix):
-        return f"Cihaz {device_id[len(prefix):]}"
+        suffix = device_id[len(prefix):]
+        return f"Cihaz {int(suffix)}" if suffix.isdigit() else f"Cihaz {suffix}"
     return device_id
 
 

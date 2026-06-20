@@ -71,7 +71,7 @@ def test_device_card_problem_plain_turkish() -> None:
 
     h = device_card_html(_health(badge="critical", n=1, top_rule="motor_voltage_erratic"))
     assert "mg-card--critical" in h and "mg-badge--critical" in h
-    assert "Cihaz 004" in h  # device_id → insan adı
+    assert "Cihaz 4" in h  # device_id → insan adı
     assert "Sabit" in h  # state "holding" → Türkçe
     assert "KRİTİK" in h  # badge label
     assert "Motor voltajı dengesiz" in h  # top_rule → düz Türkçe sorun
@@ -110,7 +110,7 @@ def test_alert_card_pill_and_escape() -> None:
     now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
     h = alert_card_html(_alert(severity="critical"), now)
     assert "mg-pill--critical" in h and "mg-alert--critical" in h
-    assert "Cihaz 004" in h  # device_id → insan adı
+    assert "Cihaz 4" in h  # device_id → insan adı
     assert "Motor voltajı dengesiz" in h  # rule → düz Türkçe başlık
     assert "&lt;x&gt;" in h  # ham açıklama (soluk detay) html.escape'lendi
     assert "<x>" not in h
@@ -134,7 +134,7 @@ def test_alerts_section_lists_alerts() -> None:
 
     now = datetime(2026, 6, 19, 12, 58, 0, tzinfo=UTC)
     h = alerts_section_html("Arıza Uyarıları", [_alert()], now, "yok")
-    assert "Cihaz 004" in h and "mg-alert" in h
+    assert "Cihaz 4" in h and "mg-alert" in h
 
 
 def test_fleet_summary_counts_and_tone() -> None:
