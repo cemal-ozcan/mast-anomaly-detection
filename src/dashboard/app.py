@@ -348,7 +348,8 @@ def _render_device_detail(
                 rule_label(alert.rule_name) if alert else "",
                 rule_explanation(alert.rule_name) if alert else "",
             )
-            + layer_chips_html(watching, caught, detail)
+            # Katman chip'leri YALNIZ uyarı varken (YAKALAYAN); sağlıkken gösterme (sade).
+            + (layer_chips_html(watching, caught, detail) if alert else "")
             + gauge_html
             + "</div>"
         )
