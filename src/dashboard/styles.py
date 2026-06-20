@@ -192,7 +192,7 @@ html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
   margin-top:5px;}}
 .mg-info {{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
   border:1px solid {_BORDER}; border-radius:50%; font-family:{_MONO}; font-size:10px; font-weight:400;
-  color:{_MUTED}; cursor:help; position:relative;}}
+  color:{_MUTED}; cursor:help; position:relative; vertical-align:middle; text-transform:none;}}
 .mg-info::after {{content:attr(data-tip); position:absolute; bottom:160%; left:50%;
   transform:translateX(-50%); background:{_SURFACE}; color:{_TEXT}; border:1px solid {_BORDER};
   font-family:{_FONT}; font-size:12px; line-height:1.4; font-weight:400;

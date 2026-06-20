@@ -45,6 +45,7 @@ from dashboard.overview import (  # noqa: E402
     fleet_card_html,
     fleet_grid_html,
     hero_html,
+    section_html,
     summarize_fleet,
     timeline_events,
     timeline_html,
@@ -247,7 +248,12 @@ def _render_overview(repository: TelemetryRepository) -> None:
     st.markdown(fleet_grid_html(cards), unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="mg-section">Son 24 saat — olay akışı</div>', unsafe_allow_html=True
+        section_html(
+            "Son 24 saat — olay akışı",
+            "Sistemin son 24 saatte yakaladığı olaylar. Bir değer anormale çıkınca uyarı açılır; "
+            "değer kararlı şekilde normale dönünce 'çözüldü' olarak kapanır (çözümü sistem belirler).",
+        ),
+        unsafe_allow_html=True,
     )
     st.markdown(timeline_html(timeline_events(alerts, now)), unsafe_allow_html=True)
 

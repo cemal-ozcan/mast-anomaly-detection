@@ -49,6 +49,12 @@ def info_badge_html(tip: str) -> str:
     return f'<span class="mg-info" data-tip="{_html.escape(tip)}">i</span>'
 
 
+def section_html(title: str, tip: str = "") -> str:
+    """Bölüm başlığı (eyebrow); tip verilirse başlık yanına info tooltip rozeti."""
+    badge = f" {info_badge_html(tip)}" if tip else ""
+    return f'<div class="mg-section">{_html.escape(title)}{badge}</div>'
+
+
 def health_ring_svg(summary: FleetSummary) -> str:
     """Sağlık halkası (donut): yeşil yay = ok/total; merkez 'N/M' + 'SAĞLIKLI'."""
     pct = (summary.ok / summary.total * 100) if summary.total else 0.0

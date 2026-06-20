@@ -38,6 +38,15 @@ def test_info_badge_escape() -> None:
     assert "mg-info" in h and 'data-tip="Açıklama &lt;x&gt;"' in h
 
 
+def test_section_html_with_and_without_tip() -> None:
+    from dashboard.overview import section_html
+    plain = section_html("Mastlar")
+    assert plain == '<div class="mg-section">Mastlar</div>'
+    tipped = section_html("Son 24 saat", "Yakalanan olaylar.")
+    assert "mg-section" in tipped and "Son 24 saat" in tipped
+    assert "mg-info" in tipped and 'data-tip="Yakalanan olaylar."' in tipped
+
+
 def test_health_ring_svg() -> None:
     from dashboard.overview import health_ring_svg, summarize_fleet
     svg = health_ring_svg(summarize_fleet([_h("ok"), _h("ok"), _h("critical"), _h("critical")]))
