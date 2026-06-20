@@ -225,6 +225,28 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
 .mg-ev-d--ack {{background:{_MUTED};}}
 .mg-ev-x {{font-size:14px; color:{_TEXT};}}
 
+/* Cihaz Detayı — katman chip'leri + kritiğe-uzaklık gauge */
+.mg-layers {{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:8px 0 2px;}}
+.mg-layers .mg-lbl {{font-family:{_MONO}; font-size:10px; letter-spacing:.07em;
+  text-transform:uppercase; color:{_MUTED}; margin-right:2px;}}
+.mg-chip {{font-size:11px; font-weight:500; padding:2px 8px; border:1px solid {_BORDER};
+  border-radius:999px; color:{_MUTED};}}
+.mg-chip--on {{background:{_CRITBG}; border-color:{_CRITBG}; color:{_CRIT}; font-weight:600;}}
+.mg-chip-score {{font-family:{_MONO}; font-size:12px; font-weight:600; color:{_CRIT};
+  margin-left:auto;}}
+.mg-gauge-row {{display:flex; align-items:center; gap:9px; margin:7px 0 2px;}}
+.mg-glbl {{font-family:{_MONO}; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+  color:{_MUTED}; min-width:108px;}}
+.mg-gauge {{flex:1; height:7px; background:{_BORDER}; border-radius:4px; overflow:hidden;}}
+.mg-gfill {{display:block; height:100%; background:{_OK};}}
+.mg-gfill--warning {{background:{_WARN};}}
+.mg-gfill--critical {{background:{_CRIT};}}
+.mg-gfill--ok {{background:{_OK};}}
+.mg-gpct {{font-family:{_MONO}; font-size:12px; font-weight:600; min-width:54px; text-align:right;
+  color:{_MUTED};}}
+.mg-gpct--warning {{color:{_WARN};}}
+.mg-gpct--critical {{color:{_CRIT};}}
+
 /* Bölüm başlığı — eyebrow (mono, letterspaced, sessiz) */
 .mg-section {{font-family:{_MONO}; font-weight:500; font-size:12px; color:{_MUTED};
   letter-spacing:.14em; text-transform:uppercase; margin:22px 0 9px;}}
@@ -405,6 +427,53 @@ def panel_header_html(
         f'<span class="mg-pval">{_html.escape(value_str)}</span>'
         "</div>"
         f'<span class="mg-pmeta">{_html.escape(meta_str)}</span>'
+    )
+
+
+def layer_chips_html(watching: list[str], caught: str | None, score: float | None) -> str:
+    """Sensörü izleyen/yakalayan tespit katmanı chip'leri (+uyarı varsa gerçek skor).
+
+    caught verilirse 'Yakalayan: <caught>' vurgulu + skor; yoksa 'İzleyen: <watching...>'.
+    watching boş ve caught yoksa boş string.
+    """
+    if not watching and caught is None:
+        return ""
+    if caught is not None:
+        ordered = list(watching)
+        if caught not in ordered:
+            ordered = [caught, *ordered]
+        chips = "".join(
+            f'<span class="mg-chip mg-chip--on">{_html.escape(c)}</span>'
+            if c == caught
+            else f'<span class="mg-chip">{_html.escape(c)}</span>'
+            for c in ordered
+        )
+        score_html = (
+            f'<span class="mg-chip-score">skor {score:.2f}</span>' if score is not None else ""
+        )
+        return (
+            '<div class="mg-layers"><span class="mg-lbl">Yakalayan</span>'
+            f"{chips}{score_html}</div>"
+        )
+    chips = "".join(f'<span class="mg-chip">{_html.escape(c)}</span>' for c in watching)
+    return f'<div class="mg-layers"><span class="mg-lbl">İzleyen</span>{chips}</div>'
+
+
+def distance_gauge_html(pct: int, severity: str) -> str:
+    """'Kritiğe uzaklık' ince gauge'ı: dolum=pct%, renk severity'den; pct==0 → 'Güvenli'.
+
+    Args:
+        pct: 0..100 (band_position_score*100, yuvarlanmış).
+        severity: ok|warning|critical → dolum/etiket rengi sınıfı.
+    """
+    sev = severity if severity in ("ok", "warning", "critical") else "ok"
+    label = "Güvenli" if pct <= 0 else f"%{pct}"
+    fill = max(0, min(100, pct))
+    return (
+        '<div class="mg-gauge-row"><span class="mg-glbl">Kritiğe uzaklık</span>'
+        f'<span class="mg-gauge"><span class="mg-gfill mg-gfill--{sev}" '
+        f'style="width:{fill}%"></span></span>'
+        f'<span class="mg-gpct mg-gpct--{sev}">{label}</span></div>'
     )
 
 

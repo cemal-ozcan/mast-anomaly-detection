@@ -22,6 +22,39 @@ def test_app_css_has_operations_center_classes() -> None:
         assert cls in APP_CSS
 
 
+def test_layer_chips_watching() -> None:
+    from dashboard.styles import layer_chips_html
+    h = layer_chips_html(["Kural", "İstatistik"], None, None)
+    assert "İzleyen" in h and "Kural" in h and "İstatistik" in h
+    assert "mg-chip" in h
+
+
+def test_layer_chips_caught_with_score() -> None:
+    from dashboard.styles import layer_chips_html
+    h = layer_chips_html(["Kural", "İstatistik"], "Kural", 0.2)
+    assert "Yakalayan" in h and "mg-chip--on" in h
+    assert "skor 0.20" in h
+
+
+def test_layer_chips_caught_not_in_watching_no_dup() -> None:
+    from dashboard.styles import layer_chips_html
+    h = layer_chips_html([], "Çoklu katman", 1.0)
+    assert h.count("Çoklu katman") == 1 and "mg-chip--on" in h
+
+
+def test_layer_chips_empty() -> None:
+    from dashboard.styles import layer_chips_html
+    assert layer_chips_html([], None, None) == ""
+
+
+def test_distance_gauge_safe_and_filled() -> None:
+    from dashboard.styles import distance_gauge_html
+    safe = distance_gauge_html(0, "ok")
+    assert "Güvenli" in safe and "mg-gauge" in safe
+    hot = distance_gauge_html(68, "warning")
+    assert "%68" in hot and "68%" in hot
+
+
 def test_header_html_contains_brand_and_clock() -> None:
     html = header_html("14:32:05")
     assert "MAST İZLEME" in html  # nötr açıklayıcı başlık (marka adı yok)
