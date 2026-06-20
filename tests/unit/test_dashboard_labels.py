@@ -41,6 +41,15 @@ def test_rule_label_direct() -> None:
     assert rule_label("sensor_out_of_range") == "Sensör geçersiz veri veriyor"
 
 
+def test_rule_explanation() -> None:
+    from dashboard.labels import rule_explanation
+
+    assert "voltaj" in rule_explanation("motor_voltage_erratic").lower()
+    assert rule_explanation("fused(2)") != ""
+    assert "saptı" in rule_explanation("three_sigma:motor_current")
+    assert rule_explanation("bilinmeyen") == ""
+
+
 def test_rule_label_fused_and_statistical() -> None:
     assert rule_label("fused(2)") == "Çoklu anormallik"
     assert rule_label("three_sigma:motor_current") == "Motor Akımı olağandışı"

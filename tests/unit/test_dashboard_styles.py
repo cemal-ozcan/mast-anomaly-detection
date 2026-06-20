@@ -22,6 +22,17 @@ def test_app_css_has_operations_center_classes() -> None:
         assert cls in APP_CSS
 
 
+def test_panel_problem_alerting_and_normal() -> None:
+    from dashboard.styles import panel_problem_html
+    a = panel_problem_html("critical", "Motor voltajı dengesiz", "Besleme sorunu olabilir.")
+    assert "Motor voltajı dengesiz" in a and "Besleme sorunu olabilir." in a
+    assert "mg-prob--critical" in a
+    n = panel_problem_html("ok", "", "")
+    assert "normal aralıkta" in n
+    e = panel_problem_html("warning", "X <y>", "Z <w>")
+    assert "&lt;y&gt;" in e and "&lt;w&gt;" in e
+
+
 def test_layer_chips_watching() -> None:
     from dashboard.styles import layer_chips_html
     h = layer_chips_html(["Kural", "İstatistik"], None, None)

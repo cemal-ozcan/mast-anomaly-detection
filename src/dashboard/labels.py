@@ -69,6 +69,29 @@ def sensor_status_label(badge: str) -> str:
     return SENSOR_STATUS_LABELS.get(badge, badge)
 
 
+# Kural adı → düz Türkçe "ne anlama geliyor" (yöneticiye/teknisyene açıklama).
+RULE_EXPLANATION: dict[str, str] = {
+    "motor_temperature_high": "Motor aşırı ısınıyor; soğutma yetersiz ya da aşırı yük olabilir.",
+    "motor_current_high": "Motor normalden fazla akım çekiyor; mekanik direnç/aşınma işareti olabilir.",
+    "vibration_elevated": "Titreşim normalin üstünde; gevşeklik, dengesizlik ya da rulman aşınması olabilir.",
+    "hydraulic_pressure_decline": "Hidrolik basınç düşüyor; sızıntı ya da pompa zayıflığı olabilir.",
+    "motor_voltage_erratic": "Motor voltajı dengesiz; besleme ya da bağlantı sorunu olabilir.",
+    "sensor_out_of_range": "Sensör imkânsız bir değer veriyor; sensör ya da kablo arızası.",
+    "sensor_frozen": "Sensör değeri hiç değişmiyor; sensör donmuş/arızalı olabilir.",
+}
+
+
+def rule_explanation(rule_name: str) -> str:
+    """Kural adını düz Türkçe açıklamaya çevirir (ne anlama geliyor); bilinmeyen → boş."""
+    if rule_name in RULE_EXPLANATION:
+        return RULE_EXPLANATION[rule_name]
+    if rule_name.startswith("fused("):
+        return "Birden çok belirti birlikte görülüyor; cihazı incelemek gerekir."
+    if rule_name.startswith(("three_sigma:", "iqr:")):
+        return "Değer, öğrenilen normal davranışından belirgin saptı."
+    return ""
+
+
 def rule_label(rule_name: str) -> str:
     """Kural adını düz Türkçe arıza ifadesine çevirir.
 

@@ -229,6 +229,14 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
 [data-testid="stVerticalBlockBorderWrapper"] {{background:{_SURFACE};
   border:1px solid {_BORDER} !important; border-radius:6px; margin-bottom:10px;}}
 
+/* Cihaz Detayı — sensör durum bloğu (tek html, taşma yok) */
+.mg-status {{min-width:0; overflow-wrap:anywhere;}}
+.mg-prob {{font-size:14px; font-weight:600; margin:8px 0 1px; color:{_CRIT};}}
+.mg-prob--warning {{color:{_WARN};}}
+.mg-prob--critical {{color:{_CRIT};}}
+.mg-prob-exp {{font-size:12.5px; color:{_MUTED}; margin-bottom:2px; line-height:1.4;}}
+.mg-prob-ok {{font-size:13px; color:{_MUTED}; margin:8px 0 2px;}}
+
 /* Cihaz Detayı — katman chip'leri + kritiğe-uzaklık gauge */
 .mg-layers {{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:8px 0 2px;}}
 .mg-layers .mg-lbl {{font-family:{_MONO}; font-size:10px; letter-spacing:.07em;
@@ -237,7 +245,7 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
   border-radius:999px; color:{_MUTED};}}
 .mg-chip--on {{background:{_CRITBG}; border-color:{_CRITBG}; color:{_CRIT}; font-weight:600;}}
 .mg-chip-score {{font-family:{_MONO}; font-size:12px; font-weight:600; color:{_CRIT};
-  margin-left:auto;}}
+  margin-left:4px;}}
 .mg-gauge-row {{display:flex; align-items:center; gap:9px; margin:7px 0 2px;}}
 .mg-glbl {{font-family:{_MONO}; font-size:10px; letter-spacing:.06em; text-transform:uppercase;
   color:{_MUTED}; min-width:108px;}}
@@ -432,6 +440,22 @@ def panel_header_html(
         "</div>"
         f'<span class="mg-pmeta">{_html.escape(meta_str)}</span>'
     )
+
+
+def panel_problem_html(badge: str, headline: str, explanation: str) -> str:
+    """Sensör panelinde düz-dil durum: uyarı varsa '⚠ {sorun}' + açıklama; yoksa 'normal aralıkta'.
+
+    Args:
+        badge: ok|warning|critical.
+        headline: Düz Türkçe sorun (rule_label) — yalnız uyarıda.
+        explanation: 'Ne anlama geliyor' (rule_explanation) — yalnız uyarıda.
+    """
+    if badge in ("warning", "critical") and headline:
+        exp = (
+            f'<div class="mg-prob-exp">{_html.escape(explanation)}</div>' if explanation else ""
+        )
+        return f'<div class="mg-prob mg-prob--{badge}">⚠ {_html.escape(headline)}</div>{exp}'
+    return '<div class="mg-prob-ok">Değerler normal aralıkta.</div>'
 
 
 def layer_chips_html(watching: list[str], caught: str | None, score: float | None) -> str:

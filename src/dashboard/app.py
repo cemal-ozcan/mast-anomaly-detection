@@ -39,7 +39,13 @@ from dashboard.fleet import (  # noqa: E402
     sensor_badge,
     sort_fleet_by_severity,
 )
-from dashboard.labels import device_label, sensor_label, sensor_status_label  # noqa: E402
+from dashboard.labels import (  # noqa: E402
+    device_label,
+    rule_explanation,
+    rule_label,
+    sensor_label,
+    sensor_status_label,
+)
 from dashboard.overview import (  # noqa: E402
     coverage_html,
     coverage_stats,
@@ -58,6 +64,7 @@ from dashboard.styles import (  # noqa: E402
     header_html,
     layer_chips_html,
     panel_header_html,
+    panel_problem_html,
 )
 from dashboard.thresholds import LevelBand, level_band  # noqa: E402
 from dashboard.transform import (  # noqa: E402
@@ -355,28 +362,34 @@ def _render_device_detail(
         caught = catching_layer(alert.rule_name) if alert else None
         score = alert.score if alert else None
         watching = watching_layers(config, sensor)
+        gauge_html = ""
+        if band is not None:
+            raw = score if score is not None else (
+                band_position_score(last_val, band.warn, band.trip)
+                if last_val is not None
+                else 0.0
+            )
+            gauge_html = distance_gauge_html(round(raw * 100), badge)
+        # Tüm durum bloğu TEK html (Streamlit blok-arası boşluk/taşma artefaktı olmasın).
+        status_html = (
+            '<div class="mg-status">'
+            + panel_header_html(
+                sensor_label(sensor), sensor_status_label(badge), badge,
+                _value_str(last_val, unit), _meta_str(band, unit),
+            )
+            + panel_problem_html(
+                badge,
+                rule_label(alert.rule_name) if alert else "",
+                rule_explanation(alert.rule_name) if alert else "",
+            )
+            + layer_chips_html(watching, caught, score)
+            + gauge_html
+            + "</div>"
+        )
         with st.container(border=True):
-            left, right = st.columns([2, 5])
+            left, right = st.columns([2, 3])
             with left:
-                st.markdown(
-                    panel_header_html(
-                        sensor_label(sensor), sensor_status_label(badge), badge,
-                        _value_str(last_val, unit), _meta_str(band, unit),
-                    ),
-                    unsafe_allow_html=True,
-                )
-                chips = layer_chips_html(watching, caught, score)
-                if chips:
-                    st.markdown(chips, unsafe_allow_html=True)
-                if band is not None:
-                    raw = score if score is not None else (
-                        band_position_score(last_val, band.warn, band.trip)
-                        if last_val is not None
-                        else 0.0
-                    )
-                    st.markdown(
-                        distance_gauge_html(round(raw * 100), badge), unsafe_allow_html=True
-                    )
+                st.markdown(status_html, unsafe_allow_html=True)
             with right:
                 # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
                 # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
