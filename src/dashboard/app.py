@@ -36,8 +36,9 @@ from dashboard.fleet import (  # noqa: E402
     DeviceHealth,
     compute_kpis,
     derive_fleet,
+    sensor_badge,
 )
-from dashboard.labels import sensor_label  # noqa: E402
+from dashboard.labels import device_label, sensor_label, sensor_status_label  # noqa: E402
 from dashboard.styles import (  # noqa: E402
     APP_CSS,
     alerts_section_html,
@@ -45,7 +46,9 @@ from dashboard.styles import (  # noqa: E402
     fleet_summary_html,
     header_html,
     kpis_html,
+    panel_header_html,
 )
+from dashboard.thresholds import LevelBand, level_band  # noqa: E402
 from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
@@ -55,6 +58,7 @@ from dashboard.transform import (  # noqa: E402
     split_alerts_by_axis,
     window_to_since,
 )
+from detectors.config import DetectorConfig, load_detector_config  # noqa: E402
 from ingestion.config import load_ingestion_config  # noqa: E402
 from storage.engine import create_sqlite_engine  # noqa: E402
 from storage.repository import TelemetryRepository  # noqa: E402
@@ -73,6 +77,8 @@ ALERTS_FETCH_LIMIT = 200  # spec § 6 — tek fetch, client-side türetim
 # Uyarı akışı görünümleri (spec § 3): cihaz özeti varsayılan; gerisi durum filtresi.
 _VIEW_OPTIONS = ["Cihaz özeti", "Açık", "Tümü", "active", "acknowledged", "resolved"]
 
+FLEET_LABEL = "🏠 Filo Genel Bakış"  # sol-menü gezinme: filo sayfası seçimi
+
 
 def _resolve_db_path() -> Path:
     """DASHBOARD_DB_PATH env override; yoksa ingestion.yaml db_path."""
@@ -80,6 +86,26 @@ def _resolve_db_path() -> Path:
     if env:
         return Path(env)
     return load_ingestion_config(Path("config/ingestion.yaml")).db_path
+
+
+def _resolve_detectors_config_path() -> Path:
+    """DASHBOARD_DETECTORS_CONFIG env override; yoksa config/detectors.yaml."""
+    return Path(os.environ.get("DASHBOARD_DETECTORS_CONFIG", "config/detectors.yaml"))
+
+
+@st.cache_resource
+def _get_detector_config() -> DetectorConfig | None:
+    """detectors.yaml bir kez okunur (radar eşikleri için); okunamazsa None → bölgesiz grafik."""
+    try:
+        return load_detector_config(_resolve_detectors_config_path())
+    except (FileNotFoundError, ValueError) as e:
+        logger.info("detector config okunamadı (bölgesiz grafik): {}", e)
+        return None
+
+
+def _go_fleet() -> None:
+    """Geri-dön butonu callback'i: sol-menü seçimini filoya çevirir (widget-state idiyomu)."""
+    st.session_state["nav"] = FLEET_LABEL
 
 
 @st.cache_resource
@@ -196,9 +222,26 @@ def _render_alert_management(repository: TelemetryRepository) -> None:
         _apply_transition(repository.acknowledge_alert, selected.id)
 
 
+def _value_str(value: float | None, unit: str) -> str:
+    """Güncel değeri okunur biçimde formatlar (yoksa '—')."""
+    if value is None:
+        return "—"
+    return f"{value:.1f} {unit}".strip()
+
+
+def _meta_str(band: LevelBand | None, unit: str) -> str:
+    """Panel meta satırı: seviye-bandı varsa eşikleri yaz; yoksa boş (sinyali çizgi+durum taşır)."""
+    if band is None:
+        return ""
+    return f"Uyarı {band.warn:g} · Kritik {band.trip:g} {unit}".strip()
+
+
 @st.experimental_fragment(run_every="2s")
-def _render_charts(repository: TelemetryRepository, device_id: str, window: str) -> None:
-    """Seçili cihazın 6 sensörünü anomali overlay'li Altair grafikleriyle çizer (spec § 3/§ 5)."""
+def _render_device_detail(
+    repository: TelemetryRepository, device_id: str, window: str,
+    config: DetectorConfig | None,
+) -> None:
+    """Seçili cihazın 6 sensörünü radar paneli (durum + eşik-bölgeli grafik) olarak çizer (spec § 3)."""
     since = window_to_since(datetime.now(UTC), window)
     alerts, _ = _fetch_alerts_safe(repository)
     device_alerts = [a for a in alerts if a.device_id == device_id]
@@ -212,20 +255,25 @@ def _render_charts(repository: TelemetryRepository, device_id: str, window: str)
         except OperationalError as e:
             logger.error("Okuma hatası device={} sensor={}: {}", device_id, sensor, e)
             with cols[i % 3]:
-                st.error(f"{sensor}: okuma hatası")
+                st.error(f"{sensor_label(sensor)}: okuma hatası")
             continue
         frame = downsample_frame(readings_to_chart_frame(readings))
         unit = readings[-1].unit if readings else ""
-        sensor_has_alert = any(a.sensor == sensor for a in device_alerts)
+        last_val = readings[-1].value if readings else None
+        badge = sensor_badge(device_alerts, sensor)
+        band = level_band(config, sensor)
         with cols[i % 3]:
-            title_cls = "mg-chart-title mg-chart-title--alert" if sensor_has_alert else "mg-chart-title"
             st.markdown(
-                f'<div class="{title_cls}">{sensor_label(sensor)}</div>', unsafe_allow_html=True
+                panel_header_html(
+                    sensor_label(sensor), sensor_status_label(badge), badge,
+                    _value_str(last_val, unit), _meta_str(band, unit),
+                ),
+                unsafe_allow_html=True,
             )
             # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
             # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
             st.altair_chart(
-                cast(alt.Chart, build_sensor_chart(frame, device_alerts, sensor, unit)),
+                cast(alt.Chart, build_sensor_chart(frame, device_alerts, sensor, unit, band=band)),
                 use_container_width=True,
                 theme="streamlit",
             )
@@ -258,13 +306,27 @@ def main() -> None:
         st.info("Henüz veri yok — simulator + ingestion çalışıyor mu?")
         return
 
-    _render_overview(repository)
-    _render_alert_management(repository)
-    st.divider()
+    config = _get_detector_config()
+    nav_options = [FLEET_LABEL] + [device_label(d) for d in devices]
+    label_to_device = {device_label(d): d for d in devices}
+    choice = st.sidebar.selectbox("Sayfa", nav_options, key="nav")
 
-    device_id: str = st.sidebar.selectbox("Cihaz", devices) or devices[0]
-    window: str = st.sidebar.selectbox("Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1) or list(WINDOW_OPTIONS.keys())[1]
-    _render_charts(repository, device_id, window)
+    if not choice or choice == FLEET_LABEL:
+        _render_overview(repository)
+        _render_alert_management(repository)
+        return
+
+    device_id = label_to_device.get(choice, devices[0])
+    st.button("← Filoya dön", on_click=_go_fleet, key="back_btn")
+    st.markdown(
+        f'<div class="mg-section">{device_label(device_id)} · Sensör Durumu</div>',
+        unsafe_allow_html=True,
+    )
+    window = (
+        st.sidebar.selectbox("Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1, key="win")
+        or list(WINDOW_OPTIONS.keys())[1]
+    )
+    _render_device_detail(repository, device_id, window, config)
 
 
 # Streamlit betiği yukarıdan aşağıya çalıştırır; __main__ guard yok.
