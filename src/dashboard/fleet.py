@@ -14,6 +14,31 @@ BADGE_WARNING = "warning"
 BADGE_CRITICAL = "critical"
 
 
+def severity_to_badge(severities: list[str]) -> str:
+    """Severity listesini rozete indirger: critical varsa critical; herhangi varsa warning; yoksa ok.
+
+    Filo semantiği: yalnız `critical` ayrıcalıklı; `high` dahil diğer her açık severity `warning`'e iner.
+    """
+    if any(s == "critical" for s in severities):
+        return BADGE_CRITICAL
+    if severities:
+        return BADGE_WARNING
+    return BADGE_OK
+
+
+def sensor_badge(device_alerts: list[Alert], sensor: str) -> str:
+    """Bir sensöre AÇIK uyarıların rozeti (açık yoksa ok). device_alerts cihaza önceden filtreli.
+
+    Status filtresini kendi içinde yapar (çağıran hatasına karşı sağlam; saf).
+    """
+    sevs = [
+        a.severity
+        for a in device_alerts
+        if a.sensor == sensor and a.status in OPEN_STATUSES
+    ]
+    return severity_to_badge(sevs)
+
+
 @dataclass(frozen=True)
 class SensorSnapshot:
     """Bir sensörün karttaki son değeri."""
@@ -70,12 +95,7 @@ def derive_device_health(
         for r in readings
     )
     state = max(readings, key=lambda r: r.timestamp).state if readings else "?"
-    if any(a.severity == "critical" for a in open_alerts):
-        badge = BADGE_CRITICAL
-    elif open_alerts:
-        badge = BADGE_WARNING
-    else:
-        badge = BADGE_OK
+    badge = severity_to_badge([a.severity for a in open_alerts])
     top_rule: str | None = None
     if open_alerts:
         top = max(open_alerts, key=lambda a: (SEVERITY_RANK.get(a.severity, 0), a.created_at))

@@ -105,3 +105,32 @@ def test_top_rule_equal_severity_recency_wins() -> None:
     ]
     health = derive_device_health("dev", [_reading("dev", "motor_current")], alerts)
     assert health.top_rule == "new"
+
+
+def test_severity_to_badge_collapse() -> None:
+    from dashboard.fleet import BADGE_CRITICAL, BADGE_OK, BADGE_WARNING, severity_to_badge
+
+    assert severity_to_badge([]) == BADGE_OK
+    assert severity_to_badge(["warning"]) == BADGE_WARNING
+    assert severity_to_badge(["high"]) == BADGE_WARNING       # high → warning (mevcut semantik)
+    assert severity_to_badge(["warning", "critical"]) == BADGE_CRITICAL
+
+
+def test_sensor_badge_per_sensor() -> None:
+    from dashboard.fleet import BADGE_CRITICAL, BADGE_OK, BADGE_WARNING, sensor_badge
+
+    alerts = [
+        _alert(1, "dev", severity="critical", sensor="motor_temperature"),
+        _alert(2, "dev", severity="warning", sensor="vibration"),
+    ]
+    assert sensor_badge(alerts, "motor_temperature") == BADGE_CRITICAL
+    assert sensor_badge(alerts, "vibration") == BADGE_WARNING
+    assert sensor_badge(alerts, "motor_current") == BADGE_OK  # uyarı yok
+
+
+def test_sensor_badge_ignores_closed_alerts() -> None:
+    from dashboard.fleet import BADGE_OK, sensor_badge
+
+    closed = [_alert(1, "dev", status="resolved", severity="critical",
+                     sensor="motor_temperature")]
+    assert sensor_badge(closed, "motor_temperature") == BADGE_OK
