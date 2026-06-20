@@ -389,7 +389,9 @@ def main() -> None:
     nav_options = [FLEET_LABEL] + [device_label(d) for d in devices]
     label_to_device = {device_label(d): d for d in devices}
     # Gezinme dar sidebar'da (cihaz erişimi solda kalır).
-    choice = st.sidebar.selectbox("Sayfa", nav_options, key="nav")
+    choice = st.sidebar.selectbox(
+        "Sayfa", nav_options, key="nav", label_visibility="collapsed"
+    )
 
     if not choice or choice == FLEET_LABEL:
         _render_overview(repository)
