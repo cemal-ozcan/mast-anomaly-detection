@@ -309,7 +309,7 @@ Expected: FAIL — `ImportError: cannot import name 'severity_to_badge'`.
 
 - [ ] **Step 3: Write minimal implementation**
 
-`src/dashboard/fleet.py` — `BADGE_CRITICAL = "critical"` satırının altına iki saf fonksiyon ekle:
+`src/dashboard/fleet.py` — `BADGE_CRITICAL = "critical"` satırının altına iki saf fonksiyon ekle. (`OPEN_STATUSES` zaten `fleet.py:8`'de import edilmiş — `from dashboard.transform import OPEN_STATUSES, relative_time`.)
 ```python
 def severity_to_badge(severities: list[str]) -> str:
     """Severity listesini rozete indirger: critical varsa critical; herhangi varsa warning; yoksa ok.
@@ -324,12 +324,17 @@ def severity_to_badge(severities: list[str]) -> str:
 
 
 def sensor_badge(device_alerts: list[Alert], sensor: str) -> str:
-    """Bir sensöre açık uyarıların rozeti (uyarı yoksa ok). device_alerts cihaza önceden filtreli."""
-    sevs = [a.sensor and a.severity for a in device_alerts if a.sensor == sensor]
-    return severity_to_badge([s for s in sevs if s])
+    """Bir sensöre AÇIK uyarıların rozeti (açık yoksa ok). device_alerts cihaza önceden filtreli.
+
+    Status filtresini kendi içinde yapar (çağıran hatasına karşı sağlam; saf). `severity` → `str`
+    listesi → mypy temiz.
+    """
+    sevs = [a.severity for a in device_alerts
+            if a.sensor == sensor and a.status in OPEN_STATUSES]
+    return severity_to_badge(sevs)
 ```
 
-Sonra `derive_device_health` içindeki gömülü dalı `severity_to_badge`'e çevir — şu bloğu:
+Sonra `derive_device_health` içindeki gömülü dalı (mevcut `fleet.py:73-78`) `severity_to_badge`'e çevir — şu bloğu:
 ```python
     if any(a.severity == "critical" for a in open_alerts):
         badge = BADGE_CRITICAL
@@ -338,22 +343,10 @@ Sonra `derive_device_health` içindeki gömülü dalı `severity_to_badge`'e çe
     else:
         badge = BADGE_OK
 ```
-şununla değiştir:
+şununla değiştir (davranış aynen korunur — `open_alerts` zaten açık-filtreli):
 ```python
     badge = severity_to_badge([a.severity for a in open_alerts])
 ```
-
-> Not: `device_alerts` Cihaz Detayı'nda zaten cihaza + (opsiyonel) zaman penceresine filtrelenmiş açık+kapalı karışık gelebilir; `sensor_badge` yalnız sensör eşleşmesine bakar. Çağıran (Task 6) yalnız AÇIK uyarıları geçirir (`_fetch_alerts_safe` + cihaz filtresi; status kontrolü Task 6'da). Bu fonksiyon status filtrelemez (saf, çağıranın sorumluluğu) — testte kapalı uyarı, çağıranın açık-filtresini takliden `status` veriliyor; `sensor_badge`'in kendisi status bakmadığından `test_sensor_badge_ignores_closed_alerts` çağıran-sözleşmesini değil saf davranışı test eder: **düzelt** → kapalı testte de severity döneceğinden, `sensor_badge`'e status filtresi EKLE.
-
-**Düzeltme (yukarıdaki nota göre kesin implementasyon):** `sensor_badge` açık-durum filtresini kendi içinde yapar (çağıran hatasına karşı sağlam):
-```python
-def sensor_badge(device_alerts: list[Alert], sensor: str) -> str:
-    """Bir sensöre AÇIK uyarıların rozeti (açık yoksa ok). device_alerts cihaza önceden filtreli."""
-    sevs = [a.severity for a in device_alerts
-            if a.sensor == sensor and a.status in OPEN_STATUSES]
-    return severity_to_badge(sevs)
-```
-(`OPEN_STATUSES` zaten `from dashboard.transform import OPEN_STATUSES, relative_time` ile import edilmiş — `fleet.py:8`.)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
@@ -392,7 +385,7 @@ git commit -m "feat(dashboard): severity_to_badge çıkarımı (DRY) + sensor_ba
 `tests/unit/test_dashboard_charts.py` sonuna ekle:
 ```python
 def test_chart_band_adds_zone_and_threshold_layers() -> None:
-    """band verilince: bölge rect (y2'li) + eşik çizgileri (y'li rule) katmanları + genişlemiş y-domain."""
+    """band verilince: bölge rect (y2'li, tam-genişlik x'li) + eşik çizgileri (y'li rule) + genişlemiş y-domain."""
     from dashboard.charts import build_sensor_chart
     from dashboard.thresholds import LevelBand
 
@@ -400,11 +393,11 @@ def test_chart_band_adds_zone_and_threshold_layers() -> None:
     band = LevelBand(warn=9.0, trip=11.0)
     spec = build_sensor_chart(frame, [], "motor_current", "A", band=band).to_dict()
     assert "layer" in spec
-    # bölge: full-width mark_rect (y + y2 encoding, x YOK)
+    # bölge: y2'li mark_rect; tam-genişlik için x+x2 de taşır (render-doğru)
     zones = [ly for ly in spec["layer"]
-             if ly["mark"]["type"] == "rect" and "y2" in ly.get("encoding", {})
-             and "x" not in ly.get("encoding", {})]
+             if ly["mark"]["type"] == "rect" and "y2" in ly.get("encoding", {})]
     assert zones
+    assert "x" in zones[0]["encoding"] and "x2" in zones[0]["encoding"]  # tam-genişlik
     # eşik çizgileri: y encoding'li mark_rule (anomali rule x encoding kullanır)
     thresh = [ly for ly in spec["layer"]
               if ly["mark"]["type"] == "rule" and "y" in ly.get("encoding", {})]
@@ -416,7 +409,7 @@ def test_chart_band_adds_zone_and_threshold_layers() -> None:
 
 
 def test_chart_band_with_alert_keeps_overlay() -> None:
-    """band + uyarı birlikte: hem bölge hem anomali overlay (x2'li rect) katmanları bulunur."""
+    """band + uyarı birlikte: bölge rect (y2'li) VE anomali overlay rect (x2'li, y2'siz) ayrı bulunur."""
     from dashboard.charts import build_sensor_chart
     from dashboard.thresholds import LevelBand
 
@@ -425,7 +418,9 @@ def test_chart_band_with_alert_keeps_overlay() -> None:
                               band=LevelBand(9.0, 11.0)).to_dict()
     rect_marks = [ly for ly in spec["layer"] if ly["mark"]["type"] == "rect"]
     has_zone = any("y2" in ly.get("encoding", {}) for ly in rect_marks)
-    has_overlay = any("x2" in ly.get("encoding", {}) for ly in rect_marks)
+    # anomali overlay: x2 var ama y2 yok (bölge rect'inden ayırt et)
+    has_overlay = any("x2" in ly.get("encoding", {}) and "y2" not in ly.get("encoding", {})
+                      for ly in rect_marks)
     assert has_zone and has_overlay
 ```
 
@@ -448,11 +443,25 @@ ZONE_OPACITY = 0.10
 ```
 
 (b) Yeni saf yardımcı (modül seviyesinde, `build_sensor_chart`'tan önce):
+Modül başına import ekle (mevcut `from alerts.models import Alert` yanına):
 ```python
-def _band_layers(lo: float, hi: float, band: "LevelBand", y_scale: alt.Scale) -> list[alt.Chart]:
-    """Seviye-bandı için bölge rect'leri + uyarı/kritik kesikli eşik çizgileri (paylaşılan y_scale)."""
+from dashboard.thresholds import LevelBand
+```
+Yeni saf yardımcı:
+```python
+def _band_layers(
+    lo: float, hi: float, band: LevelBand, y_scale: alt.Scale, x_domain: list
+) -> list[alt.Chart]:
+    """Seviye-bandı için bölge rect'leri + uyarı/kritik kesikli eşik çizgileri (paylaşılan y_scale).
+
+    BÖLGE rect'i tam-genişlik için açık x-span taşır (x_domain = [tmin, tmax]); yalnız y/y2
+    veren bir rect Vega-Lite'ta tam genişliğe yayılmaz (plan-review blocker'ı). Eşik çizgileri
+    (mark_rule, yalnız y) doğal olarak tam-genişlik yatay çizgidir.
+    """
+    x0, x1 = x_domain[0], x_domain[1]
     zones = pd.DataFrame(
-        {"y0": [lo, band.warn, band.trip], "y1": [band.warn, band.trip, hi],
+        {"x0": [x0, x0, x0], "x1": [x1, x1, x1],
+         "y0": [lo, band.warn, band.trip], "y1": [band.warn, band.trip, hi],
          "zone": ["ok", "warn", "crit"]}
     )
     zone_color = alt.Color(
@@ -463,7 +472,13 @@ def _band_layers(lo: float, hi: float, band: "LevelBand", y_scale: alt.Scale) ->
     zone_layer = (
         alt.Chart(zones)
         .mark_rect(opacity=ZONE_OPACITY)
-        .encode(y=alt.Y("y0:Q", scale=y_scale, title=None), y2="y1:Q", color=zone_color)
+        .encode(
+            x=alt.X("x0:T", title=None, axis=alt.Axis(labelFontSize=10)),
+            x2="x1:T",
+            y=alt.Y("y0:Q", scale=y_scale, title=None),
+            y2="y1:Q",
+            color=zone_color,
+        )
     )
     lines = pd.DataFrame({"y": [band.warn, band.trip], "kind": ["Uyarı", "Kritik"]})
     line_color = alt.Color(
@@ -478,11 +493,6 @@ def _band_layers(lo: float, hi: float, band: "LevelBand", y_scale: alt.Scale) ->
     )
     return [zone_layer, thresh_layer]
 ```
-Modül başına import ekle (TYPE_CHECKING yerine doğrudan, çünkü runtime'da kullanılmıyor ama tip için string-annotation yeterli; sadeleştirmek için doğrudan import):
-```python
-from dashboard.thresholds import LevelBand
-```
-ve `_band_layers` imzasındaki `"LevelBand"` string'ini `LevelBand`'e çevir.
 
 (c) `build_sensor_chart` imzasını ve gövdesini güncelle. Yeni tam fonksiyon:
 ```python
@@ -507,15 +517,15 @@ def build_sensor_chart(
         İnteraktif Altair chart'ı (band/uyarı yoksa tek çizgi; varsa katmanlı).
     """
     y_title = f"{sensor} ({unit})" if unit else sensor
-    # y-ölçeği: band varsa eşikleri kapsa (çizginin sınıra uzaklığı görünür).
+    frame_empty = bool(frame.empty)
+    x_domain = None if frame_empty else [frame["timestamp"].min(), frame["timestamp"].max()]
+
+    # y-ölçeği: band varsa eşikleri kapsa (çizginin sınıra uzaklığı görünür). Boş frame'de band yok.
     y_scale = alt.Scale(zero=False)
     band_bounds: tuple[float, float] | None = None
-    if band is not None:
-        if not frame.empty:
-            dmin = float(frame["value"].min())
-            dmax = float(frame["value"].max())
-        else:
-            dmin, dmax = band.warn, band.trip
+    if band is not None and not frame_empty:
+        dmin = float(frame["value"].min())
+        dmax = float(frame["value"].max())
         lo = min(dmin, band.warn)
         hi = max(dmax, band.trip)
         pad = (hi - lo) * 0.05 or 1.0
@@ -523,11 +533,20 @@ def build_sensor_chart(
         y_scale = alt.Scale(domain=[lo, hi], zero=False)
         band_bounds = (lo, hi)
 
+    # Katman eklenecekse (band/overlay) x-domain'i sabitle ki bölge + çizgi + overlay hizalansın.
+    relevant = [a for a in alerts if a.sensor == sensor]
+    fix_x = x_domain is not None and (band_bounds is not None or bool(relevant))
+    x_enc = (
+        alt.X("timestamp:T", title=None, scale=alt.Scale(domain=x_domain),
+              axis=alt.Axis(labelFontSize=10))
+        if fix_x
+        else alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10))
+    )
     line: alt.Chart = (
         alt.Chart(frame)
         .mark_line(color=LINE_COLOR, strokeWidth=1.5)
         .encode(
-            x=alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10)),
+            x=x_enc,
             y=alt.Y(
                 "value:Q",
                 title=y_title,
@@ -543,16 +562,10 @@ def build_sensor_chart(
     )
 
     layers: list[alt.Chart] = []
-    if band is not None and band_bounds is not None:
-        layers.extend(_band_layers(band_bounds[0], band_bounds[1], band, y_scale))
+    if band_bounds is not None and x_domain is not None:
+        layers.extend(_band_layers(band_bounds[0], band_bounds[1], band, y_scale, x_domain))
 
-    relevant = [a for a in alerts if a.sensor == sensor]
-    if relevant and not frame.empty:
-        domain = [frame["timestamp"].min(), frame["timestamp"].max()]
-        line = line.encode(
-            x=alt.X("timestamp:T", title=None, scale=alt.Scale(domain=domain),
-                    axis=alt.Axis(labelFontSize=10))
-        )
+    if relevant and not frame_empty:
         overlay = alerts_to_overlay_frame(relevant)
         layers.append(
             alt.Chart(overlay).mark_rect(opacity=BAND_OPACITY, clip=True)
@@ -709,19 +722,24 @@ Sol-menü gezinme (Filo ↔ Cihaz), Cihaz Detayı fragment'i (6 radar paneli), c
 
 - [ ] **Step 1: Import bloğunu genişlet**
 
-`src/dashboard/app.py` import bölümünde:
-- `from pathlib import Path` zaten var.
-- `from alerts.lifecycle import ...` satırları korunur.
-- Ekle:
+`src/dashboard/app.py` import bölümünde — **MEVCUT import satırlarını GENİŞLET, yeni satır EKLEME** (duplicate-import lint/F811'i önle). Plan-review minor: `sensor_label` zaten `app.py:40`'ta, fleet bloğu `app.py:35-39`'da `DeviceHealth/compute_kpis/derive_fleet`'i, styles bloğu `app.py:41-48`'de 6 ismi import ediyor.
+
+- `from dashboard.fleet import (...)` mevcut bloğuna **yalnız `sensor_badge`** ekle (DeviceHealth/compute_kpis/derive_fleet zaten var):
 ```python
-from dashboard.fleet import (  # noqa: E402  (mevcut blok)
+from dashboard.fleet import (  # noqa: E402
     DeviceHealth,
     compute_kpis,
     derive_fleet,
     sensor_badge,
 )
+```
+- `from dashboard.labels import sensor_label` (app.py:40) satırını şununla **DEĞİŞTİR** (ikinci import ekleme):
+```python
 from dashboard.labels import sensor_label, sensor_status_label  # noqa: E402
-from dashboard.styles import (  # noqa: E402  (mevcut bloğa panel_header_html ekle)
+```
+- `from dashboard.styles import (...)` mevcut bloğuna **yalnız `panel_header_html`** ekle:
+```python
+from dashboard.styles import (  # noqa: E402
     APP_CSS,
     alerts_section_html,
     fleet_html,
@@ -730,6 +748,9 @@ from dashboard.styles import (  # noqa: E402  (mevcut bloğa panel_header_html e
     kpis_html,
     panel_header_html,
 )
+```
+- **Yeni** iki import satırı ekle (bu modüller henüz import edilmiyor):
+```python
 from dashboard.thresholds import LevelBand, level_band  # noqa: E402
 from detectors.config import DetectorConfig, load_detector_config  # noqa: E402
 ```
@@ -822,7 +843,7 @@ def _render_device_detail(
 
 - [ ] **Step 4: `main()` gezinmesini güncelle**
 
-`main()` içinde `if not devices:` guard'ından SONRAKİ kısmı (mevcut `_render_overview(...)` → `_render_charts(...)` bloğu) şununla değiştir:
+`main()` içinde `if not devices:` guard'ından SONRAKİ TÜM satırları (mevcut `app.py:261-267`: `_render_overview(repository)` + `_render_alert_management(repository)` + `st.divider()` + iki `st.sidebar.selectbox` + `_render_charts(...)`) şununla **tamamen değiştir** — eski `st.divider()` ve eski sidebar selectbox satırları ORTADA KALMAMALI (orphan bırakma):
 ```python
     config = _get_detector_config()
     nav_options = [FLEET_LABEL] + [device_label(d) for d in devices]
@@ -885,7 +906,7 @@ Run: `./scripts/demo_down.sh && ./scripts/demo_up.sh`
 - [ ] **Step 2: Görsel doğrulama (kullanıcı ekran görüntüsü)**
 
 Kontrol listesi (spec § 5):
-1. Sol menüden cihaz seçince yalnız o cihaz açılıyor + "← Filoya dön" çalışıyor.
+1. Sol menüden cihaz seçince yalnız o cihaz açılıyor; **"← Filoya dön" tıklanınca `StreamlitAPIException` OLMADAN** filoya dönüyor (plan-review: `session_state["nav"]` callback idiyomu 1.36'da geçerli ama otomasyonla test edilmiyor → canlı doğrula).
 2. Seviye sensörlerinde (sıcaklık/akım/titreşim) yeşil/sarı/kırmızı bölge + uyarı/kritik kesikli çizgiler render oluyor; çizginin sınıra uzaklığı görünüyor.
 3. Her panelde durum etiketi doğru (NORMAL/DİKKAT/KRİTİK), gerçek uyarılarla tutarlı.
 4. Seviye-dışı sensörlerde (hidrolik/voltaj/konum) bölge yok ama durum etiketi + çizgi var.
