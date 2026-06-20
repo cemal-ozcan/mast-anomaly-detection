@@ -52,7 +52,10 @@ footer {{visibility: hidden;}}
 section[data-testid="stSidebar"] {{background:{_SURFACE} !important;
   border-right:1px solid {_BORDER}; width:240px !important; min-width:240px !important;}}
 section[data-testid="stSidebar"] > div {{width:240px !important; min-width:240px !important;}}
-[data-testid="stSidebarContent"] {{padding-top:0.6rem;}}
+/* Sidebar içeriğini yukarı çek (üst boşluğu kıs) */
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"],
+section[data-testid="stSidebar"] [data-testid="stSidebarUserContent"],
+section[data-testid="stSidebar"] .block-container {{padding-top:0.3rem !important;}}
 html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
 .mono, .mg-kpi-val, .mg-pval, .mg-when, .mg-summary b, .mg-pill {{
   font-family: {_MONO}; font-variant-numeric: tabular-nums;}}
