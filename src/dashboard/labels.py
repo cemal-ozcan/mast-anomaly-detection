@@ -83,6 +83,26 @@ RULE_EXPLANATION: dict[str, str] = {
 }
 
 
+def _fmt_num(value: float) -> str:
+    """Büyüklüğe uyarlı ondalık (≥100→0, ≥10→1, <10→2)."""
+    mag = abs(value)
+    dec = 0 if mag >= 100 else (1 if mag >= 10 else 2)
+    return f"{value:.{dec}f}"
+
+
+def alert_metric_phrase(rule_name: str, value: float, unit: str) -> str:
+    """Uyarıyı tetikleyen ölçüyü kural tipine göre DOĞRU düz-dil ifadeye çevirir.
+
+    Varyans kuralı → 'dalgalanma X V' (değer std'dir, seviye değil); eğim kuralı →
+    'düşüş hızı X bar/dk' (değer bar/dk eğimdir); seviye/diğer → 'ölçülen X birim'.
+    """
+    if rule_name == "motor_voltage_erratic":
+        return f"dalgalanma {_fmt_num(value)} {unit}".strip()
+    if rule_name == "hydraulic_pressure_decline":
+        return f"düşüş hızı {_fmt_num(abs(value))} bar/dk"
+    return f"ölçülen {_fmt_num(value)} {unit}".strip()
+
+
 def rule_explanation(rule_name: str) -> str:
     """Kural adını düz Türkçe açıklamaya çevirir (ne anlama geliyor); bilinmeyen → boş."""
     if rule_name in RULE_EXPLANATION:

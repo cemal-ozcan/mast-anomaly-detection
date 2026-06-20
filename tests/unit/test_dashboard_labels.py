@@ -41,6 +41,17 @@ def test_rule_label_direct() -> None:
     assert rule_label("sensor_out_of_range") == "Sensör geçersiz veri veriyor"
 
 
+def test_alert_metric_phrase() -> None:
+    from dashboard.labels import alert_metric_phrase
+
+    assert alert_metric_phrase("motor_temperature_high", 150.0, "celsius").startswith("ölçülen 150")
+    v = alert_metric_phrase("motor_voltage_erratic", 3.59, "V")
+    assert "dalgalanma" in v and "3.59" in v and "ölçülen" not in v  # std, seviye değil
+    h = alert_metric_phrase("hydraulic_pressure_decline", -6.73, "bar")
+    assert "düşüş hızı" in h and "bar/dk" in h and "6.73" in h
+    assert alert_metric_phrase("fused(3)", 10.0, "A").startswith("ölçülen 10")
+
+
 def test_rule_explanation() -> None:
     from dashboard.labels import rule_explanation
 

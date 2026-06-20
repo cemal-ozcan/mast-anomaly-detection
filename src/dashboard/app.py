@@ -40,6 +40,7 @@ from dashboard.fleet import (  # noqa: E402
     sort_fleet_by_severity,
 )
 from dashboard.labels import (  # noqa: E402
+    alert_metric_phrase,
     device_label,
     rule_explanation,
     rule_label,
@@ -324,8 +325,9 @@ def _render_device_detail(
         band = level_band(config, sensor)
         alert = _sensor_alert(device_alerts, sensor)
         caught = catching_layer(alert.rule_name) if alert else None
-        # Uyarı varsa katman satırında jargon "skor" yerine TETİKLEYEN gerçek değeri göster.
-        detail = f"ölçülen {_value_str(alert.value, unit)}" if alert else None
+        # Uyarı varsa: tetikleyen ölçü kural tipine göre doğru kelimeyle (varyans→dalgalanma,
+        # eğim→düşüş hızı, seviye→ölçülen) — "ölçülen 3.59V" voltaj std'sini yanlış gösteriyordu.
+        detail = alert_metric_phrase(alert.rule_name, alert.value, unit) if alert else None
         watching = watching_layers(config, sensor)
         gauge_html = ""
         if band is not None:
