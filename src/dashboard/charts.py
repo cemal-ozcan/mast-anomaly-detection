@@ -127,9 +127,14 @@ def _band_layers(
 
 
 def _finalize(chart: alt.LayerChart | alt.Chart) -> alt.LayerChart | alt.Chart:
-    """Ortak bitiş: interaktif + sabit yükseklik + beyaz zemin + IBM Plex eksen (enstrüman-sınıfı)."""
+    """Ortak bitiş: sabit yükseklik + beyaz zemin + IBM Plex eksen (enstrüman-sınıfı).
+
+    NOT: `.interactive()` (zoom/pan) KASITLI yok — katmanlı grafik + 2s fragment yenilemesinde
+    Vega 'Unrecognized data set' hatası veriyor (Streamlit+Altair bilinen sorunu); canlı izlemede
+    zoom zaten gereksiz (veri sürekli tazeleniyor).
+    """
     finished = (
-        chart.interactive()
+        chart
         .properties(height=CHART_HEIGHT)
         .configure_view(stroke=None)
         .configure(background=_CHART_BG, font=_FONT_SANS)
