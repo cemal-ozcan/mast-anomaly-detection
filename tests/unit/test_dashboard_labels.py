@@ -45,3 +45,12 @@ def test_rule_label_fused_and_statistical() -> None:
     assert rule_label("three_sigma:motor_current") == "Motor Akımı olağandışı"
     assert rule_label("iqr:hydraulic_pressure") == "Hidrolik Basınç olağandışı"
     assert rule_label("bilinmeyen_kural") == "bilinmeyen_kural"  # fallback
+
+
+def test_sensor_status_label() -> None:
+    from dashboard.labels import sensor_status_label
+
+    assert sensor_status_label("ok") == "NORMAL"
+    assert sensor_status_label("warning") == "DİKKAT"
+    assert sensor_status_label("critical") == "KRİTİK"
+    assert sensor_status_label("bilinmeyen") == "bilinmeyen"  # fallback

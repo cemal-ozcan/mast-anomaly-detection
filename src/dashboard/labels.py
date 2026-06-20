@@ -36,6 +36,9 @@ RULE_LABELS: dict[str, str] = {
 
 BADGE_LABELS: dict[str, str] = {"ok": "SAĞLIKLI", "warning": "DİKKAT", "critical": "KRİTİK"}
 
+# Sensör OKUMASI durumu (mast "SAĞLIKLI", sensör "NORMAL" daha doğal). DİKKAT/KRİTİK ortak.
+SENSOR_STATUS_LABELS: dict[str, str] = {"ok": "NORMAL", "warning": "DİKKAT", "critical": "KRİTİK"}
+
 
 def sensor_label(sensor: str) -> str:
     """Sensör kod adını Türkçeye çevirir (bilinmeyen → ham ad)."""
@@ -58,6 +61,11 @@ def device_label(device_id: str) -> str:
 def badge_label(badge: str) -> str:
     """ok/warning/critical → SAĞLIKLI/DİKKAT/KRİTİK (bilinmeyen → ham)."""
     return BADGE_LABELS.get(badge, badge)
+
+
+def sensor_status_label(badge: str) -> str:
+    """Sensör rozetini (ok/warning/critical) okuma-durumuna çevirir (bilinmeyen → ham)."""
+    return SENSOR_STATUS_LABELS.get(badge, badge)
 
 
 def rule_label(rule_name: str) -> str:
