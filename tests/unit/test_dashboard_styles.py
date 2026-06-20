@@ -33,6 +33,25 @@ def test_panel_problem_alerting_and_normal() -> None:
     assert "&lt;y&gt;" in e and "&lt;w&gt;" in e
 
 
+def test_stream_table_html() -> None:
+    from dashboard.styles import stream_table_html
+    from ingestion.message_parser import IngestedReading
+
+    assert "bekleniyor" in stream_table_html([])
+    rows = [
+        IngestedReading("device_001", "motor_current", "2026-06-20T17:00:05.000Z", "raising",
+                        7.94, "A"),
+        IngestedReading("device_001", "mast_position", "2026-06-20T17:00:04.000Z", "holding",
+                        6000.0, "mm"),
+    ]
+    h = stream_table_html(rows)
+    assert "mg-stream" in h and "Zaman" in h
+    assert "Motor Akımı" in h and "Mast Konumu" in h  # Türkçe sensör
+    assert "17:00:05" in h  # zaman HH:MM:SS
+    assert "Yükseliyor" in h  # Türkçe durum
+    assert "7.94 A" in h and "6000 mm" in h  # birimli + uyarlamalı basamak
+
+
 def test_layer_chips_watching() -> None:
     from dashboard.styles import layer_chips_html
     h = layer_chips_html(["Kural", "İstatistik"], None, None)

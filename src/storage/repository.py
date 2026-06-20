@@ -172,6 +172,28 @@ class TelemetryRepository:
             rows = conn.execute(stmt).all()
         return [self._row_to_reading(row) for row in rows]
 
+    def fetch_recent_for_device(self, device_id: str, limit: int) -> list[IngestedReading]:
+        """Bir cihazın TÜM sensörlerinden en yeni `limit` okumayı timestamp DESC döndürür.
+
+        Canlı ham veri akışı görünümü için (salt-okuma, gözlem modu). Tüm sensörler harmanlı.
+
+        Args:
+            device_id: Cihaz kimliği.
+            limit: Maksimum satır sayısı.
+
+        Returns:
+            En yeniden eskiye sıralı IngestedReading listesi (tüm sensörler); veri yoksa boş.
+        """
+        stmt = (
+            select(telemetry)
+            .where(telemetry.c.device_id == device_id)
+            .order_by(telemetry.c.timestamp.desc())
+            .limit(limit)
+        )
+        with self._engine.connect() as conn:
+            rows = conn.execute(stmt).all()
+        return [self._row_to_reading(row) for row in rows]
+
     def list_devices(self) -> list[str]:
         """telemetry'deki distinct device_id'leri alfabetik sıralı döndürür.
 

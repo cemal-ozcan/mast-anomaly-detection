@@ -17,9 +17,11 @@ from dashboard.labels import (
     device_label,
     rule_explanation,
     rule_label,
+    sensor_label,
     state_label,
 )
 from dashboard.transform import relative_time
+from ingestion.message_parser import IngestedReading
 
 _SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 
@@ -265,6 +267,19 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
 .mg-gpct--warning {{color:{_WARN};}}
 .mg-gpct--critical {{color:{_CRIT};}}
 
+/* Canlı veri akışı tablosu (mono enstrüman görünümü) */
+.mg-stream {{width:100%; border-collapse:collapse; font-family:{_MONO}; font-size:13px;
+  background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:6px; overflow:hidden;}}
+.mg-stream thead th {{text-align:left; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+  color:{_MUTED}; font-weight:600; padding:9px 14px; border-bottom:1px solid {_BORDER};
+  background:{_BG};}}
+.mg-stream tbody td {{padding:7px 14px; border-bottom:1px solid {_BORDER}; color:{_TEXT};}}
+.mg-stream tbody tr:last-child td {{border-bottom:0;}}
+.mg-stream tbody tr:first-child td {{background:{_ICE};}}  /* en yeni satır vurgusu */
+.mg-st-t {{color:{_MUTED};}}
+.mg-st-v {{font-weight:600; text-align:right;}}
+.mg-st-s {{color:{_MUTED};}}
+
 /* Bölüm başlığı — eyebrow (mono, letterspaced, sessiz) */
 .mg-section {{font-family:{_MONO}; font-weight:500; font-size:12px; color:{_MUTED};
   letter-spacing:.14em; text-transform:uppercase; margin:22px 0 9px;}}
@@ -508,6 +523,38 @@ def distance_gauge_html(pct: int, severity: str) -> str:
         f'<span class="mg-gauge"><span class="mg-gfill mg-gfill--{sev}" '
         f'style="width:{fill}%"></span></span>'
         f'<span class="mg-gpct mg-gpct--{sev}">{label}</span></div>'
+    )
+
+
+def stream_table_html(readings: list[IngestedReading]) -> str:
+    """Canlı ham telemetri akışı tablosu (salt-okuma; en yeni üstte; mono enstrüman görünümü).
+
+    Args:
+        readings: fetch_recent_for_device çıktısı (tüm sensörler, timestamp DESC).
+
+    Returns:
+        `.mg-stream` tablo HTML'i; boşsa dostça bekleme mesajı. Sensör/durum Türkçe, değer birimli.
+    """
+    if not readings:
+        return '<div class="mg-empty">Henüz veri yok — akış bekleniyor…</div>'
+    rows = []
+    for r in readings:
+        t = r.timestamp[11:19] if len(r.timestamp) >= 19 else r.timestamp
+        mag = abs(r.value)
+        dec = 0 if mag >= 100 else (1 if mag >= 10 else 2)
+        val = f"{r.value:.{dec}f} {r.unit}".strip()
+        rows.append(
+            "<tr>"
+            f'<td class="mg-st-t">{_html.escape(t)}</td>'
+            f"<td>{_html.escape(sensor_label(r.sensor))}</td>"
+            f'<td class="mg-st-v">{_html.escape(val)}</td>'
+            f'<td class="mg-st-s">{_html.escape(state_label(r.state))}</td>'
+            "</tr>"
+        )
+    head = "<tr><th>Zaman</th><th>Sensör</th><th>Değer</th><th>Durum</th></tr>"
+    return (
+        f'<table class="mg-stream"><thead>{head}</thead>'
+        f'<tbody>{"".join(rows)}</tbody></table>'
     )
 
 

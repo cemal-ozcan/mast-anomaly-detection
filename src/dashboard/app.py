@@ -65,6 +65,7 @@ from dashboard.styles import (  # noqa: E402
     layer_chips_html,
     panel_header_html,
     panel_problem_html,
+    stream_table_html,
 )
 from dashboard.thresholds import LevelBand, level_band  # noqa: E402
 from dashboard.transform import (  # noqa: E402
@@ -403,6 +404,24 @@ def _render_device_detail(
                 )
 
 
+@st.experimental_fragment(run_every="2s")
+def _render_data_stream(repository: TelemetryRepository, device_id: str) -> None:
+    """Seçili cihazın ham telemetri akışını canlı tablo olarak gösterir (salt-okuma, gözlem modu).
+
+    Üretilen sentetik veri SQLite'a düştükçe en yeni üstte akar; akışa MÜDAHALE YOK (yalnız okuma).
+    """
+    try:
+        readings = repository.fetch_recent_for_device(device_id, 60)
+    except OperationalError as e:
+        logger.error("Veri akışı okunamadı device={}: {}", device_id, e)
+        st.error("Veri akışı okunamadı (DB hatası).")
+        return
+    st.markdown(stream_table_html(readings), unsafe_allow_html=True)
+    st.caption(
+        f"Son {len(readings)} ölçüm · 2 sn'de bir yenilenir · salt-okuma (gözlem modu)"
+    )
+
+
 def main() -> None:
     """Dashboard ana akışı (spec § 3 sayfa yapısı)."""
     st.set_page_config(
@@ -453,6 +472,16 @@ def main() -> None:
 
     device_id = label_to_device.get(choice, devices[0])
     st.sidebar.button("← Filoya dön", on_click=_go_fleet, key="back_btn")
+    view = st.sidebar.radio(
+        "Görünüm", ["Sensör Durumu", "Canlı Veri Akışı"], key="devview"
+    )
+    if view == "Canlı Veri Akışı":
+        st.markdown(
+            f'<div class="mg-section">{device_label(device_id)} · Canlı Veri Akışı</div>',
+            unsafe_allow_html=True,
+        )
+        _render_data_stream(repository, device_id)
+        return
     window = (
         st.sidebar.selectbox("Zaman aralığı", list(WINDOW_OPTIONS.keys()), index=1, key="win")
         or list(WINDOW_OPTIONS.keys())[1]

@@ -25,6 +25,22 @@ def test_earliest_telemetry_timestamp(migrated_engine: Engine) -> None:
     assert repo.earliest_telemetry_timestamp() == "2026-06-20T09:00:00.000Z"
 
 
+def test_fetch_recent_for_device(migrated_engine: Engine) -> None:
+    repo = TelemetryRepository(migrated_engine)
+    assert repo.fetch_recent_for_device("device_001", 10) == []
+    repo.insert(IngestedReading("device_001", "motor_current", "2026-06-20T10:00:00.000Z",
+                                "idle", 1.0, "A"))
+    repo.insert(IngestedReading("device_001", "vibration", "2026-06-20T10:00:01.000Z",
+                                "idle", 0.05, "g"))
+    repo.insert(IngestedReading("device_002", "motor_current", "2026-06-20T10:00:02.000Z",
+                                "idle", 2.0, "A"))
+    rows = repo.fetch_recent_for_device("device_001", 10)
+    assert len(rows) == 2  # yalnız device_001, tüm sensörler
+    assert rows[0].timestamp == "2026-06-20T10:00:01.000Z"  # en yeni üstte (DESC)
+    assert {r.sensor for r in rows} == {"motor_current", "vibration"}
+    assert len(repo.fetch_recent_for_device("device_001", 1)) == 1  # limit
+
+
 def test_count_anomalies_since(migrated_engine: Engine) -> None:
     repo = TelemetryRepository(migrated_engine)
     assert repo.count_anomalies_since("2026-06-20T00:00:00.000Z") == 0
