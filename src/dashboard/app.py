@@ -1,17 +1,18 @@
-"""Streamlit dashboard entry (Faz 8 Iter 8.2): streamlit run src/dashboard/app.py.
+"""Streamlit dashboard girişi: streamlit run src/dashboard/app.py.
 
-Tek sayfa komuta merkezi (spec § 3): KPI satırı → filo sağlık kartları → severity-stilli
-uyarı akışı (cihaz-özeti varsayılan) → uyarı yönetimi → seçili cihazın 6 Altair grafiği
-(anomali overlay'li). Üst blok 5s, grafikler 2s fragment; yönetim fragment DIŞI (S1).
-SQLite'ı read-only sorgular; tek yazma yolu uyarı durumu geçişleri (gözlem modu).
+İki-sayfa + alt-görünüm gezinme (sol menü):
+- Filo Genel Bakış (Operasyon Merkezi): sağlık hero'su + kapsam şeridi + sinyal-öncelikli
+  cihaz kartları + son-24s olay akışı (5s fragment).
+- Cihaz Detayı: seçili cihazın 6 sensör paneli (radar grafik + katman/skor zekâsı) ya da
+  Canlı Veri Akışı (ham telemetri tablosu); 2s fragment.
 
+TAMAMEN salt-okuma (gözlem modu) — dashboard SQLite'a hiçbir şey yazmaz.
 db_path: DASHBOARD_DB_PATH env varsa o, yoksa config/ingestion.yaml db_path.
 """
 from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -29,7 +30,6 @@ import streamlit as st  # noqa: E402
 from loguru import logger  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
-from alerts.lifecycle import ACKNOWLEDGED, can_transition  # noqa: E402
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
 from dashboard.detection import catching_layer, watching_layers  # noqa: E402
@@ -134,22 +134,6 @@ def _get_repository() -> TelemetryRepository:
     """Engine + repository bir kez kurulur (her rerun'da yeniden açılmaz)."""
     engine = create_sqlite_engine(_resolve_db_path())
     return TelemetryRepository(engine)
-
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-
-
-def _apply_transition(fn: Callable[[int, str], bool], alert_id: int) -> None:
-    """Geçiş metodunu çağırır; sonuca göre kullanıcıyı bilgilendirir (Faz 7 spec § 9)."""
-    try:
-        ok = fn(alert_id, _now_iso())
-    except OperationalError as e:
-        logger.error("Uyarı durumu yazılamadı: {}", e)
-        st.error("Uyarı durumu güncellenemedi (DB hatası).")
-        return
-    if not ok:
-        st.info("Uyarı durumu değişmiş olabilir — listeyi yenileyin.")
 
 
 def _fetch_alerts_safe(repository: TelemetryRepository) -> tuple[list[Alert], bool]:
@@ -282,27 +266,6 @@ def _render_overview(repository: TelemetryRepository) -> None:
                 alerts_section_html("Veri Kalitesi / Sensör Sağlığı", data_quality, now, ""),
                 unsafe_allow_html=True,
             )
-
-
-def _render_alert_management(repository: TelemetryRepository) -> None:
-    """Açık bir uyarıyı ACK eden yönetim kontrolü (main() içinde, fragment DIŞINDA, S1).
-
-    P2 (Iter 8.5): manuel resolve YOK — çözümü detector sahiplenir (koşulun sahibi o; arıza sensörlerce
-    temizlenince auto-resolve). Teknisyen yalnız ack'ler. Gözlem modu: yalnız uyarı DURUMU yazılır.
-    """
-    try:
-        open_alerts = repository.fetch_alerts(OPEN_STATUSES, limit=50)
-    except OperationalError:
-        return  # tablo yoksa _render_overview zaten bilgilendirdi
-    if not open_alerts:
-        return
-    options = {f"#{a.id} {a.device_id} · {a.rule_name} ({a.status})": a for a in open_alerts}
-    label = st.selectbox("Uyarı yönet", list(options.keys()), key="alert_manage")
-    selected = options.get(label) if label else None
-    if selected is None:
-        return
-    if can_transition(selected.status, ACKNOWLEDGED) and st.button("Gör (ack)", key="ack_btn"):
-        _apply_transition(repository.acknowledge_alert, selected.id)
 
 
 def _value_str(value: float | None, unit: str) -> str:
@@ -467,7 +430,6 @@ def main() -> None:
 
     if not choice or choice == FLEET_LABEL:
         _render_overview(repository)
-        _render_alert_management(repository)
         return
 
     device_id = label_to_device.get(choice, devices[0])
