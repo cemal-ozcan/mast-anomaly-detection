@@ -26,7 +26,7 @@ BAND_OPACITY = 0.15
 ZONE_OK = "#16a34a"
 ZONE_WARN = "#d97706"
 ZONE_CRIT = "#dc2626"
-ZONE_OPACITY = 0.10
+ZONE_OPACITY = 0.16  # beyaz zeminde belirginlik (kullanıcı isteği: renk katmanları net görünsün)
 
 
 def alerts_to_overlay_frame(alerts: list[Alert]) -> pd.DataFrame:
