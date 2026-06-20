@@ -61,11 +61,9 @@
 - **Geri dön:** Cihaz Detayı üstünde `← Filoya dön` butonu; `on_click` callback `st.session_state["nav"]`'i filoya set eder (widget-state idiyomu).
 - **`_render_device_detail`** (fragment, `run_every="2s"`): başlıkta cihaz adı + rozet; zaman-aralığı seçici; 6 sensör 2×3 (`st.columns(3)`): her hücrede `panel_header_html` (durum=`sensor_badge`, değer=son okuma, meta=eşik/limit metni) + `st.altair_chart(build_sensor_chart(..., band=level_band(config, sensor)))`. Açık uyarılar `_fetch_alerts_safe`'ten (cihaza filtreli). Gözlem modu korunur.
 - **Config:** `_get_detector_config()` (`@st.cache_resource`) `config/detectors.yaml`'ı `load_detector_config` ile bir kez okur; dosya yok/bozuksa `None` → tüm `band`'ler `None` (graceful, bölgesiz grafik). Yol `DASHBOARD_DETECTORS_CONFIG` env veya varsayılan `config/detectors.yaml`.
-- **Meta metni (sensör tipine göre, dürüst):**
-  - seviye (sıcaklık/akım/titreşim): `Şu an {v} · Uyarı {warn} · Kritik {trip}`
-  - slope (hidrolik): `Şu an {v} bar · düşüş sınırı {warn}/{trip} bar/dk` (bölge yok)
-  - varyans (voltaj): `Şu an {v} V · dalgalanma sınırı {warn} V` (bölge yok)
-  - kuralsız (mast_position): `Şu an {v} mm` (bölge yok)
+- **Meta metni (sade, dürüst):**
+  - seviye-eşikli (sıcaklık/akım/titreşim): `Şu an {v}{unit} · Uyarı {warn} · Kritik {trip}` (eşikler `band`'ten).
+  - seviye-dışı (hidrolik/voltaj/konum): yalnız `Şu an {v}{unit}` — bölge/eşik-metni YOK. Sinyali durum etiketi + çizgi + anomali overlay taşır (her kuralın param şemasına bağlanma: YAGNI).
 - Fragment yapısı (filo 5s / detay 2s) korunur. Tek-fetch sorgu bütçesi korunur.
 
 ## 4. Veri Akışı (Cihaz Detayı)
