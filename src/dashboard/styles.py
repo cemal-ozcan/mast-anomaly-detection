@@ -225,6 +225,10 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
 .mg-ev-d--ack {{background:{_MUTED};}}
 .mg-ev-x {{font-size:14px; color:{_TEXT};}}
 
+/* Cihaz Detayı — sensör satırı (bordürlü container: durum + geniş grafik) */
+[data-testid="stVerticalBlockBorderWrapper"] {{background:{_SURFACE};
+  border:1px solid {_BORDER} !important; border-radius:6px; margin-bottom:10px;}}
+
 /* Cihaz Detayı — katman chip'leri + kritiğe-uzaklık gauge */
 .mg-layers {{display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin:8px 0 2px;}}
 .mg-layers .mg-lbl {{font-family:{_MONO}; font-size:10px; letter-spacing:.07em;

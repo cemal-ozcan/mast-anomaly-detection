@@ -338,14 +338,13 @@ def _render_device_detail(
     if since is not None:
         # Uyarı penceresi ∩ grafik zaman penceresi (lexicographic ISO karşılaştırma, spec § 6)
         device_alerts = [a for a in device_alerts if a.window_end >= since]
-    cols = st.columns(3)
-    for i, sensor in enumerate(SIX_SENSORS):
+    # Her sensör tam-genişlik bordürlü satır: solda durum, sağda geniş grafik (doğal hizalama).
+    for sensor in SIX_SENSORS:
         try:
             readings = repository.fetch_window(device_id, sensor, since)
         except OperationalError as e:
             logger.error("Okuma hatası device={} sensor={}: {}", device_id, sensor, e)
-            with cols[i % 3]:
-                st.error(f"{sensor_label(sensor)}: okuma hatası")
+            st.error(f"{sensor_label(sensor)}: okuma hatası")
             continue
         frame = downsample_frame(readings_to_chart_frame(readings))
         unit = readings[-1].unit if readings else ""
@@ -356,31 +355,39 @@ def _render_device_detail(
         caught = catching_layer(alert.rule_name) if alert else None
         score = alert.score if alert else None
         watching = watching_layers(config, sensor)
-        with cols[i % 3]:
-            st.markdown(
-                panel_header_html(
-                    sensor_label(sensor), sensor_status_label(badge), badge,
-                    _value_str(last_val, unit), _meta_str(band, unit),
-                ),
-                unsafe_allow_html=True,
-            )
-            chips = layer_chips_html(watching, caught, score)
-            if chips:
-                st.markdown(chips, unsafe_allow_html=True)
-            if band is not None:
-                raw = score if score is not None else (
-                    band_position_score(last_val, band.warn, band.trip)
-                    if last_val is not None
-                    else 0.0
+        with st.container(border=True):
+            left, right = st.columns([2, 5])
+            with left:
+                st.markdown(
+                    panel_header_html(
+                        sensor_label(sensor), sensor_status_label(badge), badge,
+                        _value_str(last_val, unit), _meta_str(band, unit),
+                    ),
+                    unsafe_allow_html=True,
                 )
-                st.markdown(distance_gauge_html(round(raw * 100), badge), unsafe_allow_html=True)
-            # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
-            # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
-            st.altair_chart(
-                cast(alt.Chart, build_sensor_chart(frame, device_alerts, sensor, unit, band=band)),
-                use_container_width=True,
-                theme=None,
-            )
+                chips = layer_chips_html(watching, caught, score)
+                if chips:
+                    st.markdown(chips, unsafe_allow_html=True)
+                if band is not None:
+                    raw = score if score is not None else (
+                        band_position_score(last_val, band.warn, band.trip)
+                        if last_val is not None
+                        else 0.0
+                    )
+                    st.markdown(
+                        distance_gauge_html(round(raw * 100), badge), unsafe_allow_html=True
+                    )
+            with right:
+                # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
+                # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
+                st.altair_chart(
+                    cast(
+                        alt.Chart,
+                        build_sensor_chart(frame, device_alerts, sensor, unit, band=band),
+                    ),
+                    use_container_width=True,
+                    theme=None,
+                )
 
 
 def main() -> None:
