@@ -1,10 +1,13 @@
 """Altair chart builder'ları (Faz 8 Iter 8.2 spec § 5). Saf — streamlit/DB import etmez."""
 from __future__ import annotations
 
+from typing import Any
+
 import altair as alt
 import pandas as pd
 
 from alerts.models import Alert
+from dashboard.thresholds import LevelBand
 
 LINE_COLOR = "#1d4ed8"  # tema B lacivert (spec § 4)
 CHART_HEIGHT = 200  # 2×3 ızgarada eşit-yükseklik okunabilirlik (Clean Corporate yeniden tasarım)
@@ -14,6 +17,12 @@ _GRID_COLOR = "#eef2f7"
 SEVERITY_COLORS = {"critical": "#b91c1c", "high": "#ea580c", "warning": "#a16207"}
 
 BAND_OPACITY = 0.15
+
+# Radar bölge renkleri (açık zemin; düşük opaklık ki çizgi/overlay üstte okunsun)
+ZONE_OK = "#16a34a"
+ZONE_WARN = "#d97706"
+ZONE_CRIT = "#dc2626"
+ZONE_OPACITY = 0.10
 
 
 def alerts_to_overlay_frame(alerts: list[Alert]) -> pd.DataFrame:
@@ -49,38 +58,109 @@ def _severity_color() -> alt.Color:
     )
 
 
-def build_sensor_chart(
-    frame: pd.DataFrame, alerts: list[Alert], sensor: str, unit: str
-) -> alt.LayerChart | alt.Chart:
-    """Bir sensörün telemetri çizgisi + anomali overlay'li Altair chart'ını kurar (spec § 5).
+def _band_layers(
+    lo: float, hi: float, band: LevelBand, y_scale: alt.Scale, x_domain: list[Any]
+) -> list[alt.Chart]:
+    """Seviye-bandı için bölge rect'leri + uyarı/kritik kesikli eşik çizgileri (paylaşılan y_scale).
 
-    Katmanlar (alttan üste): severity bandı (mark_rect) → başlangıç çizgisi (mark_rule,
-    kesikli) → kural etiketi (mark_text) → telemetri çizgisi (mark_line, tooltip'li).
-    Bu sensöre ait uyarı yoksa (veya frame boşsa) yalnız çizgi döner.
+    BÖLGE rect'i tam-genişlik için açık x-span taşır (x_domain = [tmin, tmax]); yalnız y/y2
+    veren bir rect Vega-Lite'ta tam genişliğe yayılmaz. Eşik çizgileri (mark_rule, yalnız y)
+    doğal olarak tam-genişlik yatay çizgidir.
+    """
+    x0, x1 = x_domain[0], x_domain[1]
+    zones = pd.DataFrame(
+        {"x0": [x0, x0, x0], "x1": [x1, x1, x1],
+         "y0": [lo, band.warn, band.trip], "y1": [band.warn, band.trip, hi],
+         "zone": ["ok", "warn", "crit"]}
+    )
+    zone_color = alt.Color(
+        "zone:N",
+        scale=alt.Scale(domain=["ok", "warn", "crit"], range=[ZONE_OK, ZONE_WARN, ZONE_CRIT]),
+        legend=None,
+    )
+    zone_layer = (
+        alt.Chart(zones)
+        .mark_rect(opacity=ZONE_OPACITY)
+        .encode(
+            x=alt.X("x0:T", title=None, axis=alt.Axis(labelFontSize=10)),
+            x2="x1:T",
+            y=alt.Y("y0:Q", scale=y_scale, title=None),
+            y2="y1:Q",
+            color=zone_color,
+        )
+    )
+    lines = pd.DataFrame({"y": [band.warn, band.trip], "kind": ["Uyarı", "Kritik"]})
+    line_color = alt.Color(
+        "kind:N",
+        scale=alt.Scale(domain=["Uyarı", "Kritik"], range=[ZONE_WARN, ZONE_CRIT]),
+        legend=None,
+    )
+    thresh_layer = (
+        alt.Chart(lines)
+        .mark_rule(strokeDash=[6, 3], strokeWidth=1.5)
+        .encode(y=alt.Y("y:Q", scale=y_scale), color=line_color)
+    )
+    return [zone_layer, thresh_layer]
+
+
+def build_sensor_chart(
+    frame: pd.DataFrame,
+    alerts: list[Alert],
+    sensor: str,
+    unit: str,
+    band: LevelBand | None = None,
+) -> alt.LayerChart | alt.Chart:
+    """Bir sensörün telemetri çizgisi + opsiyonel radar bölgeleri + anomali overlay'i (spec § 3/§ 5).
 
     Args:
         frame: readings_to_chart_frame çıktısı (timestamp/value/state; downsample edilmiş).
-        alerts: Seçili cihazın uyarıları (TÜM sensörler; içeride sensor'e filtrelenir —
-            fused(N) bandı yalnız temsilci Alert.sensor grafiğine çizilir, spec § 7).
+        alerts: Seçili cihazın uyarıları (içeride sensor'e filtrelenir — fused(N) bandı yalnız
+            temsilci Alert.sensor grafiğine çizilir, spec § 7).
         sensor: Sensör adı (y-ekseni başlığı).
         unit: Birim etiketi (DB'den; boşsa başlık yalnız sensör adı).
+        band: Seviye-bandı (warn/trip) verilirse yeşil/sarı/kırmızı bölge + eşik çizgileri eklenir
+            ve y-ekseni eşikleri kapsayacak şekilde genişler; None → klasik davranış.
 
     Returns:
-        İnteraktif (zoom/pan) Altair chart'ı.
+        İnteraktif Altair chart'ı (band/uyarı yoksa tek çizgi; varsa katmanlı).
     """
     y_title = f"{sensor} ({unit})" if unit else sensor
+    frame_empty = bool(frame.empty)
+    x_domain: list[Any] | None = (
+        None if frame_empty else [frame["timestamp"].min(), frame["timestamp"].max()]
+    )
+
+    # y-ölçeği: band varsa eşikleri kapsa (çizginin sınıra uzaklığı görünür). Boş frame'de band yok.
+    y_scale = alt.Scale(zero=False)
+    band_bounds: tuple[float, float] | None = None
+    if band is not None and not frame_empty:
+        dmin = float(frame["value"].min())
+        dmax = float(frame["value"].max())
+        lo = min(dmin, band.warn)
+        hi = max(dmax, band.trip)
+        pad = (hi - lo) * 0.05 or 1.0
+        lo, hi = lo - pad, hi + pad
+        y_scale = alt.Scale(domain=[lo, hi], zero=False)
+        band_bounds = (lo, hi)
+
+    # Katman eklenecekse (band/overlay) x-domain'i sabitle ki bölge + çizgi + overlay hizalansın.
+    relevant = [a for a in alerts if a.sensor == sensor]
+    fix_x = x_domain is not None and (band_bounds is not None or bool(relevant))
+    if fix_x and x_domain is not None:
+        x_enc = alt.X("timestamp:T", title=None, scale=alt.Scale(domain=x_domain),
+                      axis=alt.Axis(labelFontSize=10))
+    else:
+        x_enc = alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10))
     line: alt.Chart = (
         alt.Chart(frame)
         .mark_line(color=LINE_COLOR, strokeWidth=1.5)
         .encode(
-            x=alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10)),
+            x=x_enc,
             y=alt.Y(
                 "value:Q",
                 title=y_title,
-                scale=alt.Scale(zero=False),
-                axis=alt.Axis(
-                    grid=True, gridColor=_GRID_COLOR, labelFontSize=11, titleFontSize=11
-                ),
+                scale=y_scale,
+                axis=alt.Axis(grid=True, gridColor=_GRID_COLOR, labelFontSize=11, titleFontSize=11),
             ),
             tooltip=[
                 alt.Tooltip("timestamp:T", format="%H:%M:%S", title="zaman"),
@@ -89,34 +169,27 @@ def build_sensor_chart(
             ],
         )
     )
-    relevant = [a for a in alerts if a.sensor == sensor]
-    if frame.empty or not relevant:
-        return line.interactive().properties(height=CHART_HEIGHT)
 
-    # x-domain telemetri verisinden sabitlenir — bant domain'i esnetmesin (spec § 5).
-    domain = [frame["timestamp"].min(), frame["timestamp"].max()]
-    line = line.encode(
-        x=alt.X(
-            "timestamp:T",
-            title=None,
-            scale=alt.Scale(domain=domain),
-            axis=alt.Axis(labelFontSize=10),
+    layers: list[alt.Chart] = []
+    if band is not None and band_bounds is not None and x_domain is not None:
+        layers.extend(_band_layers(band_bounds[0], band_bounds[1], band, y_scale, x_domain))
+
+    if relevant and not frame_empty:
+        overlay = alerts_to_overlay_frame(relevant)
+        layers.append(
+            alt.Chart(overlay).mark_rect(opacity=BAND_OPACITY, clip=True)
+            .encode(x="window_start:T", x2="window_end:T", color=_severity_color())
         )
-    )
-    overlay = alerts_to_overlay_frame(relevant)
-    band = (
-        alt.Chart(overlay)
-        .mark_rect(opacity=BAND_OPACITY, clip=True)
-        .encode(x="window_start:T", x2="window_end:T", color=_severity_color())
-    )
-    rule = (
-        alt.Chart(overlay)
-        .mark_rule(strokeDash=[4, 2], clip=True)
-        .encode(x="window_start:T", color=_severity_color())
-    )
-    text = (
-        alt.Chart(overlay)
-        .mark_text(align="left", baseline="top", dx=4, clip=True)
-        .encode(x="window_start:T", y=alt.value(8), text="label:N", color=_severity_color())
-    )
-    return alt.layer(band, rule, text, line).interactive().properties(height=CHART_HEIGHT)
+        layers.append(
+            alt.Chart(overlay).mark_rule(strokeDash=[4, 2], clip=True)
+            .encode(x="window_start:T", color=_severity_color())
+        )
+        layers.append(
+            alt.Chart(overlay).mark_text(align="left", baseline="top", dx=4, clip=True)
+            .encode(x="window_start:T", y=alt.value(8), text="label:N", color=_severity_color())
+        )
+
+    if not layers:
+        return line.interactive().properties(height=CHART_HEIGHT)
+    layers.append(line)
+    return alt.layer(*layers).interactive().properties(height=CHART_HEIGHT)

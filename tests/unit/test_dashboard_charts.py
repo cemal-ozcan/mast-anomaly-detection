@@ -73,3 +73,43 @@ def test_build_sensor_chart_has_fixed_height() -> None:
                           "value": [1.0], "state": ["holding"]})
     d = build_sensor_chart(frame, [], "motor_current", "A").to_dict()
     assert d.get("height") == 200 or d.get("spec", {}).get("height") == 200
+
+
+def test_chart_band_adds_zone_and_threshold_layers() -> None:
+    """band verilince: bölge rect (y2'li, tam-genişlik x'li) + eşik çizgileri (y'li rule) + genişlemiş y-domain."""
+    from dashboard.charts import build_sensor_chart
+    from dashboard.thresholds import LevelBand
+
+    frame = readings_to_chart_frame(_readings())  # value 0..4
+    band = LevelBand(warn=9.0, trip=11.0)
+    spec = build_sensor_chart(frame, [], "motor_current", "A", band=band).to_dict()
+    assert "layer" in spec
+    # bölge: y2'li mark_rect; tam-genişlik için x+x2 de taşır (render-doğru)
+    zones = [ly for ly in spec["layer"]
+             if ly["mark"]["type"] == "rect" and "y2" in ly.get("encoding", {})]
+    assert zones
+    assert "x" in zones[0]["encoding"] and "x2" in zones[0]["encoding"]  # tam-genişlik
+    # eşik çizgileri: y encoding'li mark_rule (anomali rule x encoding kullanır)
+    thresh = [ly for ly in spec["layer"]
+              if ly["mark"]["type"] == "rule" and "y" in ly.get("encoding", {})]
+    assert thresh
+    # y-domain trip'i (11) kapsar → çizginin sınıra uzaklığı görünür
+    line = [ly for ly in spec["layer"] if ly["mark"]["type"] == "line"][0]
+    domain = line["encoding"]["y"]["scale"]["domain"]
+    assert domain[1] >= 11.0
+
+
+def test_chart_band_with_alert_keeps_overlay() -> None:
+    """band + uyarı birlikte: bölge rect (y2'li) VE anomali overlay rect (x2'li, y2'siz) ayrı bulunur."""
+    from dashboard.charts import build_sensor_chart
+    from dashboard.thresholds import LevelBand
+
+    frame = readings_to_chart_frame(_readings())
+    spec = build_sensor_chart(frame, [_alert()], "motor_current", "A",
+                              band=LevelBand(9.0, 11.0)).to_dict()
+    rect_marks = [ly for ly in spec["layer"] if ly["mark"]["type"] == "rect"]
+    has_zone = any("y2" in ly.get("encoding", {}) for ly in rect_marks)
+    # anomali overlay: x2 var ama y2 yok (bölge rect'inden ayırt et)
+    has_overlay = any("x2" in ly.get("encoding", {}) and "y2" not in ly.get("encoding", {})
+                      for ly in rect_marks)
+    assert has_zone and has_overlay
