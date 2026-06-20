@@ -240,12 +240,9 @@ a.mg-card {{text-decoration:none; color:inherit; display:block;}}
 .mg-ev-d--ack {{background:{_MUTED};}}
 .mg-ev-x {{font-size:14px; color:{_TEXT};}}
 
-/* Cihaz Detayı — sensör satırı (bordürlü container: durum + geniş grafik) */
-[data-testid="stVerticalBlockBorderWrapper"] {{background:{_SURFACE};
-  border:1px solid {_BORDER} !important; border-radius:6px; margin-bottom:10px;}}
-
-/* Cihaz Detayı — sensör durum bloğu (tek html, taşma yok) */
-.mg-status {{min-width:0; overflow-wrap:anywhere;}}
+/* Cihaz Detayı — sensör durum bloğu (tek html, taşma/çakışma yok) */
+.mg-status {{min-width:0; overflow-wrap:anywhere; padding:2px 2px 8px;}}
+.mg-status > *:last-child {{margin-bottom:0;}}
 .mg-prob {{font-size:14px; font-weight:600; margin:8px 0 1px; color:{_CRIT};}}
 .mg-prob--warning {{color:{_WARN};}}
 .mg-prob--critical {{color:{_CRIT};}}
