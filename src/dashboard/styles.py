@@ -17,106 +17,138 @@ from dashboard.transform import relative_time
 
 _SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 
-# Tema paleti (spec § 1/§ 2)
-_BG = "#f4f6fb"
+# Enstrüman-sınıfı palet (frontend-design: tek-accent, renk=anlam, AI-mavisi/Inter yok).
+_BG = "#eef0f2"        # cool paper (krem değil)
 _SURFACE = "#ffffff"
-_PRIMARY = "#1d4ed8"
-_TEXT = "#1e293b"
-_MUTED = "#64748b"
-_BORDER = "#e2e8f0"
-_OK = "#16a34a"
-_WARN = "#d97706"
-_CRIT = "#b91c1c"
+_GRAPHITE = "#1b2027"  # kontrol-odası grafit (başlık şeridi + yapısal vurgu)
+_PRIMARY = _GRAPHITE   # marka aksanı = grafit (AI-mavisi #1d4ed8 kaldırıldı)
+_TEXT = "#171b21"
+_MUTED = "#697078"
+_BORDER = "#dadee3"    # hairline
+_OK = "#2f8f5b"
+_WARN = "#c07d12"
+_CRIT = "#bd3a2c"
+_OKBG = "#e8f3ec"
+_WARNBG = "#f7efe0"
+_CRITBG = "#f7e6e3"
+_FONT = '"IBM Plex Sans", system-ui, -apple-system, sans-serif'
+_MONO = '"IBM Plex Mono", ui-monospace, "SF Mono", monospace'
 
 APP_CSS = f"""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 /* Streamlit chrome gizle (temiz demo yüzeyi) */
 #MainMenu {{visibility: hidden;}}
 header[data-testid="stHeader"] {{display: none;}}
 div[data-testid="stToolbar"] {{display: none;}}
 footer {{visibility: hidden;}}
-/* Açık kurumsal zemini zorla (tarayıcı tema-seçici ezmesine karşı) */
+/* Enstrüman-sınıfı açık zemin (tarayıcı tema-seçici ezmesine karşı) */
 .stApp {{background: {_BG} !important;}}
-.block-container {{padding-top: 1.2rem; max-width: 1500px;}}
+.block-container {{padding-top: 1.1rem; max-width: 1320px;}}
 section[data-testid="stSidebar"] {{background: {_SURFACE} !important; border-right: 1px solid {_BORDER};}}
-html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: "Inter","Segoe UI",sans-serif;}}
+html, body, .stApp, [class*="css"] {{color: {_TEXT}; font-family: {_FONT};}}
+.mono, .mg-kpi-val, .mg-pval, .mg-when, .mg-summary b, .mg-pill {{
+  font-family: {_MONO}; font-variant-numeric: tabular-nums;}}
 
-/* Başlık şeridi */
+/* Light selectbox/input/button (Streamlit BaseWeb karanlık varsayılanını ez) */
+[data-baseweb="select"] > div {{background:{_SURFACE} !important; border-color:{_BORDER} !important;
+  color:{_TEXT} !important; border-radius:5px !important;}}
+[data-baseweb="select"] span, [data-baseweb="select"] svg {{color:{_TEXT} !important; fill:{_TEXT} !important;}}
+[data-baseweb="popover"] li {{font-family:{_FONT};}}
+.stButton > button {{background:{_SURFACE}; color:{_TEXT}; border:1px solid {_BORDER};
+  border-radius:5px; font-weight:600; font-family:{_FONT};}}
+.stButton > button:hover {{border-color:{_GRAPHITE}; color:{_GRAPHITE};}}
+.stButton > button:active {{transform: translateY(1px);}}
+
+/* Başlık şeridi — kontrol-odası grafit */
 .mg-header {{display:flex; align-items:center; justify-content:space-between;
-  padding:14px 18px; background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:12px;
-  border-left:5px solid {_PRIMARY}; margin-bottom:14px;}}
-.mg-header .mg-brand {{font-size:20px; font-weight:700; color:{_TEXT};}}
-.mg-header .mg-brand small {{color:{_MUTED}; font-weight:500; font-size:13px; margin-left:8px;}}
-.mg-header .mg-live {{color:{_OK}; font-weight:600; font-size:13px;}}
+  padding:13px 22px; background:{_GRAPHITE}; border-radius:6px; margin-bottom:16px;}}
+.mg-header .mg-brand {{font-family:{_MONO}; font-size:16px; font-weight:600; color:#eef0f2;
+  letter-spacing:.16em; text-transform:uppercase;}}
+.mg-header .mg-brand small {{font-family:{_FONT}; color:#8b929b; font-weight:400; font-size:11px;
+  letter-spacing:.10em; text-transform:uppercase; margin-left:12px;}}
+.mg-header .mg-live {{font-family:{_MONO}; color:#aeb4bc; font-weight:500; font-size:12px;
+  letter-spacing:.06em; display:flex; align-items:center; gap:8px;}}
+.mg-header .mg-livedot {{width:7px; height:7px; border-radius:50%; background:{_OK};
+  box-shadow:0 0 0 3px rgba(47,143,91,.20);}}
 
-/* KPI kartları */
-.mg-kpis {{display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:16px;}}
-.mg-kpi {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:12px; padding:14px 16px;
-  border-top:3px solid {_PRIMARY};}}
-.mg-kpi--warning {{border-top-color:{_WARN};}}
-.mg-kpi--critical {{border-top-color:{_CRIT};}}
-.mg-kpi .mg-kpi-val {{font-size:30px; font-weight:700; line-height:1.1; color:{_TEXT};}}
+/* KPI — hairline enstrüman okumaları (yuvarlak/AI-mavisi kart yok) */
+.mg-kpis {{display:grid; grid-template-columns:repeat(4,1fr); background:{_SURFACE};
+  border:1px solid {_BORDER}; border-radius:6px; margin-bottom:18px; overflow:hidden;}}
+.mg-kpi {{padding:15px 18px; border-left:1px solid {_BORDER};}}
+.mg-kpi:first-child {{border-left:0;}}
+.mg-kpi .mg-kpi-val {{font-size:30px; font-weight:600; line-height:1; color:{_TEXT};}}
 .mg-kpi--critical .mg-kpi-val {{color:{_CRIT};}}
 .mg-kpi--warning .mg-kpi-val {{color:{_WARN};}}
-.mg-kpi .mg-kpi-lbl {{font-size:12px; color:{_MUTED}; text-transform:uppercase; letter-spacing:.04em;}}
+.mg-kpi .mg-kpi-lbl {{font-size:11px; color:{_MUTED}; text-transform:uppercase;
+  letter-spacing:.12em; margin-top:7px;}}
 
 /* Bir-bakışta filo özeti */
 .mg-summary {{display:flex; align-items:center; gap:10px; background:{_SURFACE};
-  border:1px solid {_BORDER}; border-left:6px solid {_OK}; border-radius:12px;
-  padding:12px 18px; margin-bottom:14px; font-size:18px; color:{_TEXT};}}
+  border:1px solid {_BORDER}; border-left:4px solid {_OK}; border-radius:6px;
+  padding:12px 18px; margin-bottom:16px; font-size:16px; color:{_TEXT};}}
 .mg-summary--warning {{border-left-color:{_WARN};}}
 .mg-summary--critical {{border-left-color:{_CRIT};}}
-.mg-summary .mg-summary-dot {{width:12px; height:12px; border-radius:50%; background:{_OK};}}
+.mg-summary .mg-summary-dot {{width:11px; height:11px; border-radius:3px; background:{_OK};}}
 .mg-summary--warning .mg-summary-dot {{background:{_WARN};}}
 .mg-summary--critical .mg-summary-dot {{background:{_CRIT};}}
 
-/* Filo kartları (sade: durum + sorun) */
-.mg-fleet {{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px;}}
-.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:14px; overflow:hidden;}}
-.mg-card .mg-strip {{height:6px; background:{_OK};}}
+/* Filo kartları — hairline + ince durum şeridi (düşük radius, gölge yok) */
+.mg-fleet {{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:20px;}}
+.mg-card {{background:{_SURFACE}; border:1px solid {_BORDER}; border-radius:6px; overflow:hidden;}}
+.mg-card .mg-strip {{height:3px; background:{_OK};}}
 .mg-card--warning .mg-strip {{background:{_WARN};}}
 .mg-card--critical .mg-strip {{background:{_CRIT};}}
-.mg-card .mg-body {{padding:16px 18px;}}
+.mg-card .mg-body {{padding:15px 17px;}}
 .mg-cardhead {{display:flex; align-items:center; justify-content:space-between;}}
-.mg-card .mg-dev {{font-weight:800; font-size:20px; color:{_TEXT};}}
-.mg-card .mg-badge {{font-size:13px; font-weight:800; padding:3px 12px; border-radius:999px;
-  letter-spacing:.03em;}}
-.mg-badge--ok {{background:#dcfce7; color:{_OK};}}
-.mg-badge--warning {{background:#fef3c7; color:{_WARN};}}
-.mg-badge--critical {{background:#fee2e2; color:{_CRIT};}}
-.mg-card .mg-state {{font-size:14px; color:{_MUTED}; margin:6px 0 12px;}}
-.mg-card .mg-problem {{font-size:16px; font-weight:700; color:{_CRIT};}}
+.mg-card .mg-dev {{font-weight:600; font-size:18px; color:{_TEXT};}}
+.mg-card .mg-badge {{font-family:{_MONO}; font-size:11px; font-weight:600; padding:3px 10px;
+  border-radius:3px; letter-spacing:.07em;}}
+.mg-badge--ok {{background:{_OKBG}; color:{_OK};}}
+.mg-badge--warning {{background:{_WARNBG}; color:{_WARN};}}
+.mg-badge--critical {{background:{_CRITBG}; color:{_CRIT};}}
+.mg-card .mg-state {{font-size:13px; color:{_MUTED}; margin:5px 0 11px;}}
+.mg-card .mg-problem {{font-size:15px; font-weight:600; color:{_CRIT};}}
 .mg-card--warning .mg-problem {{color:{_WARN};}}
-.mg-card .mg-okline {{font-size:15px; color:{_OK}; font-weight:600;}}
+.mg-card .mg-okline {{font-size:14px; color:{_MUTED}; font-weight:500;}}
 
 /* Uyarı satır-kartları (düz Türkçe başlık + soluk teknik detay) */
 .mg-alert {{display:flex; align-items:center; gap:12px; background:{_SURFACE};
-  border:1px solid {_BORDER}; border-left:5px solid {_MUTED}; border-radius:10px;
-  padding:11px 14px; margin-bottom:8px; font-size:15px; color:{_TEXT};}}
+  border:1px solid {_BORDER}; border-left:3px solid {_MUTED}; border-radius:5px;
+  padding:11px 14px; margin-bottom:7px; font-size:15px; color:{_TEXT};}}
 .mg-alert--critical {{border-left-color:{_CRIT};}}
 .mg-alert--high {{border-left-color:{_WARN};}}
 .mg-alert--warning {{border-left-color:{_WARN};}}
-.mg-pill {{font-size:12px; font-weight:800; padding:2px 10px; border-radius:999px; white-space:nowrap;}}
-.mg-pill--critical {{background:#fee2e2; color:{_CRIT};}}
-.mg-pill--high {{background:#ffedd5; color:{_WARN};}}
-.mg-pill--warning {{background:#fef9c3; color:{_WARN};}}
-.mg-alert .mg-when {{color:{_MUTED}; min-width:72px; font-size:13px;}}
+.mg-pill {{font-size:11px; font-weight:600; padding:3px 9px; border-radius:3px; white-space:nowrap;
+  letter-spacing:.06em;}}
+.mg-pill--critical {{background:{_CRITBG}; color:{_CRIT};}}
+.mg-pill--high {{background:{_WARNBG}; color:{_WARN};}}
+.mg-pill--warning {{background:{_WARNBG}; color:{_WARN};}}
+.mg-alert .mg-when {{color:{_MUTED}; min-width:76px; font-size:12px;}}
 .mg-alert .mg-desc {{color:{_TEXT}; flex:1;}}
-.mg-alert .mg-detail {{display:block; color:{_MUTED}; font-size:12px; margin-top:2px;}}
+.mg-alert .mg-detail {{display:block; color:{_MUTED}; font-size:12px; margin-top:2px; font-family:{_MONO};}}
 .mg-empty {{color:{_MUTED}; font-size:14px; padding:8px 2px;}}
 
 /* Grafik başlığı (arızalı sensör vurgusu) */
-.mg-chart-title {{font-weight:700; font-size:15px; color:{_TEXT}; margin:6px 0 2px;}}
+.mg-chart-title {{font-weight:600; font-size:15px; color:{_TEXT}; margin:6px 0 2px;}}
 .mg-chart-title--alert {{color:{_CRIT};}}
 
 /* Cihaz Detayı sensör paneli */
 .mg-panel {{display:flex; align-items:flex-start; justify-content:space-between; gap:8px;
   margin:4px 0 2px;}}
-.mg-panel .mg-pname {{font-weight:700; font-size:15px; color:{_TEXT};}}
+.mg-panel .mg-pname {{font-weight:600; font-size:14.5px; color:{_TEXT}; display:flex;
+  align-items:center; gap:8px;}}
 .mg-panel .mg-pval {{font-size:13px; color:{_MUTED};}}
-.mg-pmeta {{display:block; font-size:12px; color:{_MUTED}; margin-top:1px;}}
+.mg-panel .mg-pval b {{color:{_TEXT}; font-weight:600;}}
+.mg-lamp {{width:10px; height:10px; border-radius:3px; background:{_OK}; flex:0 0 auto;}}
+.mg-lamp--warning {{background:{_WARN};}}
+.mg-lamp--critical {{background:{_CRIT};}}
+.mg-pmeta {{display:block; font-size:11.5px; color:{_MUTED}; margin-top:1px; font-family:{_MONO};}}
 
-.mg-section {{font-weight:800; font-size:18px; color:{_TEXT}; margin:16px 0 8px;}}
+/* Bölüm başlığı — eyebrow (mono, letterspaced, sessiz) */
+.mg-section {{font-family:{_MONO}; font-weight:500; font-size:12px; color:{_MUTED};
+  letter-spacing:.14em; text-transform:uppercase; margin:22px 0 9px;}}
 </style>
 """
 
@@ -288,7 +320,8 @@ def panel_header_html(
     b = badge if badge in ("ok", "warning", "critical") else "ok"
     return (
         '<div class="mg-panel">'
-        f'<span class="mg-pname">{_html.escape(sensor_label)} '
+        f'<span class="mg-pname"><span class="mg-lamp mg-lamp--{b}"></span>'
+        f'{_html.escape(sensor_label)} '
         f'<span class="mg-badge mg-badge--{b}">{_html.escape(status_label)}</span></span>'
         f'<span class="mg-pval">{_html.escape(value_str)}</span>'
         "</div>"
@@ -307,8 +340,8 @@ def header_html(now_str: str) -> str:
     """
     return (
         '<div class="mg-header">'
-        '<span class="mg-brand">🛡 MastGuard'
-        "<small>Teleskopik Mast Filo İzleme · gözlem modu</small></span>"
-        f'<span class="mg-live">● canlı · {now_str}</span>'
+        '<span class="mg-brand">MastGuard'
+        "<small>Teleskopik Mast · Durum İzleme · gözlem modu</small></span>"
+        f'<span class="mg-live"><span class="mg-livedot"></span>CANLI · {now_str}</span>'
         "</div>"
     )

@@ -1,7 +1,7 @@
 """Altair chart builder'ları (Faz 8 Iter 8.2 spec § 5). Saf — streamlit/DB import etmez."""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import altair as alt
 import pandas as pd
@@ -9,9 +9,13 @@ import pandas as pd
 from alerts.models import Alert
 from dashboard.thresholds import LevelBand
 
-LINE_COLOR = "#1d4ed8"  # tema B lacivert (spec § 4)
-CHART_HEIGHT = 200  # 2×3 ızgarada eşit-yükseklik okunabilirlik (Clean Corporate yeniden tasarım)
-_GRID_COLOR = "#eef2f7"
+LINE_COLOR = "#171b21"  # grafit telemetri çizgisi (AI-mavisi kaldırıldı, frontend-design)
+CHART_HEIGHT = 200  # 2×3 ızgarada eşit-yükseklik okunabilirlik
+_GRID_COLOR = "#e7eaee"
+_CHART_BG = "#ffffff"  # beyaz zemin (siyah/neon değil — sayfayla tutarlı)
+_AXIS_LABEL_COLOR = "#697078"
+_FONT_SANS = "IBM Plex Sans"
+_FONT_MONO = "IBM Plex Mono"
 
 # Severity → bant/çizgi/etiket rengi (tema B paleti, spec § 4)
 SEVERITY_COLORS = {"critical": "#b91c1c", "high": "#ea580c", "warning": "#a16207"}
@@ -103,6 +107,26 @@ def _band_layers(
     return [zone_layer, thresh_layer]
 
 
+def _finalize(chart: alt.LayerChart | alt.Chart) -> alt.LayerChart | alt.Chart:
+    """Ortak bitiş: interaktif + sabit yükseklik + beyaz zemin + IBM Plex eksen (enstrüman-sınıfı)."""
+    finished = (
+        chart.interactive()
+        .properties(height=CHART_HEIGHT)
+        .configure_view(stroke=None)
+        .configure(background=_CHART_BG, font=_FONT_SANS)
+        .configure_axis(
+            labelFont=_FONT_MONO,
+            titleFont=_FONT_SANS,
+            labelColor=_AXIS_LABEL_COLOR,
+            titleColor=_AXIS_LABEL_COLOR,
+            gridColor=_GRID_COLOR,
+            domainColor=_GRID_COLOR,
+            tickColor=_GRID_COLOR,
+        )
+    )
+    return cast("alt.LayerChart | alt.Chart", finished)
+
+
 def build_sensor_chart(
     frame: pd.DataFrame,
     alerts: list[Alert],
@@ -190,6 +214,6 @@ def build_sensor_chart(
         )
 
     if not layers:
-        return line.interactive().properties(height=CHART_HEIGHT)
+        return _finalize(line)
     layers.append(line)
-    return alt.layer(*layers).interactive().properties(height=CHART_HEIGHT)
+    return _finalize(alt.layer(*layers))

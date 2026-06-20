@@ -77,7 +77,7 @@ ALERTS_FETCH_LIMIT = 200  # spec § 6 — tek fetch, client-side türetim
 # Uyarı akışı görünümleri (spec § 3): cihaz özeti varsayılan; gerisi durum filtresi.
 _VIEW_OPTIONS = ["Cihaz özeti", "Açık", "Tümü", "active", "acknowledged", "resolved"]
 
-FLEET_LABEL = "🏠 Filo Genel Bakış"  # sol-menü gezinme: filo sayfası seçimi
+FLEET_LABEL = "Filo Genel Bakış"  # sol-menü gezinme: filo sayfası seçimi
 
 
 def _resolve_db_path() -> Path:
@@ -183,19 +183,19 @@ def _render_overview(repository: TelemetryRepository) -> None:
     st.markdown(fleet_summary_html(fleet), unsafe_allow_html=True)
     _render_fleet_cards(fleet)
 
-    st.markdown('<div class="mg-section">🚨 Uyarılar</div>', unsafe_allow_html=True)
+    st.markdown('<div class="mg-section">Uyarılar</div>', unsafe_allow_html=True)
     choice = st.selectbox(
         "Görünüm", _VIEW_OPTIONS, index=0, key="alert_view", label_visibility="collapsed"
     )
     visible = _filter_view(alerts, choice or "Cihaz özeti")
     faults, data_quality = split_alerts_by_axis(visible)
     st.markdown(
-        alerts_section_html("🚨 Arıza Uyarıları", faults, now, "Açık arıza uyarısı yok."),
+        alerts_section_html("Arıza Uyarıları", faults, now, "Açık arıza uyarısı yok."),
         unsafe_allow_html=True,
     )
     st.markdown(
         alerts_section_html(
-            "🔌 Veri Kalitesi / Sensör Sağlığı", data_quality, now, "Tüm sensörler sağlıklı."
+            "Veri Kalitesi / Sensör Sağlığı", data_quality, now, "Tüm sensörler sağlıklı."
         ),
         unsafe_allow_html=True,
     )
@@ -281,7 +281,7 @@ def _render_device_detail(
             st.altair_chart(
                 cast(alt.Chart, build_sensor_chart(frame, device_alerts, sensor, unit, band=band)),
                 use_container_width=True,
-                theme="streamlit",
+                theme=None,
             )
 
 
