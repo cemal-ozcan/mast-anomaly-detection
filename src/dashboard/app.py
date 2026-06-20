@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
 
@@ -33,19 +33,26 @@ from alerts.lifecycle import ACKNOWLEDGED, can_transition  # noqa: E402
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
 from dashboard.fleet import (  # noqa: E402
-    DeviceHealth,
-    compute_kpis,
     derive_fleet,
+    representative_sensor,
     sensor_badge,
+    sort_fleet_by_severity,
 )
 from dashboard.labels import device_label, sensor_label, sensor_status_label  # noqa: E402
+from dashboard.overview import (  # noqa: E402
+    coverage_html,
+    coverage_stats,
+    fleet_card_html,
+    fleet_grid_html,
+    hero_html,
+    summarize_fleet,
+    timeline_events,
+    timeline_html,
+)
 from dashboard.styles import (  # noqa: E402
     APP_CSS,
     alerts_section_html,
-    fleet_html,
-    fleet_summary_html,
     header_html,
-    kpis_html,
     panel_header_html,
 )
 from dashboard.thresholds import LevelBand, level_band  # noqa: E402
@@ -53,13 +60,14 @@ from dashboard.transform import (  # noqa: E402
     OPEN_STATUSES,
     WINDOW_OPTIONS,
     downsample_frame,
-    latest_alert_per_device,
     readings_to_chart_frame,
+    relative_time,
     split_alerts_by_axis,
     window_to_since,
 )
 from detectors.config import DetectorConfig, load_detector_config  # noqa: E402
 from ingestion.config import load_ingestion_config  # noqa: E402
+from ingestion.message_parser import IngestedReading  # noqa: E402
 from storage.engine import create_sqlite_engine  # noqa: E402
 from storage.repository import TelemetryRepository  # noqa: E402
 
@@ -74,10 +82,10 @@ SIX_SENSORS = [
 
 ALERTS_FETCH_LIMIT = 200  # spec § 6 — tek fetch, client-side türetim
 
-# Uyarı akışı görünümleri (spec § 3): cihaz özeti varsayılan; gerisi durum filtresi.
-_VIEW_OPTIONS = ["Cihaz özeti", "Açık", "Tümü", "active", "acknowledged", "resolved"]
-
 FLEET_LABEL = "Filo Genel Bakış"  # sol-menü gezinme: filo sayfası seçimi
+
+_DAY_S = 24 * 60 * 60
+_SPARK_WINDOW_S = 60  # kart sparkline'ı: son 60s temsilci sensör (spec § 4)
 
 
 def _resolve_db_path() -> Path:
@@ -140,30 +148,60 @@ def _fetch_alerts_safe(repository: TelemetryRepository) -> tuple[list[Alert], bo
         return [], False
 
 
-def _filter_view(alerts: list[Alert], view: str) -> list[Alert]:
-    """Uyarı akışı görünümünü tek fetch sonucundan client-side türetir (spec § 6)."""
-    if view == "Cihaz özeti":
-        return latest_alert_per_device(alerts)
-    if view == "Açık":
-        return [a for a in alerts if a.status in OPEN_STATUSES]
-    if view == "Tümü":
-        return alerts
-    return [a for a in alerts if a.status == view]
+def _freshness_str(latest: list[IngestedReading], now: datetime) -> str:
+    """En yeni telemetrinin tazeliği ('2 sn önce'); veri yoksa '—'."""
+    if not latest:
+        return "—"
+    newest = max(r.timestamp for r in latest)
+    return relative_time(now, newest)
 
 
-def _render_fleet_cards(fleet_health: list[DeviceHealth]) -> None:
-    """Filo sağlık kartlarını kurumsal HTML ızgarasıyla çizer (Clean Corporate)."""
-    if not fleet_health:
-        return
-    st.markdown(fleet_html(fleet_health), unsafe_allow_html=True)
+def _span_str(repository: TelemetryRepository, now: datetime) -> str:
+    """İzleme süresi (en eski telemetriden bu yana, kabaca 'Ng Msa')."""
+    try:
+        earliest = repository.earliest_telemetry_timestamp()
+    except OperationalError:
+        return "—"
+    if not earliest:
+        return "—"
+    try:
+        start = datetime.fromisoformat(earliest.replace("Z", "+00:00"))
+    except ValueError:
+        return "—"
+    secs = max(0, int((now - start).total_seconds()))
+    days, rem = divmod(secs, _DAY_S)
+    hours = rem // 3600
+    if days:
+        return f"{days}g {hours}sa"
+    mins = (rem % 3600) // 60
+    return f"{hours}sa {mins}dk" if hours else f"{mins} dk"
+
+
+def _detections_24h(repository: TelemetryRepository, now: datetime) -> int:
+    """Son 24 saatteki anomali tespiti sayısı (KPI)."""
+    since = (now - timedelta(seconds=_DAY_S)).isoformat(timespec="milliseconds").replace(
+        "+00:00", "Z"
+    )
+    try:
+        return repository.count_anomalies_since(since)
+    except OperationalError:
+        return 0
+
+
+def _spark_values(
+    repository: TelemetryRepository, device_id: str, sensor: str, since: str
+) -> list[float]:
+    """Bir cihaz+sensörün son penceredeki değerleri (kart sparkline'ı); hata→[]."""
+    try:
+        readings = repository.fetch_window(device_id, sensor, since)
+    except OperationalError:
+        return []
+    return [r.value for r in readings]
 
 
 @st.experimental_fragment(run_every="5s")
 def _render_overview(repository: TelemetryRepository) -> None:
-    """Üst blok: KPI satırı + filo kartları + uyarı akışı; 5s'de bir yenilenir (spec § 3).
-
-    SALT-GÖRÜNTÜ (gözlem modu). Sorgu bütçesi: fetch_alerts + fetch_latest_readings (spec § 6).
-    """
+    """Operasyon Merkezi açılışı: hero + kapsam + sinyal-ızgara + 24s timeline (5s, salt-görüntü)."""
     alerts, alerts_available = _fetch_alerts_safe(repository)
     try:
         latest = repository.fetch_latest_readings()
@@ -174,31 +212,58 @@ def _render_overview(repository: TelemetryRepository) -> None:
     devices = sorted({r.device_id for r in latest})
     now = datetime.now(UTC)
 
-    kpis = compute_kpis(devices, alerts, now)
-    st.markdown(kpis_html(kpis), unsafe_allow_html=True)
+    fleet = derive_fleet(devices, latest, alerts)
+    summary = summarize_fleet(fleet)
+    sensor_count = len({(r.device_id, r.sensor) for r in latest})
+    freshness = _freshness_str(latest, now)
+
+    st.markdown(
+        hero_html(summary, len(devices), sensor_count, freshness, _span_str(repository, now)),
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        coverage_html(coverage_stats(
+            len(devices), sensor_count, len(devices) * 6, freshness,
+            _detections_24h(repository, now),
+        )),
+        unsafe_allow_html=True,
+    )
     if not alerts_available:
         st.caption("Detector henüz çalışmadı — uyarı verisi yok (`python -m detectors`).")
 
-    fleet = derive_fleet(devices, latest, alerts)
-    st.markdown(fleet_summary_html(fleet), unsafe_allow_html=True)
-    _render_fleet_cards(fleet)
+    st.markdown('<div class="mg-section">Mastlar — duruma göre sıralı</div>', unsafe_allow_html=True)
+    since_spark = (now - timedelta(seconds=_SPARK_WINDOW_S)).isoformat(
+        timespec="milliseconds"
+    ).replace("+00:00", "Z")
+    cards = []
+    for h in sort_fleet_by_severity(fleet):
+        sensor = representative_sensor(h)
+        values = _spark_values(repository, h.device_id, sensor, since_spark)
+        snap = next((s for s in h.snapshots if s.sensor == sensor), None)
+        value_str = (
+            f"{snap.value:.1f} {snap.unit}".strip() if (snap and h.open_alert_count) else ""
+        )
+        cards.append(fleet_card_html(h, values, value_str))
+    st.markdown(fleet_grid_html(cards), unsafe_allow_html=True)
 
-    st.markdown('<div class="mg-section">Uyarılar</div>', unsafe_allow_html=True)
-    choice = st.selectbox(
-        "Görünüm", _VIEW_OPTIONS, index=0, key="alert_view", label_visibility="collapsed"
-    )
-    visible = _filter_view(alerts, choice or "Cihaz özeti")
-    faults, data_quality = split_alerts_by_axis(visible)
     st.markdown(
-        alerts_section_html("Arıza Uyarıları", faults, now, "Açık arıza uyarısı yok."),
-        unsafe_allow_html=True,
+        '<div class="mg-section">Son 24 saat — olay akışı</div>', unsafe_allow_html=True
     )
-    st.markdown(
-        alerts_section_html(
-            "Veri Kalitesi / Sensör Sağlığı", data_quality, now, "Tüm sensörler sağlıklı."
-        ),
-        unsafe_allow_html=True,
-    )
+    st.markdown(timeline_html(timeline_events(alerts, now)), unsafe_allow_html=True)
+
+    open_alerts = [a for a in alerts if a.status in OPEN_STATUSES]
+    if open_alerts:
+        faults, data_quality = split_alerts_by_axis(open_alerts)
+        st.markdown('<div class="mg-section">Açık Uyarılar</div>', unsafe_allow_html=True)
+        if faults:
+            st.markdown(
+                alerts_section_html("Arıza Uyarıları", faults, now, ""), unsafe_allow_html=True
+            )
+        if data_quality:
+            st.markdown(
+                alerts_section_html("Veri Kalitesi / Sensör Sağlığı", data_quality, now, ""),
+                unsafe_allow_html=True,
+            )
 
 
 def _render_alert_management(repository: TelemetryRepository) -> None:
@@ -313,6 +378,12 @@ def main() -> None:
     if not devices:
         st.info("Henüz veri yok — simulator + ingestion çalışıyor mu?")
         return
+
+    # Filo kartına tıklanınca ?dev=... ile gelir → sol-menü seçimini o cihaza çevir (drill-down).
+    dev_param = st.query_params.get("dev")
+    if dev_param and dev_param in devices:
+        st.session_state["nav"] = device_label(dev_param)
+        st.query_params.clear()
 
     config = _get_detector_config()
     nav_options = [FLEET_LABEL] + [device_label(d) for d in devices]
