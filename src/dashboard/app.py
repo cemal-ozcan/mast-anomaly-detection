@@ -32,6 +32,7 @@ from sqlalchemy.exc import OperationalError  # noqa: E402
 from alerts.lifecycle import ACKNOWLEDGED, can_transition  # noqa: E402
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
+from dashboard.detection import catching_layer, watching_layers  # noqa: E402
 from dashboard.fleet import (  # noqa: E402
     derive_fleet,
     representative_sensor,
@@ -53,7 +54,9 @@ from dashboard.overview import (  # noqa: E402
 from dashboard.styles import (  # noqa: E402
     APP_CSS,
     alerts_section_html,
+    distance_gauge_html,
     header_html,
+    layer_chips_html,
     panel_header_html,
 )
 from dashboard.thresholds import LevelBand, level_band  # noqa: E402
@@ -67,6 +70,7 @@ from dashboard.transform import (  # noqa: E402
     window_to_since,
 )
 from detectors.config import DetectorConfig, load_detector_config  # noqa: E402
+from detectors.scoring import band_position_score  # noqa: E402
 from ingestion.config import load_ingestion_config  # noqa: E402
 from ingestion.message_parser import IngestedReading  # noqa: E402
 from storage.engine import create_sqlite_engine  # noqa: E402
@@ -313,6 +317,15 @@ def _meta_str(band: LevelBand | None, unit: str) -> str:
     return f"Uyarı {band.warn:g} · Kritik {band.trip:g} {unit}".strip()
 
 
+def _sensor_alert(device_alerts: list[Alert], sensor: str) -> Alert | None:
+    """Bu sensöre ait en yüksek severity açık uyarı (yoksa None)."""
+    matches = [a for a in device_alerts if a.sensor == sensor and a.status in OPEN_STATUSES]
+    if not matches:
+        return None
+    rank = {"critical": 3, "high": 2, "warning": 1}
+    return max(matches, key=lambda a: rank.get(a.severity, 0))
+
+
 @st.experimental_fragment(run_every="2s")
 def _render_device_detail(
     repository: TelemetryRepository, device_id: str, window: str,
@@ -339,6 +352,10 @@ def _render_device_detail(
         last_val = readings[-1].value if readings else None
         badge = sensor_badge(device_alerts, sensor)
         band = level_band(config, sensor)
+        alert = _sensor_alert(device_alerts, sensor)
+        caught = catching_layer(alert.rule_name) if alert else None
+        score = alert.score if alert else None
+        watching = watching_layers(config, sensor)
         with cols[i % 3]:
             st.markdown(
                 panel_header_html(
@@ -347,6 +364,16 @@ def _render_device_detail(
                 ),
                 unsafe_allow_html=True,
             )
+            chips = layer_chips_html(watching, caught, score)
+            if chips:
+                st.markdown(chips, unsafe_allow_html=True)
+            if band is not None:
+                raw = score if score is not None else (
+                    band_position_score(last_val, band.warn, band.trip)
+                    if last_val is not None
+                    else 0.0
+                )
+                st.markdown(distance_gauge_html(round(raw * 100), badge), unsafe_allow_html=True)
             # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
             # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
             st.altair_chart(
