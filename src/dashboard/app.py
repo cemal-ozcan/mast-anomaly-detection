@@ -324,11 +324,13 @@ def _render_device_detail(
         band = level_band(config, sensor)
         alert = _sensor_alert(device_alerts, sensor)
         caught = catching_layer(alert.rule_name) if alert else None
-        score = alert.score if alert else None
+        # Uyarı varsa katman satırında jargon "skor" yerine TETİKLEYEN gerçek değeri göster.
+        detail = f"ölçülen {_value_str(alert.value, unit)}" if alert else None
         watching = watching_layers(config, sensor)
         gauge_html = ""
         if band is not None:
-            raw = score if score is not None else (
+            # Gauge GÜNCEL değeri yansıtır (donmuş uyarı skoru değil) → header değeriyle tutarlı.
+            raw = (
                 band_position_score(last_val, band.warn, band.trip)
                 if last_val is not None
                 else 0.0
@@ -346,7 +348,7 @@ def _render_device_detail(
                 rule_label(alert.rule_name) if alert else "",
                 rule_explanation(alert.rule_name) if alert else "",
             )
-            + layer_chips_html(watching, caught, score)
+            + layer_chips_html(watching, caught, detail)
             + gauge_html
             + "</div>"
         )

@@ -59,16 +59,16 @@ def test_layer_chips_watching() -> None:
     assert "mg-chip" in h
 
 
-def test_layer_chips_caught_with_score() -> None:
+def test_layer_chips_caught_with_detail() -> None:
     from dashboard.styles import layer_chips_html
-    h = layer_chips_html(["Kural", "İstatistik"], "Kural", 0.2)
+    h = layer_chips_html(["Kural", "İstatistik"], "Kural", "ölçülen 133 °C")
     assert "Yakalayan" in h and "mg-chip--on" in h
-    assert "skor 0.20" in h
+    assert "ölçülen 133 °C" in h  # jargon 'skor' değil, tetikleyen değer
 
 
 def test_layer_chips_caught_not_in_watching_no_dup() -> None:
     from dashboard.styles import layer_chips_html
-    h = layer_chips_html([], "Çoklu katman", 1.0)
+    h = layer_chips_html([], "Çoklu katman", None)
     assert h.count("Çoklu katman") == 1 and "mg-chip--on" in h
 
 
@@ -79,10 +79,11 @@ def test_layer_chips_empty() -> None:
 
 def test_distance_gauge_safe_and_filled() -> None:
     from dashboard.styles import distance_gauge_html
-    safe = distance_gauge_html(0, "ok")
-    assert "Güvenli" in safe and "mg-gauge" in safe
+    safe = distance_gauge_html(0, "critical")  # güncel güvenli → uyarı açık olsa bile 'Güvenli' yeşil
+    assert "Güvenli" in safe and "mg-gauge" in safe and "mg-gfill--ok" in safe
     hot = distance_gauge_html(68, "warning")
-    assert "%68" in hot and "68%" in hot
+    assert "%68" in hot and "68%" in hot  # etiket + dolum genişliği
+    assert "Alarm seviyesi" in hot  # net etiket (eski 'Kritiğe uzaklık' kalktı)
 
 
 def test_header_html_contains_brand_and_clock() -> None:

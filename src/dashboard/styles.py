@@ -486,11 +486,11 @@ def panel_problem_html(badge: str, headline: str, explanation: str) -> str:
     return '<div class="mg-prob-ok">Değerler normal aralıkta.</div>'
 
 
-def layer_chips_html(watching: list[str], caught: str | None, score: float | None) -> str:
-    """Sensörü izleyen/yakalayan tespit katmanı chip'leri (+uyarı varsa gerçek skor).
+def layer_chips_html(watching: list[str], caught: str | None, detail: str | None) -> str:
+    """Sensörü izleyen/yakalayan tespit katmanı chip'leri (+uyarı varsa düz-dil ek bilgi).
 
-    caught verilirse 'Yakalayan: <caught>' vurgulu + skor; yoksa 'İzleyen: <watching...>'.
-    watching boş ve caught yoksa boş string.
+    caught verilirse 'Yakalayan: <caught>' vurgulu + detail (örn. 'ölçülen 133 °C'); yoksa
+    'İzleyen: <watching...>'. watching boş ve caught yoksa boş string.
     """
     if not watching and caught is None:
         return ""
@@ -504,32 +504,35 @@ def layer_chips_html(watching: list[str], caught: str | None, score: float | Non
             else f'<span class="mg-chip">{_html.escape(c)}</span>'
             for c in ordered
         )
-        score_html = (
-            f'<span class="mg-chip-score">skor {score:.2f}</span>' if score is not None else ""
+        detail_html = (
+            f'<span class="mg-chip-score">{_html.escape(detail)}</span>' if detail else ""
         )
         return (
             '<div class="mg-layers"><span class="mg-lbl">Yakalayan</span>'
-            f"{chips}{score_html}</div>"
+            f"{chips}{detail_html}</div>"
         )
     chips = "".join(f'<span class="mg-chip">{_html.escape(c)}</span>' for c in watching)
     return f'<div class="mg-layers"><span class="mg-lbl">İzleyen</span>{chips}</div>'
 
 
 def distance_gauge_html(pct: int, severity: str) -> str:
-    """'Kritiğe uzaklık' ince gauge'ı: dolum=pct%, renk severity'den; pct==0 → 'Güvenli'.
+    """'Alarm seviyesi' ince gauge'ı: GÜNCEL değerin alarm bandındaki konumu (0=Güvenli, 100=kritik).
 
     Args:
-        pct: 0..100 (band_position_score*100, yuvarlanmış).
-        severity: ok|warning|critical → dolum/etiket rengi sınıfı.
+        pct: 0..100 (güncel değerin band_position_score'u × 100, yuvarlanmış).
+        severity: ok|warning|critical → dolum/etiket rengi (pct=0'da daima yeşil 'Güvenli').
     """
-    sev = severity if severity in ("ok", "warning", "critical") else "ok"
-    label = "Güvenli" if pct <= 0 else f"%{pct}"
     fill = max(0, min(100, pct))
+    if fill <= 0:
+        label, tone = "Güvenli", "ok"
+    else:
+        label = f"%{fill}"
+        tone = severity if severity in ("ok", "warning", "critical") else "ok"
     return (
-        '<div class="mg-gauge-row"><span class="mg-glbl">Kritiğe uzaklık</span>'
-        f'<span class="mg-gauge"><span class="mg-gfill mg-gfill--{sev}" '
+        '<div class="mg-gauge-row"><span class="mg-glbl">Alarm seviyesi</span>'
+        f'<span class="mg-gauge"><span class="mg-gfill mg-gfill--{tone}" '
         f'style="width:{fill}%"></span></span>'
-        f'<span class="mg-gpct mg-gpct--{sev}">{label}</span></div>'
+        f'<span class="mg-gpct mg-gpct--{tone}">{label}</span></div>'
     )
 
 
