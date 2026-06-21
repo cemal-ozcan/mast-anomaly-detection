@@ -401,12 +401,15 @@ def _render_device_detail(
                 # gösterilir — Streamlit'in tarayıcı vega-embed'i KATMANLI grafikte (bant'lı sensör)
                 # x-zamanlı katmanları (çizgi + bölge) sessizce düşürüyordu → grafikler BOŞ çıkıyordu.
                 # Sunucu-tarafı render bu hatayı tümden bypass eder (canlı izlemede zoom gereksiz).
-                st.image(
-                    _chart_to_png(
+                try:
+                    chart_png = _chart_to_png(
                         build_sensor_chart(frame, device_alerts, sensor, unit, band=band)
-                    ),
-                    use_column_width=True,
-                )
+                    )
+                    st.image(chart_png, use_column_width=True)
+                except Exception as e:  # vl-convert hata tipleri belgesiz; tek grafik hatası
+                    # tüm fragment'i (6 panel) çökertmesin — izole et, dostça bildir (UI sınırı).
+                    logger.error("Grafik üretilemedi device={} sensor={}: {}", device_id, sensor, e)
+                    st.error(f"{sensor_label(sensor)}: grafik üretilemedi")
 
 
 @st.experimental_fragment(run_every="2s")

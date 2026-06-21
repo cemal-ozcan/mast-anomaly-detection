@@ -172,7 +172,8 @@ def build_sensor_chart(
             ve y-ekseni eşikleri kapsayacak şekilde genişler; None → klasik davranış.
 
     Returns:
-        İnteraktif Altair chart'ı (band/uyarı yoksa tek çizgi; varsa katmanlı).
+        Altair chart'ı (band/uyarı yoksa tek çizgi; varsa katmanlı). `.interactive()` YOK —
+        app.py bunu sunucuda PNG'ye render eder (canlı izlemede zoom gereksiz).
     """
     frame_empty = bool(frame.empty)
     x_domain: list[Any] | None = (

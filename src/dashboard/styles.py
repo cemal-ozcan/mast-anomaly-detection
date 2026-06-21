@@ -1,7 +1,7 @@
 """Clean Corporate kurumsal görünüm: CSS + saf HTML-builder'lar (yeniden tasarım 2026-06-19).
 
-SAF — streamlit/DB import ETMEZ (dashboard.fleet/dashboard.transform/alerts.models saf leaf +
-stdlib html). app.py bu string'leri st.markdown(unsafe_allow_html=True) ile basar. unsafe_allow_html
+SAF — streamlit/DB import ETMEZ (dashboard.fleet/dashboard.transform/alerts.models/detectors.fusion
+saf leaf + stdlib html). app.py bu string'leri st.markdown(unsafe_allow_html=True) ile basar. unsafe_allow_html
 ile basılan serbest-metin html.escape ile kaçışlanır (yalnız iç/sentetik veri ama disiplin).
 CSS Streamlit 1.36.0 DOM'una göre yazıldı (requirements pinli); canlı smoke ile doğrulanır.
 """
@@ -21,9 +21,8 @@ from dashboard.labels import (
     state_label,
 )
 from dashboard.transform import relative_time
+from detectors.fusion import SEVERITY_RANK  # tek-kaynak severity sıralaması (fleet.py ile aynı)
 from ingestion.message_parser import IngestedReading
-
-_SEVERITY_RANK_DISPLAY = {"critical": 3, "high": 2, "warning": 1, "info": 0}
 
 # Enstrüman-sınıfı palet (frontend-design: tek-accent, renk=anlam, AI-mavisi/Inter yok).
 _BG = "#eef0f2"        # cool paper (krem değil)
@@ -435,7 +434,7 @@ def alerts_section_html(title: str, alerts: list[Alert], now: datetime, empty_ms
     if not alerts:
         return head + f'<div class="mg-empty">{_html.escape(empty_msg)}</div>'
     ordered = sorted(
-        alerts, key=lambda a: _SEVERITY_RANK_DISPLAY.get(a.severity, 0), reverse=True
+        alerts, key=lambda a: SEVERITY_RANK.get(a.severity, 0), reverse=True
     )
     return head + "".join(alert_card_html(a, now) for a in ordered)
 
