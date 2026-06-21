@@ -20,6 +20,7 @@ scipy==1.17.1                # istatistiksel imza testleri (ttest/Spearman/Bartl
 # Dashboard
 streamlit==1.36.0
 altair==5.5.0
+vl-convert-python==1.9.0    # grafikleri SUNUCUDA PNG'ye render eder (vega-embed katmanlı-grafik hatasını bypass)
 
 # Logging
 loguru==0.7.2

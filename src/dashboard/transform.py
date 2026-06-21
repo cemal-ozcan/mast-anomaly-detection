@@ -87,9 +87,12 @@ def readings_to_chart_frame(readings: list[IngestedReading]) -> pd.DataFrame:
     """
     return pd.DataFrame(
         {
+            # tz KALDIRILIR (utc=True ile UTC'ye çevir, sonra naive yap): Vega tz'li ISO'yu yerel
+            # saate çevirip gösteriyordu → grafik ekseni (yerel) üstteki saat/veri-akışıyla (UTC)
+            # tutarsızdı. Naive UTC duvar-saati değeri olduğu gibi gösterilir → her yer aynı saat.
             "timestamp": pd.to_datetime(
                 [r.timestamp for r in readings], format="ISO8601", utc=True
-            ),
+            ).tz_localize(None),
             "value": [r.value for r in readings],
             "state": [r.state for r in readings],
         }

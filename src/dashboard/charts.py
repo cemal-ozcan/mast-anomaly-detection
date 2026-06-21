@@ -41,12 +41,14 @@ def alerts_to_overlay_frame(alerts: list[Alert]) -> pd.DataFrame:
     """
     return pd.DataFrame(
         {
+            # tz KALDIRILIR (telemetri çizgisiyle AYNI eksende hizalanmalı; readings_to_chart_frame
+            # naive UTC kullanıyor → overlay de naive UTC olmalı, yoksa 3 saat kayar).
             "window_start": pd.to_datetime(
                 [a.window_start for a in alerts], format="ISO8601", utc=True
-            ),
+            ).tz_localize(None),
             "window_end": pd.to_datetime(
                 [a.window_end for a in alerts], format="ISO8601", utc=True
-            ),
+            ).tz_localize(None),
             "severity": [a.severity for a in alerts],
             "label": [f"⚠ {a.rule_name} ({a.score:.2f})" for a in alerts],
         }
@@ -187,14 +189,11 @@ def build_sensor_chart(
         y_scale = alt.Scale(domain=[ylo, yhi], zero=False)
         band_bounds = (ylo, yhi)
 
-    # Katman eklenecekse (band/overlay) x-domain'i sabitle ki bölge + çizgi + overlay hizalansın.
+    # x'e AÇIK scale-domain verme: paylaşılan otomatik x-domain (veri min/max) bölge + çizgi +
+    # overlay'i zaten hizalar (bölgeler x0/x1'i VERİ değeri olarak alır). Açık tz'li ISO domain
+    # gereksiz ve kimi vega sürümlerinde kırılgandır.
     relevant = [a for a in alerts if a.sensor == sensor]
-    fix_x = x_domain is not None and (band_bounds is not None or bool(relevant))
-    if fix_x and x_domain is not None:
-        x_enc = alt.X("timestamp:T", title=None, scale=alt.Scale(domain=x_domain),
-                      axis=alt.Axis(labelFontSize=10))
-    else:
-        x_enc = alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10))
+    x_enc = alt.X("timestamp:T", title=None, axis=alt.Axis(labelFontSize=10))
     # y-başlığı YOK (ham kod adı yerine panel başlığı sensörü adlandırır); yalnız değer eksenleri.
     line: alt.Chart = (
         alt.Chart(frame)

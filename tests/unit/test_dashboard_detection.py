@@ -62,3 +62,14 @@ def test_catching_layer() -> None:
     assert catching_layer("three_sigma:motor_current") == "İstatistik"
     assert catching_layer("iqr:vibration") == "İstatistik"
     assert catching_layer("fused(3)") == "Çoklu katman"
+
+
+def test_caught_layers_from_rule_set() -> None:
+    from dashboard.detection import caught_layers
+    # kural + istatistik birlikte (füzyon) → sıralı, tekilleştirilmiş
+    assert caught_layers("motor_current_high,three_sigma:motor_current,iqr:motor_current") == [
+        "Kural", "İstatistik",
+    ]
+    assert caught_layers("motor_current_high,vibration_elevated") == ["Kural"]
+    assert caught_layers("three_sigma:motor_current") == ["İstatistik"]
+    assert caught_layers(None) == [] and caught_layers("") == []

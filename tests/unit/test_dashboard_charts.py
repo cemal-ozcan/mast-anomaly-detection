@@ -100,6 +100,19 @@ def test_chart_band_adds_zone_and_threshold_layers() -> None:
     assert len(domain) == 2 and domain[0] < domain[1]
 
 
+def test_chart_line_has_no_explicit_x_domain() -> None:
+    """Bant'lı grafikte çizgi katmanı x'e AÇIK scale-domain taşımamalı (paylaşılan otomatik domain
+    hizalar; açık tz'li ISO domain bazı vega sürümlerinde x-bağlı katmanları düşürür)."""
+    from dashboard.charts import build_sensor_chart
+    from dashboard.thresholds import LevelBand
+
+    frame = readings_to_chart_frame(_readings())
+    spec = build_sensor_chart(frame, [_alert()], "motor_current", "A",
+                              band=LevelBand(9.0, 11.0)).to_dict()
+    line = [ly for ly in spec["layer"] if ly["mark"]["type"] == "line"][0]
+    assert "domain" not in line["encoding"]["x"].get("scale", {})
+
+
 def test_chart_band_with_alert_keeps_overlay() -> None:
     """band + uyarı birlikte: bölge rect (y2'li) VE anomali overlay rect (x2'li, y2'siz) ayrı bulunur."""
     from dashboard.charts import build_sensor_chart

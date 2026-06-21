@@ -37,7 +37,7 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 
 [[tool.mypy.overrides]]
-module = ["pandas", "pandas.*"]
+module = ["pandas", "pandas.*", "vl_convert"]
 ignore_missing_imports = true
 
 [tool.ruff]

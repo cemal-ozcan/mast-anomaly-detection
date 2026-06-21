@@ -11,11 +11,11 @@ db_path: DASHBOARD_DB_PATH env varsa o, yoksa config/ingestion.yaml db_path.
 """
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import cast
 
 # `streamlit run src/dashboard/app.py` yalnızca src/dashboard'ı sys.path'e ekler; top-level
 # paketler (dashboard, ingestion, storage) için src/ kökünü ekle. Editable install .pth'i
@@ -27,12 +27,13 @@ if str(_SRC_ROOT) not in sys.path:
 
 import altair as alt  # noqa: E402
 import streamlit as st  # noqa: E402
+import vl_convert as vlc  # noqa: E402
 from loguru import logger  # noqa: E402
 from sqlalchemy.exc import OperationalError  # noqa: E402
 
 from alerts.models import Alert  # noqa: E402
 from dashboard.charts import build_sensor_chart  # noqa: E402
-from dashboard.detection import catching_layer, watching_layers  # noqa: E402
+from dashboard.detection import catching_layer, caught_layers, watching_layers  # noqa: E402
 from dashboard.fleet import (  # noqa: E402
     derive_fleet,
     representative_sensor,
@@ -298,6 +299,32 @@ def _sensor_alert(device_alerts: list[Alert], sensor: str) -> Alert | None:
     return max(matches, key=lambda a: rank.get(a.severity, 0))
 
 
+def _chart_to_png(chart: alt.LayerChart | alt.Chart) -> bytes:
+    """Altair grafiğini SUNUCUDA PNG'ye çevirir (vl-convert, gerçek Vega motoru).
+
+    Tarayıcı vega-embed'i katmanlı (bant'lı) grafikte x-zamanlı katmanları düşürdüğü için detay
+    grafikleri sunucu-tarafı render edilir; PNG `st.image` ile gösterilir. Gözlem modu korunur
+    (yalnız okuma). scale=2 → retina-keskin.
+    """
+    return vlc.vegalite_to_png(json.dumps(chart.to_dict()), scale=2)
+
+
+def _problem_explanation(alert: Alert | None) -> str:
+    """Uyarı açıklaması; füzyon uyarısına 'hangi katmanlar birlikte yakaladı' eklenir.
+
+    Füzyon (`fused(N)`) birden çok dedektörün aynı anda uyarmasıdır — rule_set'ten katılan
+    katmanları (Kural/İstatistik) türetip açıklamaya ekler ki çok-katmanlı tespit görünür olsun.
+    """
+    if alert is None:
+        return ""
+    explanation = rule_explanation(alert.rule_name)
+    if alert.rule_name.startswith("fused("):
+        layers = caught_layers(alert.rule_set)
+        if len(layers) >= 2:
+            explanation += f" Yakalayan katmanlar: {' + '.join(layers)} (aynı anda)."
+    return explanation
+
+
 @st.experimental_fragment(run_every="2s")
 def _render_device_detail(
     repository: TelemetryRepository, device_id: str, window: str,
@@ -310,6 +337,16 @@ def _render_device_detail(
     if since is not None:
         # Uyarı penceresi ∩ grafik zaman penceresi (lexicographic ISO karşılaştırma, spec § 6)
         device_alerts = [a for a in device_alerts if a.window_end >= since]
+    # Arkadaki çok-katmanlı analizi görünür kıl: her sensör 3 katmanla izlenir (tek satırlık özet).
+    # st.caption açık-gri (okunmuyor) → koyu metinli HTML markdown ile net göster.
+    st.markdown(
+        '<p style="color:#1b2027;font-size:0.84rem;line-height:1.55;margin:0 0 0.6rem 0;">'
+        "Her sensör <b>3 katmanla</b> izlenir — <b>Kural</b> (sabit güvenlik eşikleri), "
+        "<b>İstatistik</b> (sensörün öğrenilen normalinden sapma) ve <b>Füzyon</b> (katmanlar "
+        "aynı anda uyarınca tek olayda birleştirme). Alarm seviyesi ISO 20816 bant-konumuna göre "
+        "%0–100 ölçeklenir.</p>",
+        unsafe_allow_html=True,
+    )
     # Her sensör tam-genişlik bordürlü satır: solda durum, sağda geniş grafik (doğal hizalama).
     for sensor in SIX_SENSORS:
         try:
@@ -348,7 +385,7 @@ def _render_device_detail(
             + panel_problem_html(
                 badge,
                 rule_label(alert.rule_name) if alert else "",
-                rule_explanation(alert.rule_name) if alert else "",
+                _problem_explanation(alert),
             )
             # Katman chip'leri YALNIZ uyarı varken (YAKALAYAN); sağlıkken gösterme (sade).
             + (layer_chips_html(watching, caught, detail) if alert else "")
@@ -360,15 +397,15 @@ def _render_device_detail(
             with left:
                 st.markdown(status_html, unsafe_allow_html=True)
             with right:
-                # build_sensor_chart döner LayerChart | Chart; st.altair_chart overloadu Chart
-                # bekler — cast mypy'yi tatmin eder (runtime'da ikisi de Chart alt tipi).
-                st.altair_chart(
-                    cast(
-                        alt.Chart,
-                        build_sensor_chart(frame, device_alerts, sensor, unit, band=band),
+                # KRİTİK render: grafik PNG olarak SUNUCUDA üretilir (vl-convert) ve st.image ile
+                # gösterilir — Streamlit'in tarayıcı vega-embed'i KATMANLI grafikte (bant'lı sensör)
+                # x-zamanlı katmanları (çizgi + bölge) sessizce düşürüyordu → grafikler BOŞ çıkıyordu.
+                # Sunucu-tarafı render bu hatayı tümden bypass eder (canlı izlemede zoom gereksiz).
+                st.image(
+                    _chart_to_png(
+                        build_sensor_chart(frame, device_alerts, sensor, unit, band=band)
                     ),
-                    use_container_width=True,
-                    theme=None,
+                    use_column_width=True,
                 )
 
 

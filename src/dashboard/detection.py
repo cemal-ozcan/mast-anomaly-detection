@@ -69,3 +69,20 @@ def catching_layer(rule_name: str) -> str:
     if rule_name.startswith(("three_sigma:", "iqr:")):
         return LAYER_STAT
     return LAYER_RULE
+
+
+def caught_layers(rule_set: str | None) -> list[str]:
+    """Füzyon uyarısının rule_set'ine (virgülle ayrı kural adları) katkıda bulunan katmanlar.
+
+    Her kuralı katmanına (Kural/İstatistik) eşler, sırayı koruyarak tekilleştirir. Amaç: "Çoklu
+    anormallik" uyarısında HANGİ katmanların aynı anda yakaladığını göstermek (örn. ["Kural",
+    "İstatistik"]). Boş/None → boş liste.
+    """
+    if not rule_set:
+        return []
+    layers: list[str] = []
+    for raw in rule_set.split(","):
+        layer = catching_layer(raw.strip())
+        if layer in (LAYER_RULE, LAYER_STAT) and layer not in layers:
+            layers.append(layer)
+    return layers
