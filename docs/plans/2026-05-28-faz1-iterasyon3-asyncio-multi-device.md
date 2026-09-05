@@ -17,7 +17,7 @@
 `.venv` aktif, `pip install -e .` yapılmış, Iter 2b testleri (71 PASS) yeşil olmalı:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/ -q                          # 71 passed beklenir
 mypy src/simulator tests/unit             # Success

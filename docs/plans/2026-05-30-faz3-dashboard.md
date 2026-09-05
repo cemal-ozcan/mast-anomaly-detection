@@ -16,7 +16,7 @@
 
 `.venv` aktif, Faz 2 testleri (166 passed + 1 skipped) yeşil:
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/ -q                                                                      # 166 passed, 1 skipped
 mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios tests/smoke  # Success

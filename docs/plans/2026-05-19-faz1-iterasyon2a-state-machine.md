@@ -17,7 +17,7 @@
 `.venv` aktif, `pip install -e .` yapılmış. Tüm Iterasyon 1 testleri (17 PASS) yeşil olmalı. Bu plan'ın başında doğrulamak için:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/unit/ -v
 ```
@@ -1490,7 +1490,7 @@ mosquitto_sub -t 'telemetry/+/motor_current' -v
 
 **Terminal B** (simulator):
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 python -m simulator
 ```
