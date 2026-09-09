@@ -17,7 +17,7 @@
 `.venv` aktif, `pip install -e .` yapılmış (Iter 2a sonu paketleme fix `94ed570` sonrası `python -m simulator` PYTHONPATH'siz çalışıyor). Iter 2a testleri (42 PASS) yeşil olmalı:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/unit/ -q                  # 42 passed beklenir
 mypy src/simulator tests/unit          # Success
@@ -1465,7 +1465,7 @@ mosquitto_sub -t 'telemetry/+/#' -v
 
 **Terminal B** (simulator):
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 python -m simulator
 ```

@@ -20,11 +20,12 @@ def test_devices_demo_has_clean_and_three_faults() -> None:
     assert {"mechanical_wear", "hydraulic_leak", "electrical_fault", "temperature_overshoot", "sensor_fault"} <= scenario_names
 
 
-def test_devices_demo_has_short_clearing_fault() -> None:
-    """En az bir arıza KISA süreli (biter → auto-resolve demo beat'i): duration_s <= 300."""
+def test_devices_demo_faults_are_persistent() -> None:
+    """Tüm arızalar KALICI (uzun süreli): demo ne zaman başlatılırsa başlatılsın anomaliler
+    ekranda kalır → sunum zamanlamasına bağımlı değil. Her arıza demo-üstü süreli (>= 3600s)."""
     devices = load_devices(_DEVICES_DEMO)
     durations = [s.duration_s for d in devices for s in d.scenarios]
-    assert any(dur <= 300 for dur in durations), f"kısa-süreli arıza yok: {durations}"
+    assert durations and all(dur >= 3600 for dur in durations), f"kalıcı olmayan arıza var: {durations}"
 
 
 def test_devices_demo_fast_onset() -> None:

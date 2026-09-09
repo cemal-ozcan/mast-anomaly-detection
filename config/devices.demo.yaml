@@ -39,7 +39,7 @@ devices:
     scenarios:
       - name: mechanical_wear
         start_after_s: 60
-        duration_s: 150
+        duration_s: 86400   # kalıcı (tüm gün) — anomali her zaman ekranda, zamanlama derdi yok
         params: {severity: 0.25, ramp_up_s: 30}
 
   # device_003: hydraulic_leak — UZUN holding (slope kuralı min_samples 60 ister).
@@ -62,7 +62,7 @@ devices:
     scenarios:
       - name: hydraulic_leak
         start_after_s: 60
-        duration_s: 1800
+        duration_s: 86400   # kalıcı (tüm gün) — her holding döngüsünde yeniden düşer → kural sürekli tetiklenir
         params: {leak_rate_bar_per_min: 5.0, position_sag_mm: 2.0}
 
   # device_004: electrical_fault — varyans arızası (kural motor_voltage_erratic; istatistik sessiz = tamamlayıcı).
@@ -85,7 +85,7 @@ devices:
     scenarios:
       - name: electrical_fault
         start_after_s: 60
-        duration_s: 1800
+        duration_s: 86400   # kalıcı (tüm gün) — voltaj varyansı sürekli yüksek
         params: {spike_prob: 0.05, voltage_jitter_std: 0.6}
 
   # device_005: temperature_overshoot (F) — sıcaklık kritik eşiğe tırmanır.
@@ -108,7 +108,7 @@ devices:
     scenarios:
       - name: temperature_overshoot
         start_after_s: 60
-        duration_s: 600
+        duration_s: 86400   # kalıcı (tüm gün) — sıcaklık tavanda plato yapar, eşiğin üstünde kalır
         params:
           overshoot_rate_c_per_s: 0.8
           max_overshoot_c: 60
@@ -133,7 +133,7 @@ devices:
     scenarios:
       - name: sensor_fault
         start_after_s: 60
-        duration_s: 600
+        duration_s: 86400   # kalıcı (tüm gün) — sensör aralıklarla imkânsız değer verir
         params:
           spike_prob: 0.3
           impossible_value: -500.0

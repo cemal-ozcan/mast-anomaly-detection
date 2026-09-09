@@ -24,7 +24,7 @@
 `.venv` aktif, Iter 2.2 testleri (155 PASS) yeşil olmalı:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/ -q                                                                      # 155 passed
 mypy src/simulator src/ingestion src/storage tests/unit tests/integration tests/scenarios  # Success

@@ -17,7 +17,7 @@
 Henüz yapılmadıysa, kullanıcı terminalinde bir kerelik:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -1010,7 +1010,7 @@ Beklenen: `mosquitto started`. Değilse: `brew services start mosquitto`.
 - [x] **Step 7.2: Lokal config dosyalarını oluştur**
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 cp config/mqtt.yaml.example config/mqtt.yaml
 cp config/devices.yaml.example config/devices.yaml
 cp config/simulator.yaml.example config/simulator.yaml
@@ -1025,7 +1025,7 @@ mosquitto_sub -t 'telemetry/+/motor_current' -v
 
 Terminal B (simulator):
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 python -m simulator
 ```

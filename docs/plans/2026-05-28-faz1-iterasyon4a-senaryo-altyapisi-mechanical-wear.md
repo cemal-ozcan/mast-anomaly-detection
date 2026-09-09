@@ -17,7 +17,7 @@
 `.venv` aktif, `pip install -e .` yapılmış, Iter 3.5 cleanup testleri (88 PASS) yeşil olmalı:
 
 ```bash
-cd /Users/cemalozcan/Desktop/mast-anomaly-detection
+cd ~/mast-anomaly-detection
 source .venv/bin/activate
 pytest tests/ -q                          # 88 passed beklenir
 mypy src/simulator tests/unit tests/integration   # Success
