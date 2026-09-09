@@ -6,7 +6,7 @@ Bu proje **prototip aşamasındadır** ve tamamen sentetik veri ile çalışır.
 
 ## Hedef
 
-Arıza henüz oluşmadan önce davranışsal sapmaları yakalayıp teknisyenlere uyarı üreten bir gözlem sistemi. Sistem üç katmanlı anomali tespiti kullanır: kural tabanlı, istatistiksel ve makine öğrenmesi.
+Arıza henüz oluşmadan önce davranışsal sapmaları yakalayıp teknisyenlere uyarı üreten bir gözlem sistemi. Sistem iki katmanlı anomali tespiti kullanır: sabit eşiklere dayalı kural tabanlı kontrol ve her cihazın kendi geçmişine göre sapma ölçen istatistiksel katman. Makine öğrenmesi tabanlı bir üçüncü katman (Isolation Forest) değerlendirildi; sentetik veri setinde mevcut iki katmanın kapsamına ek bir değer katmadığı görülünce kapsam dışı bırakıldı.
 
 ## Felsefe
 
@@ -16,17 +16,13 @@ Bu proje karmaşıklığa değil, biten parçalara odaklanır. Her faz tamamland
 
 ## Mimari
 
-Sistem altı bağımsız servisten oluşur. Servisler MQTT broker üzerinden iletişim kurar, her biri ayrı bir Python süreci olarak çalışır.
+Sistem dört bağımsız Python servisinden oluşur; aralarında bir MQTT broker (Mosquitto) aracılık eder. Her servis ayrı bir süreç olarak çalışır — biri çökse diğerleri etkilenmez. Uyarı yaşam döngüsü (açık/onaylanmış/kapanmış) ayrı bir servis değildir, detector süreci içinde yönetilir.
 
 ```
-[Simulator] -> [MQTT Broker] -> [Ingestion]
-                            -> [Detector]
-                                  |
-                                  v
-                            [Alert Manager]
-                                  |
-                                  v
-[Dashboard] <- [SQLite] <- [Ingestion + Alert]
+[Simulator] -> [MQTT Broker] -> [Ingestion] -> [SQLite]
+                            -> [Detector (anomali + uyarı yaşam döngüsü)] -> [SQLite]
+
+[Dashboard] <- [SQLite]  (salt-okuma, gözlem modu)
 ```
 
 Detay için `docs/ARCHITECTURE.md` dosyasına bakın.
@@ -38,12 +34,12 @@ Python 3.11+, MQTT (Mosquitto + paho-mqtt), SQLite, Pandas, scikit-learn, Stream
 ## Kurulum
 
 ```bash
-# Sanal ortam oluştur
-python3 -m venv venv
-source venv/bin/activate
+# Sanal ortam oluştur (python3.11 önerilir)
+python3.11 -m venv .venv
+source .venv/bin/activate
 
-# Bağımlılıkları kur
-pip install -r requirements.txt
+# Bağımlılıkları kur (editable install gerekli — modüller `python -m ...` ile çalıştırılıyor)
+pip install -r requirements.txt -e .
 
 # Mosquitto broker'ı kur (macOS)
 brew install mosquitto
